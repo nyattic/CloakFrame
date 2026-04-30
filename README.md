@@ -39,7 +39,7 @@ Model files are not committed to this repository. You can also launch the app an
 ### macOS
 
 ```bash
-cmake -S . -B build -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+cmake -S . -B build
 cmake --build build
 open build/FaceVeil.app
 ```
