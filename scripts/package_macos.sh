@@ -155,6 +155,14 @@ done < <(find "$FRAMEWORKS_DIR" -type f -name '*.dylib')
 
 mkdir -p "$DIST_APP/Contents/Resources"
 cp "$ROOT_DIR/THIRD_PARTY_NOTICES.txt" "$DIST_APP/Contents/Resources/THIRD_PARTY_NOTICES.txt"
+cp "$ROOT_DIR/LICENSE" "$DIST_APP/Contents/Resources/LICENSE.txt"
+
+# Guard: SCRFD models are downloaded at runtime and must never be bundled
+# (InsightFace's models are non-commercial and are not redistributed here).
+if find "$DIST_APP" -name '*.onnx' -print -quit | grep -q .; then
+    echo "❌ ONNX model files found in the app bundle; models must not be bundled."
+    exit 1
+fi
 
 # ── Sign ───────────────────────────────────────────────────────────
 SIGN_FLAGS=(--force --timestamp --options runtime)

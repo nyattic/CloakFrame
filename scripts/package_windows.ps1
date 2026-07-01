@@ -156,8 +156,14 @@ if ($worldDlls) {
     Write-Host "Bundled $(@($moduleDlls).Count) OpenCV module DLL(s)."
 }
 
-# ── Third-party notices ────────────────────────────────────────────
+# ── Third-party notices + license ──────────────────────────────────
 Copy-Item (Join-Path $RootDir "THIRD_PARTY_NOTICES.txt") $DistDir -Force
+Copy-Item (Join-Path $RootDir "LICENSE") (Join-Path $DistDir "LICENSE.txt") -Force
+
+# Guard: SCRFD models are downloaded at runtime and must never be bundled.
+if (Get-ChildItem -Path $DistDir -Recurse -Filter *.onnx -ErrorAction SilentlyContinue) {
+    throw "ONNX model files found in the package; models must not be bundled."
+}
 
 Write-Host ""
 Write-Host "✅ Packaged app: $DistDir"

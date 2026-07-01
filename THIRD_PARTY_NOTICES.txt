@@ -16,9 +16,10 @@ Qt  (LGPL-3.0)
 --
 Qt is used under the GNU Lesser General Public License, version 3 (LGPLv3),
 and is dynamically linked. You may replace the bundled Qt libraries with your
-own compatible build. The complete corresponding source code for the bundled
-Qt version is available from https://download.qt.io/ (archived releases) and
-https://code.qt.io/.
+own interface-compatible build; on macOS, re-sign the application bundle with
+your own signing identity after replacing them. The complete corresponding
+source code for the bundled Qt version is available from https://download.qt.io/
+(archived releases) and https://code.qt.io/.
 
 Copyright (C) The Qt Company Ltd. and other Qt contributors.
 ================================================================================
