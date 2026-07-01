@@ -31,7 +31,7 @@ Supported inputs: `.jpg` `.jpeg` `.png` `.bmp` `.tif` `.tiff` `.webp`.
 
 ## Build from source
 
-Requires CMake 3.24+, a C++20 compiler, Qt 6 available to CMake, OpenCV 4, ONNX Runtime, spdlog, and SCRFD ONNX model files.
+Requires CMake 3.24+, a C++20 compiler, Qt 6 available to CMake (with the Linguist tools for UI translations), OpenCV 4, ONNX Runtime, spdlog, and SCRFD ONNX model files.
 
 The built-in models are **not bundled** and **not committed** to this repository. The app downloads them on first use (with an integrity check) and caches them under the platform data directory. To pre-place them for offline use, drop them in `models/`:
 

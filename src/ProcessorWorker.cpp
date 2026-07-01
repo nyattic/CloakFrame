@@ -5,6 +5,7 @@
 #include "faceveil/ReviewTypes.hpp"
 #include "faceveil/ScrfdFaceDetector.hpp"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QImageReader>
 #include <QMetaObject>
@@ -46,7 +47,7 @@ namespace faceveil
             const QSize size = reader.size();
             if (!size.isValid() || size.width() <= 0 || size.height() <= 0)
             {
-                return {false, "cannot inspect image dimensions", {}};
+                return {false, QCoreApplication::translate("faceveil::ProcessorWorker", "cannot inspect image dimensions"), {}};
             }
 
             const long long pixelCount =
@@ -55,7 +56,8 @@ namespace faceveil
             {
                 return {
                     false,
-                    QString("image too large, %1 x %2").arg(size.width()).arg(size.height()),
+                    QCoreApplication::translate("faceveil::ProcessorWorker", "image too large, %1 x %2")
+                        .arg(size.width()).arg(size.height()),
                     size
                 };
             }
@@ -173,13 +175,15 @@ namespace faceveil
                 const auto [it, inserted] = firstSourceForDestination.emplace(key, item.sourcePath);
                 if (!inserted)
                 {
-                    messages.push_back(QString("Output name collision: '%1' and '%2' would both write to '%3'")
+                    messages.push_back(QCoreApplication::translate("faceveil::ProcessorWorker",
+                                                                   "Output name collision: '%1' and '%2' would both write to '%3'")
                         .arg(QString::fromStdString(it->second.string()),
                              QString::fromStdString(item.sourcePath.string()),
                              QString::fromStdString(destination.string())));
                     if (messages.size() >= 10)
                     {
-                        messages.push_back("Additional output name collisions omitted.");
+                        messages.push_back(QCoreApplication::translate("faceveil::ProcessorWorker",
+                                                                       "Additional output name collisions omitted."));
                         return true;
                     }
                 }
@@ -295,17 +299,17 @@ namespace faceveil
         {
             if (!detector_)
             {
-                emit logMessage("Loading SCRFD model...");
+                emit logMessage(tr("Loading SCRFD model..."));
                 detector_ = std::make_shared<ScrfdFaceDetector>(modelPath_.toStdString());
             } else
             {
-                emit logMessage("Reusing loaded SCRFD model.");
+                emit logMessage(tr("Reusing loaded SCRFD model."));
             }
 
-            emit logMessage("Scanning images...");
+            emit logMessage(tr("Scanning images..."));
             const auto images = scanImages(inputs_, recursive_);
             const int total = static_cast<int>(images.size());
-            emit logMessage(QString("Preflight: found %1 supported image(s).").arg(total));
+            emit logMessage(tr("Preflight: found %1 supported image(s).").arg(total));
             emit progressChanged(0, total);
 
             if (cancelled_.load(std::memory_order_acquire))
@@ -316,7 +320,7 @@ namespace faceveil
 
             if (total == 0)
             {
-                emit logMessage("No supported images were found.");
+                emit logMessage(tr("No supported images were found."));
                 emit finished(false);
                 return;
             }
@@ -326,7 +330,7 @@ namespace faceveil
             std::filesystem::create_directories(outputRoot, mkdirError);
             if (mkdirError)
             {
-                emit logMessage(QString("Cannot create output directory: %1")
+                emit logMessage(tr("Cannot create output directory: %1")
                     .arg(QString::fromStdString(mkdirError.message())));
                 emit finished(false);
                 return;
@@ -341,7 +345,7 @@ namespace faceveil
             QStringList collisionMessages;
             if (hasDestinationCollisions(images, safeRoot, collisionMessages))
             {
-                emit logMessage("Refusing to run because multiple inputs would write to the same output path.");
+                emit logMessage(tr("Refusing to run because multiple inputs would write to the same output path."));
                 for (const auto &message: collisionMessages)
                 {
                     emit logMessage(message);
@@ -349,7 +353,7 @@ namespace faceveil
                 emit finished(false);
                 return;
             }
-            emit logMessage("Preflight: output paths are unique.");
+            emit logMessage(tr("Preflight: output paths are unique."));
 
             int completed = 0;
             int index = 0;
@@ -371,7 +375,7 @@ namespace faceveil
                 if (!destinationIsSafe(destination, safeRoot))
                 {
                     emit logMessage(
-                        QString("Skipped unsafe output path for: %1").arg(
+                        tr("Skipped unsafe output path for: %1").arg(
                             QString::fromStdString(source.filename().string())));
                     ++skippedCount;
                     emit progressChanged(++completed, total);
@@ -383,7 +387,7 @@ namespace faceveil
                 if (parentMkdirError)
                 {
                     emit logMessage(
-                        QString("Skipped (cannot create parent dir): %1 — %2")
+                        tr("Skipped (cannot create parent dir): %1 — %2")
                         .arg(QString::fromStdString(source.filename().string()),
                              QString::fromStdString(parentMkdirError.message())));
                     ++skippedCount;
@@ -396,7 +400,7 @@ namespace faceveil
                 if (!sizeError && fileSize > kMaxInputFileBytes)
                 {
                     emit logMessage(
-                        QString("Skipped (file too large, %1 MB): %2")
+                        tr("Skipped (file too large, %1 MB): %2")
                         .arg(static_cast<qulonglong>(fileSize >> 20))
                         .arg(QString::fromStdString(source.filename().string())));
                     ++skippedCount;
@@ -405,12 +409,12 @@ namespace faceveil
                 }
 
                 const QString fileName = QString::fromStdString(source.filename().string());
-                emit stageChanged(index, total, "Loading", fileName);
+                emit stageChanged(index, total, tr("Loading"), fileName);
 
                 const auto dimensions = inspectImageDimensions(source);
                 if (!dimensions.ok)
                 {
-                    emit logMessage(QString("Skipped (%1): %2").arg(dimensions.reason, fileName));
+                    emit logMessage(tr("Skipped (%1): %2").arg(dimensions.reason, fileName));
                     ++skippedCount;
                     emit progressChanged(++completed, total);
                     continue;
@@ -420,7 +424,7 @@ namespace faceveil
                 if (image.empty())
                 {
                     emit logMessage(
-                        QString("Skipped unreadable image: %1").arg(QString::fromStdString(source.string())));
+                        tr("Skipped unreadable image: %1").arg(QString::fromStdString(source.string())));
                     ++skippedCount;
                     emit progressChanged(++completed, total);
                     continue;
@@ -436,7 +440,7 @@ namespace faceveil
                 if (pixelCount > kMaxPixelCount)
                 {
                     emit logMessage(
-                        QString("Skipped (image too large, %1 × %2): %3")
+                        tr("Skipped (image too large, %1 × %2): %3")
                         .arg(image.cols).arg(image.rows)
                         .arg(fileName));
                     image.release();
@@ -445,7 +449,7 @@ namespace faceveil
                     continue;
                 }
 
-                emit stageChanged(index, total, "Detecting", fileName);
+                emit stageChanged(index, total, tr("Detecting"), fileName);
                 const auto detected = detector_->detect(image, scoreThreshold_, nmsThreshold_);
                 if (cancelled_.load(std::memory_order_acquire))
                 {
@@ -457,7 +461,7 @@ namespace faceveil
 
                 if (reviewEnabled_ && reviewReceiver_)
                 {
-                    emit stageChanged(index, total, "Reviewing", fileName);
+                    emit stageChanged(index, total, tr("Reviewing"), fileName);
 
                     auto [preview, previewScale] = makeReviewPreview(image);
                     const QVector<QRectF> detectedRects = scaleRects(toQRects(detected), previewScale);
@@ -476,7 +480,7 @@ namespace faceveil
 
                     if (!invoked)
                     {
-                        emit logMessage("Review bridge unavailable; saved without review.");
+                        emit logMessage(tr("Review bridge unavailable; saved without review."));
                     } else
                     {
                         switch (reviewResult.decision)
@@ -507,7 +511,7 @@ namespace faceveil
 
                 if (doNotSaveThisImage)
                 {
-                    emit logMessage(QString("Skipped without saving: %1").arg(fileName));
+                    emit logMessage(tr("Skipped without saving: %1").arg(fileName));
                     ++skippedCount;
                     emit progressChanged(++completed, total);
                     continue;
@@ -515,22 +519,22 @@ namespace faceveil
 
                 if (copyOriginalThisImage)
                 {
-                    emit stageChanged(index, total, "Saving", fileName);
+                    emit stageChanged(index, total, tr("Saving"), fileName);
                     if (!atomicImwrite(destination, image))
                     {
-                        emit logMessage(QString("Failed to copy: %1").arg(
+                        emit logMessage(tr("Failed to copy: %1").arg(
                             QString::fromStdString(destination.string())));
                         ++failedCount;
                     } else
                     {
-                        emit logMessage(QString("Skipped (original copied): %1").arg(fileName));
+                        emit logMessage(tr("Skipped (original copied): %1").arg(fileName));
                         ++copiedCount;
                     }
                     emit progressChanged(++completed, total);
                     continue;
                 }
 
-                emit stageChanged(index, total, "Applying mosaic", fileName);
+                emit stageChanged(index, total, tr("Applying mosaic"), fileName);
                 applyAnonymization(image, finalFaces, method_, mosaicBlockSize_, paddingRatio_);
 
                 if (cancelled_.load(std::memory_order_acquire))
@@ -541,11 +545,11 @@ namespace faceveil
                 emit stageChanged(index, total, "Saving", fileName);
                 if (!atomicImwrite(destination, image))
                 {
-                    emit logMessage(QString("Failed to save: %1").arg(QString::fromStdString(destination.string())));
+                    emit logMessage(tr("Failed to save: %1").arg(QString::fromStdString(destination.string())));
                     ++failedCount;
                 } else
                 {
-                    emit logMessage(QString("Processed %1 face(s): %2")
+                    emit logMessage(tr("Processed %1 face(s): %2")
                         .arg(static_cast<int>(finalFaces.size()))
                         .arg(fileName));
                     ++anonymizedCount;
@@ -555,7 +559,7 @@ namespace faceveil
             }
 
             emit logMessage(
-                QString("Summary: %1 anonymized, %2 copied, %3 skipped, %4 failed (of %5).")
+                tr("Summary: %1 anonymized, %2 copied, %3 skipped, %4 failed (of %5).")
                     .arg(anonymizedCount).arg(copiedCount).arg(skippedCount).arg(failedCount).arg(total));
 
             if (cancelled_.load(std::memory_order_acquire))
@@ -564,11 +568,11 @@ namespace faceveil
                 return;
             }
 
-            emit logMessage("Done.");
+            emit logMessage(tr("Done."));
             emit finished(false);
         } catch (const std::exception &exception)
         {
-            emit logMessage(QString("Error: %1").arg(exception.what()));
+            emit logMessage(tr("Error: %1").arg(exception.what()));
             emit finished(cancelled_.load(std::memory_order_acquire));
         }
     }

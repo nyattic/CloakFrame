@@ -11,6 +11,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt6 QUIET OPTIONAL_COMPONENTS LinguistTools)
 find_package(OpenCV REQUIRED COMPONENTS core imgcodecs imgproc)
 find_package(spdlog REQUIRED)
 include(CTest)
@@ -91,6 +92,14 @@ target_link_libraries(FaceVeil PRIVATE
     onnxruntime::onnxruntime
     spdlog::spdlog
 )
+
+if(Qt6LinguistTools_FOUND)
+    qt_add_translations(FaceVeil
+        TS_FILES translations/faceveil_ko.ts
+    )
+else()
+    message(WARNING "Qt LinguistTools not found; building without embedded translations (English only).")
+endif()
 
 # ── Security hardening ────────────────────────────────────────────
 # Opt-in compile/link flags that catch common memory-safety issues at runtime

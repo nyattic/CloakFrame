@@ -3,9 +3,12 @@
 #include "faceveil/ReviewTypes.hpp"
 
 #include <QMainWindow>
+#include <QTranslator>
 #include <QVector>
 
+#include <functional>
 #include <memory>
+#include <vector>
 
 class QCheckBox;
 class QComboBox;
@@ -48,6 +51,8 @@ namespace faceveil
 
         void closeEvent(QCloseEvent *event) override;
 
+        void changeEvent(QEvent *event) override;
+
     private slots:
         void chooseModel();
 
@@ -70,7 +75,7 @@ namespace faceveil
     private:
         void addInputPath(const QString &path) const;
 
-        void populateBundledModels() const;
+        void populateBundledModels();
 
         void updateModelPathFromSelection() const;
 
@@ -86,8 +91,15 @@ namespace faceveil
 
         void saveSettings() const;
 
+        void retranslateUi();
+
+        void applyLanguage(const QString &language);
+
+        void addRetranslation(std::function<void()> apply);
+
         QComboBox *modelCombo_ = nullptr;
         QComboBox *methodCombo_ = nullptr;
+        QComboBox *languageCombo_ = nullptr;
         QLineEdit *modelPathEdit_ = nullptr;
         QLineEdit *outputDirEdit_ = nullptr;
         QListWidget *inputList_ = nullptr;
@@ -110,5 +122,9 @@ namespace faceveil
 
         std::shared_ptr<ScrfdFaceDetector> cachedDetector_;
         QString cachedDetectorModelPath_;
+
+        QTranslator translator_;
+        QString language_;
+        std::vector<std::function<void()>> retranslators_;
     };
 }

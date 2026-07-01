@@ -367,7 +367,7 @@ namespace faceveil
                                QWidget *parent)
         : QDialog(parent)
     {
-        setWindowTitle(QString("Review — %1").arg(sourceName));
+        setWindowTitle(tr("Review — %1").arg(sourceName));
         setModal(true);
         resize(960, 720);
 
@@ -386,8 +386,8 @@ namespace faceveil
         root->addWidget(canvas_, 1);
 
         hintLabel_ = new QLabel(
-            QString("Click a box to toggle · Drag an empty area to add · "
-                    "Click a blue box to delete · %1 / %2 to undo/redo")
+            tr("Click a box to toggle · Drag an empty area to add · "
+               "Click a blue box to delete · %1 / %2 to undo/redo")
                 .arg(QKeySequence(QKeySequence::Undo).toString(QKeySequence::NativeText),
                      QKeySequence(QKeySequence::Redo).toString(QKeySequence::NativeText)), this);
         hintLabel_->setStyleSheet("color: #6B7280; font-size: 12px;");
@@ -396,24 +396,24 @@ namespace faceveil
         auto *buttonRow = new QHBoxLayout();
         buttonRow->setSpacing(8);
 
-        auto *cancelAll = new QPushButton("Cancel All", this);
+        auto *cancelAll = new QPushButton(tr("Cancel All"), this);
         cancelAll->setCursor(Qt::PointingHandCursor);
 
-        auto *undoButton = new QPushButton("Undo", this);
+        auto *undoButton = new QPushButton(tr("Undo"), this);
         undoButton->setCursor(Qt::PointingHandCursor);
         undoButton->setEnabled(false);
 
-        auto *redoButton = new QPushButton("Redo", this);
+        auto *redoButton = new QPushButton(tr("Redo"), this);
         redoButton->setCursor(Qt::PointingHandCursor);
         redoButton->setEnabled(false);
 
-        auto *doNotSave = new QPushButton("Do Not Save", this);
+        auto *doNotSave = new QPushButton(tr("Do Not Save"), this);
         doNotSave->setCursor(Qt::PointingHandCursor);
 
-        auto *copyOriginal = new QPushButton("Copy Original", this);
+        auto *copyOriginal = new QPushButton(tr("Copy Original"), this);
         copyOriginal->setCursor(Qt::PointingHandCursor);
 
-        auto *save = new QPushButton("Save && Next", this);
+        auto *save = new QPushButton(tr("Save && Next"), this);
         save->setObjectName("primaryButton");
         save->setCursor(Qt::PointingHandCursor);
         save->setDefault(true);

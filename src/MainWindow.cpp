@@ -4,8 +4,10 @@
 #include "faceveil/ReviewDialog.hpp"
 #include "faceveil/ScrfdFaceDetector.hpp"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -14,6 +16,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QLocale>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPlainTextEdit>
@@ -326,7 +329,8 @@ namespace faceveil
             request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                                  QNetworkRequest::NoLessSafeRedirectPolicy);
 
-            QProgressDialog progress("Downloading model…", "Cancel", 0, 0, parent);
+            QProgressDialog progress(QCoreApplication::translate("faceveil::MainWindow", "Downloading model…"),
+                                     QCoreApplication::translate("faceveil::MainWindow", "Cancel"), 0, 0, parent);
             progress.setWindowModality(Qt::WindowModal);
             progress.setMinimumDuration(0);
             progress.setAutoClose(false);
@@ -354,8 +358,9 @@ namespace faceveil
             {
                 if (reply->error() != QNetworkReply::OperationCanceledError)
                 {
-                    QMessageBox::warning(parent, "Download Failed",
-                                         QString("Could not download the model.\n\n%1").arg(reply->errorString()));
+                    QMessageBox::warning(parent, QCoreApplication::translate("faceveil::MainWindow", "Download Failed"),
+                                         QCoreApplication::translate("faceveil::MainWindow", "Could not download the model.\n\n%1")
+                                             .arg(reply->errorString()));
                 }
                 return false;
             }
@@ -365,8 +370,9 @@ namespace faceveil
                 QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
             if (actual.compare(model.sha256, Qt::CaseInsensitive) != 0)
             {
-                QMessageBox::warning(parent, "Download Failed",
-                                     "The downloaded model failed its integrity check and was discarded.");
+                QMessageBox::warning(parent, QCoreApplication::translate("faceveil::MainWindow", "Download Failed"),
+                                     QCoreApplication::translate("faceveil::MainWindow",
+                                                                 "The downloaded model failed its integrity check and was discarded."));
                 return false;
             }
 
@@ -376,7 +382,8 @@ namespace faceveil
             if (!file.open(QIODevice::WriteOnly) || file.write(data) != data.size())
             {
                 file.remove();
-                QMessageBox::warning(parent, "Download Failed", "Could not save the model file.");
+                QMessageBox::warning(parent, QCoreApplication::translate("faceveil::MainWindow", "Download Failed"),
+                                     QCoreApplication::translate("faceveil::MainWindow", "Could not save the model file."));
                 return false;
             }
             file.close();
@@ -384,7 +391,8 @@ namespace faceveil
             if (!QFile::rename(tempPath, destPath))
             {
                 QFile::remove(tempPath);
-                QMessageBox::warning(parent, "Download Failed", "Could not save the model file.");
+                QMessageBox::warning(parent, QCoreApplication::translate("faceveil::MainWindow", "Download Failed"),
+                                     QCoreApplication::translate("faceveil::MainWindow", "Could not save the model file."));
                 return false;
             }
             return true;
@@ -395,11 +403,12 @@ namespace faceveil
             const auto sizeMb = QString::number(model.approxBytes / 1024.0 / 1024.0, 'f', 1);
             const auto answer = QMessageBox::question(
                 parent,
-                "Download Model",
-                QString("The %1 model isn't on this computer yet.\n\n"
-                        "FaceVeil can download it once (%2 MB) from Hugging Face. "
-                        "The model is provided by InsightFace for non-commercial use. "
-                        "Your images are never uploaded.\n\nDownload now?")
+                QCoreApplication::translate("faceveil::MainWindow", "Download Model"),
+                QCoreApplication::translate("faceveil::MainWindow",
+                                            "The %1 model isn't on this computer yet.\n\n"
+                                            "FaceVeil can download it once (%2 MB) from Hugging Face. "
+                                            "The model is provided by InsightFace for non-commercial use. "
+                                            "Your images are never uploaded.\n\nDownload now?")
                     .arg(model.fileName, sizeMb),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::Yes);
@@ -410,24 +419,24 @@ namespace faceveil
             return downloadModelWithProgress(parent, model, destPath);
         }
 
-        QLabel *makeSectionTitle(const QString &text, QWidget *parent)
+        QLabel *makeSectionTitle(QWidget *parent)
         {
-            auto *label = new QLabel(text, parent);
+            auto *label = new QLabel(parent);
             label->setProperty("role", "sectionTitle");
             return label;
         }
 
-        QLabel *makeSectionHint(const QString &text, QWidget *parent)
+        QLabel *makeSectionHint(QWidget *parent)
         {
-            auto *label = new QLabel(text, parent);
+            auto *label = new QLabel(parent);
             label->setProperty("role", "sectionHint");
             label->setWordWrap(true);
             return label;
         }
 
-        QLabel *makeFieldLabel(const QString &text, QWidget *parent)
+        QLabel *makeFieldLabel(QWidget *parent)
         {
-            auto *label = new QLabel(text, parent);
+            auto *label = new QLabel(parent);
             label->setProperty("role", "fieldLabel");
             return label;
         }
@@ -437,19 +446,22 @@ namespace faceveil
             const QFileInfo info(path);
             if (!info.exists() || !info.isFile())
             {
-                QMessageBox::warning(parent, "Invalid Model", "Choose an existing ONNX model file.");
+                QMessageBox::warning(parent, QCoreApplication::translate("faceveil::MainWindow", "Invalid Model"),
+                                     QCoreApplication::translate("faceveil::MainWindow", "Choose an existing ONNX model file."));
                 return false;
             }
             if (info.suffix().compare("onnx", Qt::CaseInsensitive) != 0)
             {
-                QMessageBox::warning(parent, "Invalid Model", "The selected model must use the .onnx extension.");
+                QMessageBox::warning(parent, QCoreApplication::translate("faceveil::MainWindow", "Invalid Model"),
+                                     QCoreApplication::translate("faceveil::MainWindow", "The selected model must use the .onnx extension."));
                 return false;
             }
             if (info.size() > kMaxCustomModelBytes)
             {
-                QMessageBox::warning(parent, "Model Too Large",
-                                     "The selected ONNX file is larger than 512 MB. "
-                                     "Choose a smaller SCRFD model.");
+                QMessageBox::warning(parent, QCoreApplication::translate("faceveil::MainWindow", "Model Too Large"),
+                                     QCoreApplication::translate("faceveil::MainWindow",
+                                                                 "The selected ONNX file is larger than 512 MB. "
+                                                                 "Choose a smaller SCRFD model."));
                 return false;
             }
             return true;
@@ -460,8 +472,9 @@ namespace faceveil
             const QFileInfo info(path);
             const auto answer = QMessageBox::question(
                 parent,
-                "Load Custom Model",
-                QString("Only load ONNX models from sources you trust.\n\nModel: %1\nSize: %2 MB\n\nContinue?")
+                QCoreApplication::translate("faceveil::MainWindow", "Load Custom Model"),
+                QCoreApplication::translate("faceveil::MainWindow",
+                                            "Only load ONNX models from sources you trust.\n\nModel: %1\nSize: %2 MB\n\nContinue?")
                     .arg(info.fileName())
                     .arg(QString::number(info.size() / 1024.0 / 1024.0, 'f', 1)),
                 QMessageBox::Yes | QMessageBox::No,
@@ -512,15 +525,33 @@ namespace faceveil
         titleRow->setSpacing(8);
         auto *title = new QLabel("FaceVeil", header);
         title->setObjectName("titleLabel");
+
+        languageCombo_ = new QComboBox(header);
+        languageCombo_->addItem("English", "en");
+        languageCombo_->addItem("한국어", "ko");
+        languageCombo_->setFocusPolicy(Qt::NoFocus);
+        languageCombo_->setCursor(Qt::PointingHandCursor);
+        connect(languageCombo_, &QComboBox::currentIndexChanged, this, [this]
+        {
+            const auto language = languageCombo_->currentData().toString();
+            if (language != language_)
+            {
+                applyLanguage(language);
+                saveSettings();
+            }
+        });
+
         auto *versionLabel = new QLabel(QString("v%1").arg(QCoreApplication::applicationVersion()), header);
         versionLabel->setObjectName("subtitleLabel");
         versionLabel->setAlignment(Qt::AlignRight | Qt::AlignBottom);
         titleRow->addWidget(title);
         titleRow->addStretch(1);
+        titleRow->addWidget(languageCombo_);
         titleRow->addWidget(versionLabel);
 
-        auto *subtitle = new QLabel("Local, private face anonymization for photos", header);
+        auto *subtitle = new QLabel(header);
         subtitle->setObjectName("subtitleLabel");
+        addRetranslation([this, subtitle]{ subtitle->setText(tr("Local, private face anonymization for photos")); });
         headerLayout->addLayout(titleRow);
         headerLayout->addWidget(subtitle);
         root->addWidget(header);
@@ -531,9 +562,14 @@ namespace faceveil
             cardLayout->setContentsMargins(20, 18, 20, 18);
             cardLayout->setSpacing(12);
 
-            cardLayout->addWidget(makeSectionTitle("Model", card));
-            cardLayout->addWidget(makeSectionHint(
-                "Choose speed vs. accuracy, or load a custom SCRFD ONNX file.", card));
+            auto *modelTitle = makeSectionTitle(card);
+            cardLayout->addWidget(modelTitle);
+            addRetranslation([this, modelTitle]{ modelTitle->setText(tr("Model")); });
+
+            auto *modelHint = makeSectionHint(card);
+            cardLayout->addWidget(modelHint);
+            addRetranslation([this, modelHint]
+                             { modelHint->setText(tr("Choose speed vs. accuracy, or load a custom SCRFD ONNX file.")); });
 
             modelCombo_ = new QComboBox(card);
             modelCombo_->setMinimumHeight(34);
@@ -543,8 +579,9 @@ namespace faceveil
             pathRow->setSpacing(8);
             modelPathEdit_ = new QLineEdit(card);
             modelPathEdit_->setReadOnly(true);
-            modelPathEdit_->setPlaceholderText("Bundled SCRFD model path");
-            auto *modelButton = new QPushButton("Browse…", card);
+            addRetranslation([this]{ modelPathEdit_->setPlaceholderText(tr("Bundled SCRFD model path")); });
+            auto *modelButton = new QPushButton(card);
+            addRetranslation([this, modelButton]{ modelButton->setText(tr("Browse…")); });
             modelButton->setCursor(Qt::PointingHandCursor);
             pathRow->addWidget(modelPathEdit_, 1);
             pathRow->addWidget(modelButton);
@@ -563,9 +600,14 @@ namespace faceveil
             cardLayout->setContentsMargins(20, 18, 20, 18);
             cardLayout->setSpacing(12);
 
-            cardLayout->addWidget(makeSectionTitle("Inputs", card));
-            cardLayout->addWidget(makeSectionHint(
-                "Drag images or folders here, or use the buttons below.", card));
+            auto *inputsTitle = makeSectionTitle(card);
+            cardLayout->addWidget(inputsTitle);
+            addRetranslation([this, inputsTitle]{ inputsTitle->setText(tr("Inputs")); });
+
+            auto *inputsHint = makeSectionHint(card);
+            cardLayout->addWidget(inputsHint);
+            addRetranslation([this, inputsHint]
+                             { inputsHint->setText(tr("Drag images or folders here, or use the buttons below.")); });
 
             inputList_ = new QListWidget(card);
             inputList_->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -575,20 +617,28 @@ namespace faceveil
 
             auto *buttonRow = new QHBoxLayout();
             buttonRow->setSpacing(8);
-            auto *addFiles = new QPushButton("Add Images", card);
-            auto *addFolder = new QPushButton("Add Folder", card);
-            auto *clearInputs = new QPushButton("Clear", card);
+            auto *addFiles = new QPushButton(card);
+            addRetranslation([this, addFiles]{ addFiles->setText(tr("Add Images")); });
+            auto *addFolder = new QPushButton(card);
+            addRetranslation([this, addFolder]{ addFolder->setText(tr("Add Folder")); });
+            auto *clearInputs = new QPushButton(card);
+            addRetranslation([this, clearInputs]{ clearInputs->setText(tr("Clear")); });
             addFiles->setCursor(Qt::PointingHandCursor);
             addFolder->setCursor(Qt::PointingHandCursor);
             clearInputs->setCursor(Qt::PointingHandCursor);
-            recursiveCheck_ = new QCheckBox("Include subfolders", card);
+            recursiveCheck_ = new QCheckBox(card);
+            addRetranslation([this]{ recursiveCheck_->setText(tr("Include subfolders")); });
             recursiveCheck_->setChecked(true);
-            reviewCheck_ = new QCheckBox("Review each image", card);
+            reviewCheck_ = new QCheckBox(card);
+            addRetranslation([this]{ reviewCheck_->setText(tr("Review each image")); });
             reviewCheck_->setChecked(false);
-            reviewCheck_->setToolTip(
-                "Before saving each image, open a preview where you can:\n"
-                "  • Click a detected box to exclude it\n"
-                "  • Drag an empty area to add a box the model missed");
+            addRetranslation([this]
+                             {
+                                 reviewCheck_->setToolTip(tr(
+                                     "Before saving each image, open a preview where you can:\n"
+                                     "  • Click a detected box to exclude it\n"
+                                     "  • Drag an empty area to add a box the model missed"));
+                             });
 
             connect(addFiles, &QPushButton::clicked, this, &MainWindow::chooseFiles);
             connect(addFolder, &QPushButton::clicked, this, &MainWindow::chooseFolder);
@@ -611,14 +661,20 @@ namespace faceveil
             cardLayout->setContentsMargins(20, 18, 20, 18);
             cardLayout->setSpacing(12);
 
-            cardLayout->addWidget(makeSectionTitle("Output", card));
-            cardLayout->addWidget(makeSectionHint(
-                "Anonymized copies are written here, preserving folder structure.", card));
+            auto *outputTitle = makeSectionTitle(card);
+            cardLayout->addWidget(outputTitle);
+            addRetranslation([this, outputTitle]{ outputTitle->setText(tr("Output")); });
+
+            auto *outputHint = makeSectionHint(card);
+            cardLayout->addWidget(outputHint);
+            addRetranslation([this, outputHint]
+                             { outputHint->setText(tr("Anonymized copies are written here, preserving folder structure.")); });
 
             auto *outputRow = new QHBoxLayout();
             outputRow->setSpacing(8);
             outputDirEdit_ = new QLineEdit(defaultOutputDirectory(), card);
-            auto *outputButton = new QPushButton("Choose…", card);
+            auto *outputButton = new QPushButton(card);
+            addRetranslation([this, outputButton]{ outputButton->setText(tr("Choose…")); });
             outputButton->setCursor(Qt::PointingHandCursor);
             outputRow->addWidget(outputDirEdit_, 1);
             outputRow->addWidget(outputButton);
@@ -640,7 +696,7 @@ namespace faceveil
 
             advancedToggle_ = new QToolButton(card);
             advancedToggle_->setObjectName("advancedToggle");
-            advancedToggle_->setText("Advanced Options");
+            addRetranslation([this]{ advancedToggle_->setText(tr("Advanced Options")); });
             advancedToggle_->setCheckable(true);
             advancedToggle_->setChecked(false);
             advancedToggle_->setArrowType(Qt::RightArrow);
@@ -648,7 +704,8 @@ namespace faceveil
             advancedToggle_->setCursor(Qt::PointingHandCursor);
             advancedToggle_->setFocusPolicy(Qt::NoFocus);
 
-            auto *resetButton = new QPushButton("Reset to defaults", card);
+            auto *resetButton = new QPushButton(card);
+            addRetranslation([this, resetButton]{ resetButton->setText(tr("Reset to defaults")); });
             resetButton->setCursor(Qt::PointingHandCursor);
 
             headerRow->addWidget(advancedToggle_);
@@ -661,68 +718,100 @@ namespace faceveil
             bodyLayout->setContentsMargins(0, 14, 0, 4);
             bodyLayout->setSpacing(12);
 
-            bodyLayout->addWidget(makeSectionHint(
-                "Tweak detection and mosaic behavior. Defaults work for most photos.",
-                advancedBody_));
+            auto *advancedHint = makeSectionHint(advancedBody_);
+            bodyLayout->addWidget(advancedHint);
+            addRetranslation([this, advancedHint]
+                             { advancedHint->setText(tr("Tweak detection and mosaic behavior. Defaults work for most photos.")); });
 
             methodCombo_ = new QComboBox(advancedBody_);
-            methodCombo_->addItem("Mosaic (pixelate)", static_cast<int>(AnonymizationMethod::Mosaic));
-            methodCombo_->addItem("Gaussian blur", static_cast<int>(AnonymizationMethod::Blur));
-            methodCombo_->addItem("Solid fill (blackout)", static_cast<int>(AnonymizationMethod::Fill));
-            methodCombo_->setToolTip(
-                "How detected faces are obscured.\n"
-                "Mosaic = pixelation (block size below).\n"
-                "Gaussian blur = strong smoothing scaled to face size.\n"
-                "Solid fill = opaque black box, irreversible. Default: Mosaic");
+            methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Mosaic));
+            methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Blur));
+            methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Fill));
+            addRetranslation([this]
+                             {
+                                 methodCombo_->setItemText(0, tr("Mosaic (pixelate)"));
+                                 methodCombo_->setItemText(1, tr("Gaussian blur"));
+                                 methodCombo_->setItemText(2, tr("Solid fill (blackout)"));
+                             });
+            addRetranslation([this]
+                             {
+                                 methodCombo_->setToolTip(tr(
+                                     "How detected faces are obscured.\n"
+                                     "Mosaic = pixelation (block size below).\n"
+                                     "Gaussian blur = strong smoothing scaled to face size.\n"
+                                     "Solid fill = opaque black box, irreversible. Default: Mosaic"));
+                             });
 
             scoreThresholdSpin_ = new QDoubleSpinBox(advancedBody_);
             scoreThresholdSpin_->setRange(0.05, 0.99);
             scoreThresholdSpin_->setSingleStep(0.05);
             scoreThresholdSpin_->setDecimals(2);
             scoreThresholdSpin_->setValue(kDefaultScoreThreshold);
-            scoreThresholdSpin_->setToolTip(
-                "Minimum confidence to accept a face.\n"
-                "Higher = fewer false positives but may miss small or side-profile faces.\n"
-                "Lower = catches more faces but may blur non-face regions. Default: 0.50");
+            addRetranslation([this]
+                             {
+                                 scoreThresholdSpin_->setToolTip(tr(
+                                     "Minimum confidence to accept a face.\n"
+                                     "Higher = fewer false positives but may miss small or side-profile faces.\n"
+                                     "Lower = catches more faces but may blur non-face regions. Default: 0.50"));
+                             });
 
             nmsThresholdSpin_ = new QDoubleSpinBox(advancedBody_);
             nmsThresholdSpin_->setRange(0.05, 0.95);
             nmsThresholdSpin_->setSingleStep(0.05);
             nmsThresholdSpin_->setDecimals(2);
             nmsThresholdSpin_->setValue(kDefaultNmsThreshold);
-            nmsThresholdSpin_->setToolTip(
-                "Non-Maximum Suppression overlap threshold for duplicate boxes.\n"
-                "Lower = more aggressively removes overlapping detections.\n"
-                "Higher = allows more overlap. Default: 0.40");
+            addRetranslation([this]
+                             {
+                                 nmsThresholdSpin_->setToolTip(tr(
+                                     "Non-Maximum Suppression overlap threshold for duplicate boxes.\n"
+                                     "Lower = more aggressively removes overlapping detections.\n"
+                                     "Higher = allows more overlap. Default: 0.40"));
+                             });
 
             blockSizeSpin_ = new QSpinBox(advancedBody_);
             blockSizeSpin_->setRange(2, 200);
             blockSizeSpin_->setValue(kDefaultBlockSize);
-            blockSizeSpin_->setToolTip(
-                "Mosaic block size in pixels.\n"
-                "Larger = coarser blocks, harder to un-blur.\n"
-                "Smaller = finer mosaic, higher recovery risk. Default: 28");
+            addRetranslation([this]
+                             {
+                                 blockSizeSpin_->setToolTip(tr(
+                                     "Mosaic block size in pixels.\n"
+                                     "Larger = coarser blocks, harder to un-blur.\n"
+                                     "Smaller = finer mosaic, higher recovery risk. Default: 28"));
+                             });
 
             paddingSpin_ = new QDoubleSpinBox(advancedBody_);
             paddingSpin_->setRange(0.0, 1.0);
             paddingSpin_->setSingleStep(0.05);
             paddingSpin_->setDecimals(2);
             paddingSpin_->setValue(kDefaultPadding);
-            paddingSpin_->setToolTip(
-                "Extra margin around each detected face, as a fraction of its size.\n"
-                "Covers ears, hairline, and chin that the detector may miss.\n"
-                "0.00 = exact box, 0.18 = ~18% larger. Default: 0.18");
+            addRetranslation([this]
+                             {
+                                 paddingSpin_->setToolTip(tr(
+                                     "Extra margin around each detected face, as a fraction of its size.\n"
+                                     "Covers ears, hairline, and chin that the detector may miss.\n"
+                                     "0.00 = exact box, 0.18 = ~18% larger. Default: 0.18"));
+                             });
 
             auto *grid = new QFormLayout();
             grid->setLabelAlignment(Qt::AlignLeft);
             grid->setFormAlignment(Qt::AlignLeft | Qt::AlignTop);
             grid->setHorizontalSpacing(18);
             grid->setVerticalSpacing(10);
-            grid->addRow(makeFieldLabel("Anonymization", advancedBody_), methodCombo_);
-            grid->addRow(makeFieldLabel("Score threshold", advancedBody_), scoreThresholdSpin_);
-            grid->addRow(makeFieldLabel("NMS threshold", advancedBody_), nmsThresholdSpin_);
-            grid->addRow(makeFieldLabel("Mosaic block size", advancedBody_), blockSizeSpin_);
-            grid->addRow(makeFieldLabel("Face padding", advancedBody_), paddingSpin_);
+            auto *methodLabel = makeFieldLabel(advancedBody_);
+            addRetranslation([this, methodLabel]{ methodLabel->setText(tr("Anonymization")); });
+            grid->addRow(methodLabel, methodCombo_);
+            auto *scoreLabel = makeFieldLabel(advancedBody_);
+            addRetranslation([this, scoreLabel]{ scoreLabel->setText(tr("Score threshold")); });
+            grid->addRow(scoreLabel, scoreThresholdSpin_);
+            auto *nmsLabel = makeFieldLabel(advancedBody_);
+            addRetranslation([this, nmsLabel]{ nmsLabel->setText(tr("NMS threshold")); });
+            grid->addRow(nmsLabel, nmsThresholdSpin_);
+            auto *blockLabel = makeFieldLabel(advancedBody_);
+            addRetranslation([this, blockLabel]{ blockLabel->setText(tr("Mosaic block size")); });
+            grid->addRow(blockLabel, blockSizeSpin_);
+            auto *paddingLabel = makeFieldLabel(advancedBody_);
+            addRetranslation([this, paddingLabel]{ paddingLabel->setText(tr("Face padding")); });
+            grid->addRow(paddingLabel, paddingSpin_);
             bodyLayout->addLayout(grid);
 
             advancedBody_->setVisible(false);
@@ -740,7 +829,9 @@ namespace faceveil
             cardLayout->setContentsMargins(20, 18, 20, 18);
             cardLayout->setSpacing(10);
 
-            cardLayout->addWidget(makeSectionTitle("Activity", card));
+            auto *activityTitle = makeSectionTitle(card);
+            cardLayout->addWidget(activityTitle);
+            addRetranslation([this, activityTitle]{ activityTitle->setText(tr("Activity")); });
             logEdit_ = new QPlainTextEdit(card);
             logEdit_->setReadOnly(true);
             logEdit_->setMinimumHeight(140);
@@ -760,8 +851,9 @@ namespace faceveil
         bottomLayout->setContentsMargins(24, 14, 24, 14);
         bottomLayout->setSpacing(14);
 
-        statusLabel_ = new QLabel("Ready", bottomBar);
+        statusLabel_ = new QLabel(bottomBar);
         statusLabel_->setObjectName("statusLabel");
+        addRetranslation([this]{ statusLabel_->setText(tr("Ready")); });
 
         progressBar_ = new QProgressBar(bottomBar);
         progressBar_->setRange(0, 100);
@@ -769,13 +861,15 @@ namespace faceveil
         progressBar_->setTextVisible(false);
         progressBar_->setFixedHeight(6);
 
-        stopButton_ = new QPushButton("Stop", bottomBar);
+        stopButton_ = new QPushButton(bottomBar);
         stopButton_->setObjectName("dangerButton");
+        addRetranslation([this]{ stopButton_->setText(tr("Stop")); });
         stopButton_->setCursor(Qt::PointingHandCursor);
         stopButton_->setEnabled(false);
 
-        startButton_ = new QPushButton("Start", bottomBar);
+        startButton_ = new QPushButton(bottomBar);
         startButton_->setObjectName("primaryButton");
+        addRetranslation([this]{ startButton_->setText(tr("Start")); });
         startButton_->setCursor(Qt::PointingHandCursor);
         startButton_->setDefault(true);
 
@@ -794,7 +888,7 @@ namespace faceveil
 
         populateBundledModels();
         loadSettings();
-        appendLog("Ready. Drop images or folders to begin.");
+        appendLog(tr("Ready. Drop images or folders to begin."));
     }
 
     MainWindow::~MainWindow()
@@ -866,8 +960,8 @@ namespace faceveil
 
     void MainWindow::chooseModel()
     {
-        const auto path = QFileDialog::getOpenFileName(this, "Select SCRFD ONNX Model", QDir::currentPath(),
-                                                       "ONNX Models (*.onnx)");
+        const auto path = QFileDialog::getOpenFileName(this, tr("Select SCRFD ONNX Model"), QDir::currentPath(),
+                                                       tr("ONNX Models (*.onnx)"));
         if (!path.isEmpty())
         {
             if (!customModelFileIsAllowed(this, path) || !confirmTrustedCustomModel(this, path))
@@ -875,7 +969,7 @@ namespace faceveil
                 return;
             }
             const QFileInfo info(path);
-            modelCombo_->addItem("Custom — " + info.fileName(), info.absoluteFilePath());
+            modelCombo_->addItem(tr("Custom — %1").arg(info.fileName()), info.absoluteFilePath());
             modelCombo_->setCurrentIndex(modelCombo_->count() - 1);
             modelPathEdit_->setText(path);
         }
@@ -884,10 +978,10 @@ namespace faceveil
     void MainWindow::chooseFiles()
     {
         const auto files = QFileDialog::getOpenFileNames(this,
-                                                         "Select Images",
+                                                         tr("Select Images"),
                                                          QStandardPaths::writableLocation(
                                                              QStandardPaths::PicturesLocation),
-                                                         "Images (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp)");
+                                                         tr("Images (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp)"));
         for (const auto &file: files)
         {
             addInputPath(file);
@@ -896,7 +990,7 @@ namespace faceveil
 
     void MainWindow::chooseFolder()
     {
-        const auto folder = QFileDialog::getExistingDirectory(this, "Select Folder",
+        const auto folder = QFileDialog::getExistingDirectory(this, tr("Select Folder"),
                                                               QStandardPaths::writableLocation(
                                                                   QStandardPaths::PicturesLocation));
         if (!folder.isEmpty())
@@ -907,7 +1001,7 @@ namespace faceveil
 
     void MainWindow::chooseOutputDirectory()
     {
-        const auto folder = QFileDialog::getExistingDirectory(this, "Select Output Folder", outputDirEdit_->text());
+        const auto folder = QFileDialog::getExistingDirectory(this, tr("Select Output Folder"), outputDirEdit_->text());
         if (!folder.isEmpty())
         {
             outputDirEdit_->setText(folder);
@@ -917,12 +1011,11 @@ namespace faceveil
     void MainWindow::startProcessing()
     {
         const auto modelPath = selectedModelPath();
-        const auto currentLabel = modelCombo_ ? modelCombo_->currentText() : QString();
-        const bool isCustom = currentLabel.startsWith("Custom");
+        const bool isCustom = !modelPath.isEmpty() && findBuiltinModel(modelPath) == nullptr;
 
         if (modelPath.isEmpty())
         {
-            appendLog("Choose a SCRFD ONNX model first.");
+            appendLog(tr("Choose a SCRFD ONNX model first."));
             return;
         }
 
@@ -931,17 +1024,17 @@ namespace faceveil
             const BuiltinModel *builtin = isCustom ? nullptr : findBuiltinModel(modelPath);
             if (builtin == nullptr)
             {
-                appendLog("Choose a valid SCRFD ONNX model first.");
+                appendLog(tr("Choose a valid SCRFD ONNX model first."));
                 return;
             }
-            appendLog(QString("Downloading %1…").arg(builtin->fileName));
+            appendLog(tr("Downloading %1…").arg(builtin->fileName));
             if (!ensureBuiltinModelAvailable(this, *builtin, modelPath))
             {
-                appendLog("Model download was cancelled or failed.");
+                appendLog(tr("Model download was cancelled or failed."));
                 return;
             }
             updateModelPathFromSelection();
-            appendLog(QString("Model ready: %1").arg(builtin->fileName));
+            appendLog(tr("Model ready: %1").arg(builtin->fileName));
         }
 
         if (isCustom && !customModelFileIsAllowed(this, modelPath))
@@ -951,13 +1044,13 @@ namespace faceveil
 
         if (inputList_->count() == 0)
         {
-            appendLog("Add at least one image or folder.");
+            appendLog(tr("Add at least one image or folder."));
             return;
         }
 
         if (outputDirEdit_->text().isEmpty())
         {
-            appendLog("Choose an output folder.");
+            appendLog(tr("Choose an output folder."));
             return;
         }
 
@@ -982,8 +1075,8 @@ namespace faceveil
             const bool isUnder = canonicalOutput.startsWith(withSep, Qt::CaseInsensitive);
             if (isSame || isUnder)
             {
-                appendLog(QString("Refusing to run: output folder is inside input '%1'. "
-                        "Pick a different output folder so originals aren't overwritten.")
+                appendLog(tr("Refusing to run: output folder is inside input '%1'. "
+                             "Pick a different output folder so originals aren't overwritten.")
                     .arg(input));
                 return;
             }
@@ -991,7 +1084,7 @@ namespace faceveil
 
         setProcessing(true);
         progressBar_->setValue(0);
-        statusLabel_->setText("Starting…");
+        statusLabel_->setText(tr("Starting…"));
 
         auto detectorForRun = (cachedDetectorModelPath_ == modelPath) ? cachedDetector_ : nullptr;
 
@@ -1028,7 +1121,7 @@ namespace faceveil
         connect(workerThread_, &QThread::finished, worker_, &QObject::deleteLater);
         connect(workerThread_, &QThread::finished, workerThread_, &QObject::deleteLater);
 
-        appendLog("Starting…");
+        appendLog(tr("Starting…"));
         workerThread_->start();
     }
 
@@ -1036,16 +1129,16 @@ namespace faceveil
     {
         if (worker_ != nullptr)
         {
-            appendLog("Stopping after the current processing step…");
-            statusLabel_->setText("Stopping…");
+            appendLog(tr("Stopping after the current processing step…"));
+            statusLabel_->setText(tr("Stopping…"));
             QMetaObject::invokeMethod(worker_, "cancel", Qt::QueuedConnection);
         }
     }
 
     void MainWindow::onWorkerFinished(bool cancelled)
     {
-        appendLog(cancelled ? "Cancelled." : "Finished.");
-        statusLabel_->setText(cancelled ? "Cancelled" : "Done");
+        appendLog(cancelled ? tr("Cancelled.") : tr("Finished."));
+        statusLabel_->setText(cancelled ? tr("Cancelled") : tr("Done"));
         setProcessing(false);
 
         if (worker_ != nullptr)
@@ -1116,7 +1209,7 @@ namespace faceveil
         if (!savedCustomModel.isEmpty() && QFileInfo::exists(savedCustomModel))
         {
             const QFileInfo info(savedCustomModel);
-            modelCombo_->addItem("Custom — " + info.fileName(), info.absoluteFilePath());
+            modelCombo_->addItem(tr("Custom — %1").arg(info.fileName()), info.absoluteFilePath());
             modelCombo_->setCurrentIndex(modelCombo_->count() - 1);
         }
 
@@ -1146,6 +1239,21 @@ namespace faceveil
         }
         settings.endGroup();
 
+        const auto savedLanguage = settings.value("language").toString();
+        QString language = savedLanguage;
+        if (language.isEmpty())
+        {
+            language = (QLocale::system().language() == QLocale::Korean) ? QStringLiteral("ko") : QStringLiteral("en");
+        }
+        if (languageCombo_ != nullptr)
+        {
+            languageCombo_->blockSignals(true);
+            const int languageIndex = languageCombo_->findData(language);
+            languageCombo_->setCurrentIndex(languageIndex >= 0 ? languageIndex : 0);
+            languageCombo_->blockSignals(false);
+        }
+        applyLanguage(language);
+
         updateModelPathFromSelection();
     }
 
@@ -1160,10 +1268,10 @@ namespace faceveil
         settings.beginGroup("processing");
         settings.setValue("modelIndex", modelCombo_ ? modelCombo_->currentIndex() : 0);
 
-        const auto currentLabel = modelCombo_ ? modelCombo_->currentText() : QString();
-        if (currentLabel.startsWith("Custom"))
+        const auto currentModel = selectedModelPath();
+        if (!currentModel.isEmpty() && findBuiltinModel(currentModel) == nullptr)
         {
-            settings.setValue("customModelPath", selectedModelPath());
+            settings.setValue("customModelPath", currentModel);
         } else
         {
             settings.remove("customModelPath");
@@ -1179,6 +1287,8 @@ namespace faceveil
         settings.setValue("method", methodCombo_ ? methodCombo_->currentIndex() : 0);
         settings.setValue("advancedExpanded", advancedToggle_ ? advancedToggle_->isChecked() : false);
         settings.endGroup();
+
+        settings.setValue("language", language_);
     }
 
     void MainWindow::addInputPath(const QString &path) const
@@ -1211,6 +1321,7 @@ namespace faceveil
     {
         startButton_->setEnabled(!processing);
         stopButton_->setEnabled(processing);
+        languageCombo_->setEnabled(!processing);
         modelCombo_->setEnabled(!processing);
         methodCombo_->setEnabled(!processing);
         modelPathEdit_->setEnabled(!processing);
@@ -1234,14 +1345,23 @@ namespace faceveil
         return paths;
     }
 
-    void MainWindow::populateBundledModels() const
+    void MainWindow::populateBundledModels()
     {
         for (const auto &model: builtinModels())
         {
             const auto existing = firstExistingModelPath(model.fileName);
             const auto path = existing.isEmpty() ? modelCacheDir() + "/" + model.fileName : existing;
-            modelCombo_->addItem(model.label, path);
+            modelCombo_->addItem(QString(), path);
         }
+
+        addRetranslation([this]
+                         {
+                             if (modelCombo_->count() >= 2)
+                             {
+                                 modelCombo_->setItemText(0, tr("Fast  ·  SCRFD 2.5G"));
+                                 modelCombo_->setItemText(1, tr("Accurate  ·  SCRFD 10G"));
+                             }
+                         });
 
         modelCombo_->setCurrentIndex(0);
         updateModelPathFromSelection();
@@ -1256,7 +1376,7 @@ namespace faceveil
         }
         else
         {
-            modelPathEdit_->setText("Not downloaded yet — fetched when you press Start");
+            modelPathEdit_->setText(tr("Not downloaded yet — fetched when you press Start"));
         }
     }
 
@@ -1268,6 +1388,39 @@ namespace faceveil
         }
 
         return modelCombo_->currentData().toString();
+    }
+
+    void MainWindow::addRetranslation(std::function<void()> apply)
+    {
+        apply();
+        retranslators_.push_back(std::move(apply));
+    }
+
+    void MainWindow::retranslateUi()
+    {
+        for (const auto &apply: retranslators_)
+        {
+            apply();
+        }
+    }
+
+    void MainWindow::applyLanguage(const QString &language)
+    {
+        qApp->removeTranslator(&translator_);
+        if (language != "en" && translator_.load(":/i18n/faceveil_" + language + ".qm"))
+        {
+            qApp->installTranslator(&translator_);
+        }
+        language_ = language;
+    }
+
+    void MainWindow::changeEvent(QEvent *event)
+    {
+        if (event->type() == QEvent::LanguageChange)
+        {
+            retranslateUi();
+        }
+        QMainWindow::changeEvent(event);
     }
 
     void MainWindow::appendLog(const QString &message) const
