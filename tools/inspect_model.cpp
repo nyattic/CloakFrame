@@ -1,27 +1,37 @@
 #include <onnxruntime_cxx_api.h>
 
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_sinks.h>
+
 #include <filesystem>
-#include <iostream>
+#include <memory>
+#include <string>
 #include <vector>
 
 namespace {
 
-void printShape(const std::vector<int64_t>& shape) {
-    std::cout << "[";
+std::string shapeToString(const std::vector<int64_t>& shape) {
+    std::string result = "[";
     for (size_t i = 0; i < shape.size(); ++i) {
         if (i > 0) {
-            std::cout << ", ";
+            result += ", ";
         }
-        std::cout << shape[i];
+        result += std::to_string(shape[i]);
     }
-    std::cout << "]";
+    result += "]";
+    return result;
 }
 
 }
 
 int main(int argc, char* argv[]) {
+    auto logger = std::make_shared<spdlog::logger>(
+        "inspect", std::make_shared<spdlog::sinks::stdout_sink_mt>());
+    logger->set_pattern("%v");
+    spdlog::set_default_logger(logger);
+
     if (argc != 2) {
-        std::cerr << "Usage: faceveil_inspect_model <model.onnx>\n";
+        spdlog::error("Usage: faceveil_inspect_model <model.onnx>");
         return 2;
     }
 
@@ -34,27 +44,23 @@ int main(int argc, char* argv[]) {
         Ort::Session session(env, modelPath.c_str(), options);
         Ort::AllocatorWithDefaultOptions allocator;
 
-        std::cout << "Inputs\n";
+        spdlog::info("Inputs");
         for (size_t i = 0; i < session.GetInputCount(); ++i) {
             auto name = session.GetInputNameAllocated(i, allocator);
             const auto typeInfo = session.GetInputTypeInfo(i);
             const auto info = typeInfo.GetTensorTypeAndShapeInfo();
-            std::cout << "  " << name.get() << " ";
-            printShape(info.GetShape());
-            std::cout << "\n";
+            spdlog::info("  {} {}", name.get(), shapeToString(info.GetShape()));
         }
 
-        std::cout << "Outputs\n";
+        spdlog::info("Outputs");
         for (size_t i = 0; i < session.GetOutputCount(); ++i) {
             auto name = session.GetOutputNameAllocated(i, allocator);
             const auto typeInfo = session.GetOutputTypeInfo(i);
             const auto info = typeInfo.GetTensorTypeAndShapeInfo();
-            std::cout << "  " << name.get() << " ";
-            printShape(info.GetShape());
-            std::cout << "\n";
+            spdlog::info("  {} {}", name.get(), shapeToString(info.GetShape()));
         }
     } catch (const std::exception& exception) {
-        std::cerr << "Error: " << exception.what() << "\n";
+        spdlog::error("Error: {}", exception.what());
         return 1;
     }
 

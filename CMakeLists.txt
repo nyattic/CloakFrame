@@ -12,6 +12,7 @@ set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 find_package(OpenCV REQUIRED COMPONENTS core imgcodecs imgproc)
+find_package(spdlog REQUIRED)
 include(CTest)
 
 if(WIN32)
@@ -86,6 +87,7 @@ target_link_libraries(FaceVeil PRIVATE
     Qt6::Widgets
     ${OpenCV_LIBS}
     onnxruntime::onnxruntime
+    spdlog::spdlog
 )
 
 # ── Security hardening ────────────────────────────────────────────
@@ -142,7 +144,7 @@ add_executable(faceveil_inspect_model
     tools/inspect_model.cpp
 )
 
-target_link_libraries(faceveil_inspect_model PRIVATE onnxruntime::onnxruntime)
+target_link_libraries(faceveil_inspect_model PRIVATE onnxruntime::onnxruntime spdlog::spdlog)
 
 if(BUILD_TESTING)
     add_executable(faceveil_tests

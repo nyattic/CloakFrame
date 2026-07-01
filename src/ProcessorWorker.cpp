@@ -353,13 +353,16 @@ namespace faceveil
 
             int completed = 0;
             int index = 0;
+            int anonymizedCount = 0;
+            int copiedCount = 0;
+            int skippedCount = 0;
+            int failedCount = 0;
             for (const auto &item: images)
             {
                 ++index;
                 if (cancelled_.load(std::memory_order_acquire))
                 {
-                    emit finished(true);
-                    return;
+                    break;
                 }
 
                 const auto source = item.sourcePath;
@@ -370,6 +373,7 @@ namespace faceveil
                     emit logMessage(
                         QString("Skipped unsafe output path for: %1").arg(
                             QString::fromStdString(source.filename().string())));
+                    ++skippedCount;
                     emit progressChanged(++completed, total);
                     continue;
                 }
@@ -382,6 +386,7 @@ namespace faceveil
                         QString("Skipped (cannot create parent dir): %1 — %2")
                         .arg(QString::fromStdString(source.filename().string()),
                              QString::fromStdString(parentMkdirError.message())));
+                    ++skippedCount;
                     emit progressChanged(++completed, total);
                     continue;
                 }
@@ -394,6 +399,7 @@ namespace faceveil
                         QString("Skipped (file too large, %1 MB): %2")
                         .arg(static_cast<qulonglong>(fileSize >> 20))
                         .arg(QString::fromStdString(source.filename().string())));
+                    ++skippedCount;
                     emit progressChanged(++completed, total);
                     continue;
                 }
@@ -405,6 +411,7 @@ namespace faceveil
                 if (!dimensions.ok)
                 {
                     emit logMessage(QString("Skipped (%1): %2").arg(dimensions.reason, fileName));
+                    ++skippedCount;
                     emit progressChanged(++completed, total);
                     continue;
                 }
@@ -414,14 +421,14 @@ namespace faceveil
                 {
                     emit logMessage(
                         QString("Skipped unreadable image: %1").arg(QString::fromStdString(source.string())));
+                    ++skippedCount;
                     emit progressChanged(++completed, total);
                     continue;
                 }
 
                 if (cancelled_.load(std::memory_order_acquire))
                 {
-                    emit finished(true);
-                    return;
+                    break;
                 }
 
                 const long long pixelCount =
@@ -433,6 +440,7 @@ namespace faceveil
                         .arg(image.cols).arg(image.rows)
                         .arg(fileName));
                     image.release();
+                    ++skippedCount;
                     emit progressChanged(++completed, total);
                     continue;
                 }
@@ -441,8 +449,7 @@ namespace faceveil
                 const auto detected = detector_->detect(image, scoreThreshold_, nmsThreshold_);
                 if (cancelled_.load(std::memory_order_acquire))
                 {
-                    emit finished(true);
-                    return;
+                    break;
                 }
                 FaceDetections finalFaces = detected;
                 bool doNotSaveThisImage = false;
@@ -476,8 +483,7 @@ namespace faceveil
                         {
                             case ReviewDecision::CancelAll:
                                 cancelled_.store(true, std::memory_order_release);
-                                emit finished(true);
-                                return;
+                                break;
                             case ReviewDecision::DoNotSave:
                                 doNotSaveThisImage = true;
                                 break;
@@ -496,13 +502,13 @@ namespace faceveil
 
                 if (cancelled_.load(std::memory_order_acquire))
                 {
-                    emit finished(true);
-                    return;
+                    break;
                 }
 
                 if (doNotSaveThisImage)
                 {
                     emit logMessage(QString("Skipped without saving: %1").arg(fileName));
+                    ++skippedCount;
                     emit progressChanged(++completed, total);
                     continue;
                 }
@@ -514,9 +520,11 @@ namespace faceveil
                     {
                         emit logMessage(QString("Failed to copy: %1").arg(
                             QString::fromStdString(destination.string())));
+                        ++failedCount;
                     } else
                     {
                         emit logMessage(QString("Skipped (original copied): %1").arg(fileName));
+                        ++copiedCount;
                     }
                     emit progressChanged(++completed, total);
                     continue;
@@ -527,22 +535,33 @@ namespace faceveil
 
                 if (cancelled_.load(std::memory_order_acquire))
                 {
-                    emit finished(true);
-                    return;
+                    break;
                 }
 
                 emit stageChanged(index, total, "Saving", fileName);
                 if (!atomicImwrite(destination, image))
                 {
                     emit logMessage(QString("Failed to save: %1").arg(QString::fromStdString(destination.string())));
+                    ++failedCount;
                 } else
                 {
                     emit logMessage(QString("Processed %1 face(s): %2")
                         .arg(static_cast<int>(finalFaces.size()))
                         .arg(fileName));
+                    ++anonymizedCount;
                 }
 
                 emit progressChanged(++completed, total);
+            }
+
+            emit logMessage(
+                QString("Summary: %1 anonymized, %2 copied, %3 skipped, %4 failed (of %5).")
+                    .arg(anonymizedCount).arg(copiedCount).arg(skippedCount).arg(failedCount).arg(total));
+
+            if (cancelled_.load(std::memory_order_acquire))
+            {
+                emit finished(true);
+                return;
             }
 
             emit logMessage("Done.");

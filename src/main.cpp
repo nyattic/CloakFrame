@@ -2,12 +2,22 @@
 #include "faceveil/ReviewTypes.hpp"
 
 #include <QApplication>
+#include <QDir>
 #include <QFont>
 #include <QMetaType>
 #include <QPalette>
 #include <QRectF>
+#include <QStandardPaths>
 #include <QStyleFactory>
 #include <QVector>
+
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+
+#include <exception>
+#include <memory>
+#include <vector>
 
 namespace
 {
@@ -29,6 +39,37 @@ namespace
         palette.setColor(QPalette::Disabled, QPalette::WindowText, QColor("#9CA3AF"));
         app.setPalette(palette);
     }
+
+    void setupLogging()
+    {
+        try
+        {
+            std::vector<spdlog::sink_ptr> sinks;
+            sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+
+            const auto dataDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+            if (!dataDir.isEmpty())
+            {
+                const auto logDir = dataDir + "/FaceVeil/logs";
+                if (QDir().mkpath(logDir))
+                {
+                    const auto logFile = (logDir + "/faceveil.log").toStdString();
+                    sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+                        logFile, 1024 * 1024, 3));
+                }
+            }
+
+            auto logger = std::make_shared<spdlog::logger>("faceveil", sinks.begin(), sinks.end());
+            logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
+            logger->flush_on(spdlog::level::info);
+            spdlog::set_default_logger(logger);
+            spdlog::set_level(spdlog::level::info);
+        }
+        catch (const std::exception &)
+        {
+            spdlog::set_level(spdlog::level::off);
+        }
+    }
 }
 
 int main(int argc, char *argv[])
@@ -38,6 +79,8 @@ int main(int argc, char *argv[])
     QCoreApplication::setOrganizationName("FaceVeil");
     QCoreApplication::setOrganizationDomain("faceveil.app");
     QCoreApplication::setApplicationName("FaceVeil");
+
+    setupLogging();
 
     QApplication::setStyle(QStyleFactory::create("Fusion"));
     applyLightPalette(app);

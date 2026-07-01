@@ -30,6 +30,8 @@
 #include <QUrl>
 #include <QWidget>
 
+#include <spdlog/spdlog.h>
+
 #include <array>
 
 namespace faceveil
@@ -1103,6 +1105,7 @@ namespace faceveil
     {
         const auto time = QDateTime::currentDateTime().toString("HH:mm:ss");
         logEdit_->appendPlainText(QString("[%1]  %2").arg(time, message));
+        spdlog::info("{}", message.toStdString());
     }
 
     ReviewResult MainWindow::requestReview(const QImage &image,
