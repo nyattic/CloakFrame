@@ -3,7 +3,7 @@
 ![Release](https://img.shields.io/github/v/release/nyabi021/FaceVeil?style=flat&color=6366f1)
 ![Downloads](https://img.shields.io/github/downloads/nyabi021/FaceVeil/total?style=flat&color=10b981)
 ![Last Commit](https://img.shields.io/github/last-commit/nyabi021/FaceVeil?style=flat&color=f59e0b)
-![License](https://img.shields.io/badge/app%20code-MIT-8b5cf6?style=flat)
+![License](https://img.shields.io/badge/app%20code-PolyForm%20Noncommercial%201.0.0-8b5cf6?style=flat)
 
 Local desktop app that automatically mosaics faces in your photos. Drop in images or folders, pick a model, get anonymized copies — nothing ever leaves your machine.
 
@@ -29,7 +29,7 @@ Supported inputs: `.jpg` `.jpeg` `.png` `.bmp` `.tif` `.tiff` `.webp`.
 
 ## Build from source
 
-Requires CMake 3.24+, a C++20 compiler, Qt 6 available to CMake, OpenCV 4, ONNX Runtime, and SCRFD ONNX model files.
+Requires CMake 3.24+, a C++20 compiler, Qt 6 available to CMake, OpenCV 4, ONNX Runtime, spdlog, and SCRFD ONNX model files.
 
 Put SCRFD models in `models/` before running the app, for example:
 
@@ -51,7 +51,7 @@ open build/FaceVeil.app
 Install dependencies with Homebrew:
 
 ```bash
-brew install cmake opencv onnxruntime
+brew install cmake opencv onnxruntime spdlog
 ```
 
 ### Windows (PowerShell)
@@ -63,6 +63,8 @@ cmake -S . -B build-windows -G Ninja `
   -DONNXRUNTIME_ROOT="C:\onnxruntime-win-x64-1.24.4"
 cmake --build build-windows --config Release
 ```
+
+spdlog must also be discoverable by CMake — for example install it with [vcpkg](https://vcpkg.io) (`vcpkg install spdlog`) and add the vcpkg entries to `CMAKE_PREFIX_PATH`.
 
 ### Tests
 
@@ -80,13 +82,13 @@ No network calls. Images are read from disk, processed locally, and written to t
 
 ## License
 
-**Application source code** — MIT License. SPDX identifier: `MIT`. See [LICENSE](LICENSE).
+**Application source code** — PolyForm Noncommercial License 1.0.0. SPDX identifier: `PolyForm-Noncommercial-1.0.0`. Personal and other noncommercial use is permitted; **commercial use is not**. See [LICENSE](LICENSE).
 
 Copyright © 2026 Nyabi.
 
-**Bundled SCRFD models** — **NOT MIT.** Provided by [InsightFace](https://github.com/deepinsight/insightface) for **non-commercial research use only**. If you redistribute FaceVeil commercially, replace the bundled models with ones you have commercial rights to, or obtain a commercial licence from InsightFace. See the [InsightFace Model Zoo](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md) for details.
+**Bundled SCRFD models** — provided by [InsightFace](https://github.com/deepinsight/insightface) for **non-commercial research use only**, under their own terms separate from the application license. See the [InsightFace Model Zoo](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md) for details.
 
-**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT). Each retains its own license.
+**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT), spdlog (MIT). Each retains its own license.
 
 ## Citation
 
