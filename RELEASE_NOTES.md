@@ -1,6 +1,6 @@
 # FaceVeil 1.0.0
 
-The first 1.0 release. FaceVeil is now licensed for noncommercial use, works with current ONNX Runtime, and adds new anonymization styles, a run summary, and diagnostic logging.
+The first 1.0 release. FaceVeil is now licensed for noncommercial use, speaks English and Korean, fetches its face-detection models on first use instead of bundling them, works with current ONNX Runtime, and adds new anonymization styles, a run summary, and diagnostic logging.
 
 ## License
 - **The application source code is now under the PolyForm Noncommercial License 1.0.0 (previously MIT).** Personal and other noncommercial use is permitted; commercial use is not. Versions released earlier under MIT remain MIT.
@@ -13,6 +13,12 @@ The first 1.0 release. FaceVeil is now licensed for noncommercial use, works wit
 - Anonymization style selector: **Mosaic** (pixelate), **Gaussian blur**, or **Solid fill** (blackout)
 - End-of-run summary reporting anonymized / copied / skipped / failed counts
 - The current version is shown in the app header
+
+## Localization
+- The interface is available in **English** and **한국어 (Korean)**, switchable live from the header. The initial language follows your system locale.
+
+## Models & privacy
+- SCRFD models are no longer bundled in the download. On first use of a built-in model, FaceVeil fetches it once from Hugging Face with a SHA-256 integrity check and caches it locally. Your images are always processed on-device and never uploaded.
 
 ## Logging
 - Logging now runs through spdlog: colored console output plus a rotating log file under the platform data directory (`~/Library/Application Support/FaceVeil/logs` on macOS)
