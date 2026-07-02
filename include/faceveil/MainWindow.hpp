@@ -95,6 +95,8 @@ namespace faceveil
 
         void saveSettings() const;
 
+        void checkForUpdates();
+
         void retranslateUi();
 
         void applyLanguage(const QString &language);
@@ -112,6 +114,8 @@ namespace faceveil
         QCheckBox *recursiveCheck_ = nullptr;
         QCheckBox *reviewCheck_ = nullptr;
         QCheckBox *preserveMetaCheck_ = nullptr;
+        QCheckBox *updateCheck_ = nullptr;
+        QLabel *updateLabel_ = nullptr;
         QDoubleSpinBox *scoreThresholdSpin_ = nullptr;
         QDoubleSpinBox *nmsThresholdSpin_ = nullptr;
         QSpinBox *blockSizeSpin_ = nullptr;

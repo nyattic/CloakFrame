@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(FaceVeil VERSION 1.2.0 LANGUAGES CXX)
+project(FaceVeil VERSION 1.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -99,6 +99,7 @@ qt_add_executable(FaceVeil ${FACEVEIL_APP_OPTIONS}
     src/ProcessorWorker.cpp
     src/ReviewDialog.cpp
     src/ScrfdFaceDetector.cpp
+    src/UpdateChecker.cpp
     include/faceveil/FaceDetection.hpp
     include/faceveil/ImageIo.hpp
     include/faceveil/ImageScanner.hpp
@@ -108,6 +109,7 @@ qt_add_executable(FaceVeil ${FACEVEIL_APP_OPTIONS}
     include/faceveil/ReviewDialog.hpp
     include/faceveil/ReviewTypes.hpp
     include/faceveil/ScrfdFaceDetector.hpp
+    include/faceveil/UpdateChecker.hpp
     ${FACEVEIL_APP_RESOURCES}
 )
 

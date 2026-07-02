@@ -3,6 +3,7 @@
 #include "faceveil/ProcessorWorker.hpp"
 #include "faceveil/ReviewDialog.hpp"
 #include "faceveil/ScrfdFaceDetector.hpp"
+#include "faceveil/UpdateChecker.hpp"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -585,12 +586,19 @@ namespace faceveil
         auto *versionLabel = new QLabel(QString("v%1").arg(QCoreApplication::applicationVersion()), header);
         versionLabel->setObjectName("subtitleLabel");
 
+        updateLabel_ = new QLabel(header);
+        updateLabel_->setObjectName("subtitleLabel");
+        updateLabel_->setTextFormat(Qt::RichText);
+        updateLabel_->setOpenExternalLinks(true);
+        updateLabel_->setVisible(false);
+
         auto *titleGroup = new QWidget(header);
         auto *titleGroupLayout = new QHBoxLayout(titleGroup);
         titleGroupLayout->setContentsMargins(0, 0, 0, 0);
         titleGroupLayout->setSpacing(8);
         titleGroupLayout->addWidget(title, 0, Qt::AlignBottom);
         titleGroupLayout->addWidget(versionLabel, 0, Qt::AlignBottom);
+        titleGroupLayout->addWidget(updateLabel_, 0, Qt::AlignBottom);
 
         titleRow->addWidget(titleGroup, 0, Qt::AlignVCenter);
         titleRow->addStretch(1);
@@ -904,6 +912,15 @@ namespace faceveil
             grid->addRow(paddingLabel, paddingSpin_);
             bodyLayout->addLayout(grid);
 
+            updateCheck_ = new QCheckBox(advancedBody_);
+            updateCheck_->setChecked(true);
+            addRetranslation([this]{ updateCheck_->setText(tr("Check for updates on startup")); });
+            addRetranslation([this]
+                             {
+                                 updateCheck_->setToolTip(tr("Checks whether a new version is available at startup."));
+                             });
+            bodyLayout->addWidget(updateCheck_);
+
             advancedBody_->setVisible(false);
             cardLayout->addWidget(advancedBody_);
 
@@ -979,6 +996,8 @@ namespace faceveil
         populateBundledModels();
         loadSettings();
         appendLog(tr("Ready. Drop images or folders to begin."));
+
+        checkForUpdates();
     }
 
     MainWindow::~MainWindow()
@@ -1340,6 +1359,11 @@ namespace faceveil
         }
         settings.endGroup();
 
+        if (updateCheck_ != nullptr)
+        {
+            updateCheck_->setChecked(settings.value("checkForUpdates", true).toBool());
+        }
+
         const auto savedLanguage = settings.value("language").toString();
         QString language = savedLanguage;
         if (language.isEmpty())
@@ -1391,7 +1415,32 @@ namespace faceveil
         settings.setValue("advancedExpanded", advancedToggle_ ? advancedToggle_->isChecked() : false);
         settings.endGroup();
 
+        settings.setValue("checkForUpdates", updateCheck_ ? updateCheck_->isChecked() : true);
+
         settings.setValue("language", language_);
+    }
+
+    void MainWindow::checkForUpdates()
+    {
+        if (updateCheck_ == nullptr || !updateCheck_->isChecked())
+        {
+            return;
+        }
+
+        auto *checker = new UpdateChecker(QCoreApplication::applicationVersion(), this);
+        connect(checker, &UpdateChecker::updateAvailable, this,
+                [this](const QString &latestVersion, const QString &releaseUrl)
+                {
+                    if (updateLabel_ == nullptr)
+                    {
+                        return;
+                    }
+                    const QString text = tr("Update available: %1").arg(latestVersion);
+                    updateLabel_->setText(QStringLiteral("<a href=\"%1\">%2</a>")
+                        .arg(releaseUrl.toHtmlEscaped(), text.toHtmlEscaped()));
+                    updateLabel_->setVisible(true);
+                });
+        checker->check();
     }
 
     void MainWindow::addInputPath(const QString &path) const

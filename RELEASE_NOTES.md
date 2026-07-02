@@ -1,3 +1,12 @@
+# FaceVeil 1.3.0
+
+Adds an update check: at launch FaceVeil asks the GitHub Releases API whether a
+newer version exists and, if so, shows a link in the header. No image or
+personal data is sent, and the check can be disabled under Advanced Options →
+Check for updates on startup.
+
+---
+
 # FaceVeil 1.2.0
 
 Adds Linux support: FaceVeil now builds on Linux and ships a self-contained

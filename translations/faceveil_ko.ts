@@ -222,6 +222,18 @@ On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preser
         <translation>기본값으로 초기화</translation>
     </message>
     <message>
+        <source>Check for updates on startup</source>
+        <translation>시작 시 업데이트 확인</translation>
+    </message>
+    <message>
+        <source>Checks whether a new version is available at startup.</source>
+        <translation>시작할 때 새로운 버전이 있는지 확인합니다.</translation>
+    </message>
+    <message>
+        <source>Update available: %1</source>
+        <translation>새 버전 있음: %1</translation>
+    </message>
+    <message>
         <location filename="../src/MainWindow.cpp" line="724"/>
         <source>Tweak detection and mosaic behavior. Defaults work for most photos.</source>
         <translation>감지와 모자이크 동작을 조정합니다. 대부분의 사진은 기본값으로 충분합니다.</translation>

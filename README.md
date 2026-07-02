@@ -99,7 +99,7 @@ Packaging scripts: [`scripts/package_macos.sh`](scripts/package_macos.sh), [`scr
 
 ## Privacy
 
-Your images never leave your device — they are read from disk, processed locally, and written to the output folder you pick. The only network request FaceVeil ever makes is a one-time download of the face-detection model (from Hugging Face) the first time you use a built-in model. Supply your own model with **Browse…** and it makes no network calls at all.
+Your images never leave your device — they are read from disk, processed locally, and written to the output folder you pick. FaceVeil makes only two kinds of network request, and neither sends any image or personal data: a one-time download of the face-detection model (from Hugging Face) the first time you use a built-in model, and a check at launch against the GitHub Releases API to see whether a newer version exists. The update check can be turned off under **Advanced Options → Check for updates on startup**, and supplying your own model with **Browse…** avoids the model download entirely.
 
 ## License
 
