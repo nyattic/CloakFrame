@@ -1,5 +1,6 @@
 #include "faceveil/MainWindow.hpp"
 
+#include "faceveil/PlateDetector.hpp"
 #include "faceveil/ProcessorWorker.hpp"
 #include "faceveil/ReviewDialog.hpp"
 #include "faceveil/ScrfdFaceDetector.hpp"
@@ -322,6 +323,17 @@ namespace faceveil
             return models;
         }
 
+        const BuiltinModel &plateModel()
+        {
+            static const BuiltinModel model{
+                "License plates  ·  YOLOv9-t",
+                "yolo-v9-t-512-license-plates-end2end.onnx",
+                "https://github.com/ankandrew/open-image-models/releases/download/assets/"
+                "yolo-v9-t-512-license-plates-end2end.onnx",
+                "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade", 7799480};
+            return model;
+        }
+
         const BuiltinModel *findBuiltinModel(const QString &path)
         {
             const auto name = QFileInfo(path).fileName();
@@ -423,6 +435,27 @@ namespace faceveil
                                             "The model is provided by InsightFace for non-commercial use. "
                                             "Your images are never uploaded.\n\nDownload now?")
                     .arg(model.fileName, sizeMb),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::Yes);
+            if (answer != QMessageBox::Yes)
+            {
+                return false;
+            }
+            return downloadModelWithProgress(parent, model, destPath);
+        }
+
+        bool ensurePlateModelAvailable(QWidget *parent, const QString &destPath)
+        {
+            const auto &model = plateModel();
+            const auto sizeMb = QString::number(model.approxBytes / 1024.0 / 1024.0, 'f', 1);
+            const auto answer = QMessageBox::question(
+                parent,
+                QCoreApplication::translate("faceveil::MainWindow", "Download Model"),
+                QCoreApplication::translate("faceveil::MainWindow",
+                                            "The license plate detection model isn't on this computer yet.\n\n"
+                                            "FaceVeil can download it once (%1 MB) from the open-image-models "
+                                            "project (MIT-licensed). Your images are never uploaded.\n\nDownload now?")
+                    .arg(sizeMb),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::Yes);
             if (answer != QMessageBox::Yes)
@@ -626,9 +659,28 @@ namespace faceveil
             addRetranslation([this, modelHint]
                              { modelHint->setText(tr("Choose speed vs. accuracy, or load a custom SCRFD ONNX file.")); });
 
+            detectCombo_ = new QComboBox(card);
+            detectCombo_->setMinimumHeight(34);
+            detectCombo_->addItem(QString(), "faces");
+            detectCombo_->addItem(QString(), "plates");
+            detectCombo_->addItem(QString(), "both");
+            addRetranslation([this]
+                             {
+                                 detectCombo_->setItemText(0, tr("Faces"));
+                                 detectCombo_->setItemText(1, tr("License plates"));
+                                 detectCombo_->setItemText(2, tr("Faces + license plates"));
+                             });
+            cardLayout->addWidget(detectCombo_);
+
             modelCombo_ = new QComboBox(card);
             modelCombo_->setMinimumHeight(34);
             cardLayout->addWidget(modelCombo_);
+            connect(detectCombo_, &QComboBox::currentIndexChanged, this, [this]
+            {
+                const bool facesNeeded = detectCombo_->currentData().toString() != "plates";
+                modelCombo_->setEnabled(facesNeeded);
+                modelPathEdit_->setEnabled(facesNeeded);
+            });
 
             auto *pathRow = new QHBoxLayout();
             pathRow->setSpacing(8);
@@ -1119,36 +1171,61 @@ namespace faceveil
 
     void MainWindow::startProcessing()
     {
+        const QString detectTarget = detectCombo_ ? detectCombo_->currentData().toString()
+                                                   : QStringLiteral("faces");
+        const bool detectFaces = detectTarget != "plates";
+        const bool detectPlates = detectTarget != "faces";
+
         const auto modelPath = selectedModelPath();
         const bool isCustom = !modelPath.isEmpty() && findBuiltinModel(modelPath) == nullptr;
 
-        if (modelPath.isEmpty())
+        if (detectFaces)
         {
-            reportValidationIssue(tr("Choose a SCRFD ONNX model first."), modelCombo_);
-            return;
-        }
-
-        if (!QFileInfo::exists(modelPath))
-        {
-            const BuiltinModel *builtin = isCustom ? nullptr : findBuiltinModel(modelPath);
-            if (builtin == nullptr)
+            if (modelPath.isEmpty())
             {
-                appendLog(tr("Choose a valid SCRFD ONNX model first."));
+                reportValidationIssue(tr("Choose a SCRFD ONNX model first."), modelCombo_);
                 return;
             }
-            appendLog(tr("Downloading %1…").arg(builtin->fileName));
-            if (!ensureBuiltinModelAvailable(this, *builtin, modelPath))
+
+            if (!QFileInfo::exists(modelPath))
             {
-                appendLog(tr("Model download was cancelled or failed."));
+                const BuiltinModel *builtin = isCustom ? nullptr : findBuiltinModel(modelPath);
+                if (builtin == nullptr)
+                {
+                    appendLog(tr("Choose a valid SCRFD ONNX model first."));
+                    return;
+                }
+                appendLog(tr("Downloading %1…").arg(builtin->fileName));
+                if (!ensureBuiltinModelAvailable(this, *builtin, modelPath))
+                {
+                    appendLog(tr("Model download was cancelled or failed."));
+                    return;
+                }
+                updateModelPathFromSelection();
+                appendLog(tr("Model ready: %1").arg(builtin->fileName));
+            }
+
+            if (isCustom && !customModelFileIsAllowed(this, modelPath))
+            {
                 return;
             }
-            updateModelPathFromSelection();
-            appendLog(tr("Model ready: %1").arg(builtin->fileName));
         }
 
-        if (isCustom && !customModelFileIsAllowed(this, modelPath))
+        QString plateModelPath;
+        if (detectPlates)
         {
-            return;
+            plateModelPath = firstExistingModelPath(plateModel().fileName);
+            if (plateModelPath.isEmpty())
+            {
+                plateModelPath = modelCacheDir() + "/" + plateModel().fileName;
+                appendLog(tr("Downloading %1…").arg(plateModel().fileName));
+                if (!ensurePlateModelAvailable(this, plateModelPath))
+                {
+                    appendLog(tr("Model download was cancelled or failed."));
+                    return;
+                }
+                appendLog(tr("Model ready: %1").arg(plateModel().fileName));
+            }
         }
 
         if (inputList_->count() == 0)
@@ -1197,6 +1274,9 @@ namespace faceveil
         statusLabel_->setText(tr("Starting…"));
 
         auto detectorForRun = (cachedDetectorModelPath_ == modelPath) ? cachedDetector_ : nullptr;
+        auto plateForRun = (!plateModelPath.isEmpty() && cachedPlateModelPath_ == plateModelPath)
+                               ? cachedPlateDetector_
+                               : nullptr;
 
         workerThread_ = new QThread(this);
         worker_ = new ProcessorWorker(modelPath,
@@ -1212,7 +1292,11 @@ namespace faceveil
                                       preserveMetaCheck_->isChecked(),
                                       reviewCheck_->isChecked(),
                                       this,
-                                      std::move(detectorForRun));
+                                      std::move(detectorForRun),
+                                      detectFaces,
+                                      detectPlates,
+                                      plateModelPath,
+                                      std::move(plateForRun));
 
         worker_->moveToThread(workerThread_);
         connect(workerThread_, &QThread::started, worker_, &ProcessorWorker::process);
@@ -1260,6 +1344,13 @@ namespace faceveil
             {
                 cachedDetector_ = std::move(detector);
                 cachedDetectorModelPath_ = selectedModelPath();
+            }
+
+            auto plate = worker_->takePlateDetector();
+            if (plate)
+            {
+                cachedPlateDetector_ = std::move(plate);
+                cachedPlateModelPath_ = firstExistingModelPath(plateModel().fileName);
             }
         }
 
@@ -1353,6 +1444,12 @@ namespace faceveil
             shapeCombo_->setCurrentIndex(savedShape);
         }
 
+        const auto savedDetect = settings.value("detectTarget", 0).toInt();
+        if (detectCombo_ != nullptr && savedDetect >= 0 && savedDetect < detectCombo_->count())
+        {
+            detectCombo_->setCurrentIndex(savedDetect);
+        }
+
         if (settings.value("advancedExpanded", false).toBool())
         {
             advancedToggle_->setChecked(true);
@@ -1412,6 +1509,7 @@ namespace faceveil
         settings.setValue("padding", paddingSpin_->value());
         settings.setValue("method", methodCombo_ ? methodCombo_->currentIndex() : 0);
         settings.setValue("shape", shapeCombo_ ? shapeCombo_->currentIndex() : 0);
+        settings.setValue("detectTarget", detectCombo_ ? detectCombo_->currentIndex() : 0);
         settings.setValue("advancedExpanded", advancedToggle_ ? advancedToggle_->isChecked() : false);
         settings.endGroup();
 

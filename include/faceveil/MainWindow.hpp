@@ -28,6 +28,7 @@ namespace faceveil
 {
     class ProcessorWorker;
     class ScrfdFaceDetector;
+    class PlateDetector;
 
     class MainWindow final : public QMainWindow
     {
@@ -104,6 +105,7 @@ namespace faceveil
         void addRetranslation(std::function<void()> apply);
 
         QComboBox *modelCombo_ = nullptr;
+        QComboBox *detectCombo_ = nullptr;
         QComboBox *methodCombo_ = nullptr;
         QComboBox *shapeCombo_ = nullptr;
         QComboBox *languageCombo_ = nullptr;
@@ -133,6 +135,8 @@ namespace faceveil
 
         std::shared_ptr<ScrfdFaceDetector> cachedDetector_;
         QString cachedDetectorModelPath_;
+        std::shared_ptr<PlateDetector> cachedPlateDetector_;
+        QString cachedPlateModelPath_;
 
         QTranslator translator_;
         QString language_;

@@ -234,6 +234,18 @@ On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preser
         <translation>새 버전 있음: %1</translation>
     </message>
     <message>
+        <source>Faces</source>
+        <translation>얼굴</translation>
+    </message>
+    <message>
+        <source>License plates</source>
+        <translation>번호판</translation>
+    </message>
+    <message>
+        <source>Faces + license plates</source>
+        <translation>얼굴 + 번호판</translation>
+    </message>
+    <message>
         <location filename="../src/MainWindow.cpp" line="724"/>
         <source>Tweak detection and mosaic behavior. Defaults work for most photos.</source>
         <translation>감지와 모자이크 동작을 조정합니다. 대부분의 사진은 기본값으로 충분합니다.</translation>
@@ -533,6 +545,22 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/ProcessorWorker.cpp" line="306"/>
         <source>Reusing loaded SCRFD model.</source>
         <translation>이미 불러온 SCRFD 모델을 재사용합니다.</translation>
+    </message>
+    <message>
+        <source>Loading face detection model...</source>
+        <translation>얼굴 탐지 모델 불러오는 중...</translation>
+    </message>
+    <message>
+        <source>Reusing loaded face detection model.</source>
+        <translation>이미 불러온 얼굴 탐지 모델을 재사용합니다.</translation>
+    </message>
+    <message>
+        <source>Loading license plate detection model...</source>
+        <translation>번호판 탐지 모델 불러오는 중...</translation>
+    </message>
+    <message>
+        <source>Reusing loaded license plate detection model.</source>
+        <translation>이미 불러온 번호판 탐지 모델을 재사용합니다.</translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="309"/>

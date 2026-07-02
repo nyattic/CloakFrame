@@ -1,5 +1,6 @@
 #pragma once
 
+#include "faceveil/Detector.hpp"
 #include "faceveil/FaceDetection.hpp"
 
 #include <onnxruntime_cxx_api.h>
@@ -10,12 +11,12 @@
 
 namespace faceveil
 {
-    class ScrfdFaceDetector
+    class ScrfdFaceDetector final : public Detector
     {
     public:
         explicit ScrfdFaceDetector(const std::string &modelPath, int inputSize = 640);
 
-        FaceDetections detect(const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold);
+        FaceDetections detect(const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
 
     private:
         struct PreparedImage

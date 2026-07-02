@@ -1,3 +1,12 @@
+# FaceVeil 1.4.0
+
+Adds license plate anonymization. A new **Detect** option lets you anonymize
+faces, license plates, or both; the license plate detector (an MIT-licensed
+YOLOv9 model from the open-image-models project) is downloaded on first use,
+like the face models. Existing behavior is unchanged — faces stay the default.
+
+---
+
 # FaceVeil 1.3.0
 
 Adds an update check: at launch FaceVeil asks the GitHub Releases API whether a

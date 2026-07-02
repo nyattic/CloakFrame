@@ -3,6 +3,7 @@
 #include "faceveil/ImageIo.hpp"
 #include "faceveil/ImageScanner.hpp"
 #include "faceveil/PathUtil.hpp"
+#include "faceveil/PlateDetector.hpp"
 #include "faceveil/Mosaic.hpp"
 #include "faceveil/ReviewTypes.hpp"
 #include "faceveil/ScrfdFaceDetector.hpp"
@@ -273,7 +274,11 @@ namespace faceveil
                                      bool preserveMetadata,
                                      bool reviewEnabled,
                                      QObject *reviewReceiver,
-                                     std::shared_ptr<ScrfdFaceDetector> cachedDetector)
+                                     std::shared_ptr<ScrfdFaceDetector> cachedDetector,
+                                     bool detectFaces,
+                                     bool detectPlates,
+                                     QString plateModelPath,
+                                     std::shared_ptr<PlateDetector> cachedPlateDetector)
         : modelPath_(std::move(modelPath)),
           inputs_(std::move(inputs)),
           outputDirectory_(std::move(outputDirectory)),
@@ -287,7 +292,11 @@ namespace faceveil
           preserveMetadata_(preserveMetadata),
           reviewEnabled_(reviewEnabled),
           reviewReceiver_(reviewReceiver),
-          detector_(std::move(cachedDetector))
+          detectFaces_(detectFaces),
+          detectPlates_(detectPlates),
+          plateModelPath_(std::move(plateModelPath)),
+          detector_(std::move(cachedDetector)),
+          plateDetector_(std::move(cachedPlateDetector))
     {
     }
 
@@ -298,19 +307,40 @@ namespace faceveil
         return std::move(detector_);
     }
 
+    std::shared_ptr<PlateDetector> ProcessorWorker::takePlateDetector()
+    {
+        return std::move(plateDetector_);
+    }
+
     void ProcessorWorker::process()
     {
         cancelled_.store(false, std::memory_order_relaxed);
 
         try
         {
-            if (!detector_)
+            if (detectFaces_)
             {
-                emit logMessage(tr("Loading SCRFD model..."));
-                detector_ = std::make_shared<ScrfdFaceDetector>(modelPath_.toStdString());
-            } else
+                if (!detector_)
+                {
+                    emit logMessage(tr("Loading face detection model..."));
+                    detector_ = std::make_shared<ScrfdFaceDetector>(modelPath_.toStdString());
+                } else
+                {
+                    emit logMessage(tr("Reusing loaded face detection model."));
+                }
+            }
+
+            if (detectPlates_)
             {
-                emit logMessage(tr("Reusing loaded SCRFD model."));
+                if (!plateDetector_)
+                {
+                    emit logMessage(tr("Loading license plate detection model..."));
+                    plateDetector_ = std::make_shared<PlateDetector>(
+                        pathToUtf8(pathFromQString(plateModelPath_)));
+                } else
+                {
+                    emit logMessage(tr("Reusing loaded license plate detection model."));
+                }
             }
 
             emit logMessage(tr("Scanning images..."));
@@ -461,7 +491,16 @@ namespace faceveil
                 const cv::Mat detectMat = toDetectionBgr(image);
 
                 emit stageChanged(index, total, tr("Detecting"), fileName);
-                const auto detected = detector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
+                FaceDetections detected;
+                if (detector_)
+                {
+                    detected = detector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
+                }
+                if (plateDetector_)
+                {
+                    const auto plates = plateDetector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
+                    detected.insert(detected.end(), plates.begin(), plates.end());
+                }
                 if (cancelled_.load(std::memory_order_acquire))
                 {
                     break;
