@@ -60,7 +60,19 @@ Redactly can download it once (%2 MB) from Hugging Face. The model is provided b
 Download now?</source>
         <translation>%1 모델이 아직 이 컴퓨터에 없습니다.
 
-Redactly이 Hugging Face에서 한 번(%2 MB) 다운로드할 수 있습니다. 이 모델은 InsightFace가 비상업적 용도로 제공합니다. 사진은 절대 업로드되지 않습니다.
+Redactly가 Hugging Face에서 한 번(%2 MB) 다운로드할 수 있습니다. 이 모델은 InsightFace가 비상업적 용도로 제공합니다. 사진은 절대 업로드되지 않습니다.
+
+지금 다운로드할까요?</translation>
+    </message>
+    <message>
+        <source>The license plate detection model isn&apos;t on this computer yet.
+
+Redactly can download it once (%1 MB) from the open-image-models project (MIT-licensed). Your images are never uploaded.
+
+Download now?</source>
+        <translation>번호판 인식 모델이 아직 이 컴퓨터에 없습니다.
+
+Redactly가 open-image-models 프로젝트(MIT 라이선스)에서 한 번(%1 MB) 다운로드할 수 있습니다. 사진은 절대 업로드되지 않습니다.
 
 지금 다운로드할까요?</translation>
     </message>
@@ -685,9 +697,17 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <translation>저장했지만 메타데이터를 복사하지 못했습니다: %1</translation>
     </message>
     <message>
+        <source>Saved with no regions redacted: %1</source>
+        <translation>가려진 영역 없이 저장됨: %1</translation>
+    </message>
+    <message>
         <location filename="../src/ProcessorWorker.cpp" line="562"/>
         <source>Summary: %1 anonymized, %2 copied, %3 skipped, %4 failed (of %5).</source>
         <translation>요약: 익명화 %1, 복사 %2, 건너뜀 %3, 실패 %4 (총 %5).</translation>
+    </message>
+    <message>
+        <source>Warning: %1 image(s) were saved with no regions redacted. Check them before sharing.</source>
+        <translation>주의: 이미지 %1장이 아무 영역도 가려지지 않은 채 저장되었습니다. 공유하기 전에 확인하세요.</translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="571"/>

@@ -41,6 +41,7 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QLibraryInfo>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -873,11 +874,19 @@ namespace redactly
 
     MainWindow::~MainWindow()
     {
-        if (workerThread_ != nullptr)
+        QThread *thread = workerThread_;
+        if (thread != nullptr)
         {
-            stopProcessing();
-            workerThread_->quit();
-            workerThread_->wait();
+            shuttingDown_ = true;
+            if (worker_ != nullptr)
+            {
+                worker_->cancel();
+            }
+            thread->quit();
+            while (!thread->wait(50))
+            {
+                QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+            }
         }
     }
 
@@ -1148,7 +1157,7 @@ namespace redactly
         {
             appendLog(tr("Stopping after the current processing step…"));
             statusLabel_->setText(tr("Stopping…"));
-            QMetaObject::invokeMethod(worker_, "cancel", Qt::QueuedConnection);
+            worker_->cancel();
         }
     }
 
@@ -1572,9 +1581,18 @@ namespace redactly
     void MainWindow::applyLanguage(const QString &language)
     {
         qApp->removeTranslator(&translator_);
-        if (language != "en" && translator_.load(":/i18n/redactly_" + language + ".qm"))
+        qApp->removeTranslator(&qtTranslator_);
+        if (language != "en")
         {
-            qApp->installTranslator(&translator_);
+            if (translator_.load(":/i18n/redactly_" + language + ".qm"))
+            {
+                qApp->installTranslator(&translator_);
+            }
+            if (qtTranslator_.load("qtbase_" + language,
+                                   QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
+            {
+                qApp->installTranslator(&qtTranslator_);
+            }
         }
         language_ = language;
     }
@@ -1624,6 +1642,12 @@ namespace redactly
                                            int currentIndex,
                                            int total)
     {
+        if (shuttingDown_)
+        {
+            ReviewResult cancelAll;
+            cancelAll.decision = ReviewDecision::CancelAll;
+            return cancelAll;
+        }
         ReviewDialog dialog(image, sourceName, detected, currentIndex, total,
                             preserveMetaCheck_ != nullptr && preserveMetaCheck_->isChecked(), this);
         dialog.exec();

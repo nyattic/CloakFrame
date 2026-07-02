@@ -352,6 +352,7 @@ namespace redactly
             int copiedCount = 0;
             int skippedCount = 0;
             int failedCount = 0;
+            int unredactedCount = 0;
             for (const auto &item: images)
             {
                 ++index;
@@ -573,9 +574,16 @@ namespace redactly
                     {
                         emit logMessage(tr("Saved, but could not copy metadata: %1").arg(fileName));
                     }
-                    emit logMessage(tr("Redacted %1 region(s): %2")
-                        .arg(static_cast<int>(finalFaces.size()))
-                        .arg(fileName));
+                    if (finalFaces.empty())
+                    {
+                        emit logMessage(tr("Saved with no regions redacted: %1").arg(fileName));
+                        ++unredactedCount;
+                    } else
+                    {
+                        emit logMessage(tr("Redacted %1 region(s): %2")
+                            .arg(static_cast<int>(finalFaces.size()))
+                            .arg(fileName));
+                    }
                     ++anonymizedCount;
                 }
 
@@ -585,6 +593,13 @@ namespace redactly
             emit logMessage(
                 tr("Summary: %1 anonymized, %2 copied, %3 skipped, %4 failed (of %5).")
                     .arg(anonymizedCount).arg(copiedCount).arg(skippedCount).arg(failedCount).arg(total));
+
+            if (unredactedCount > 0)
+            {
+                emit logMessage(
+                    tr("Warning: %1 image(s) were saved with no regions redacted. Check them before sharing.")
+                        .arg(unredactedCount));
+            }
 
             if (cancelled_.load(std::memory_order_acquire))
             {

@@ -1,12 +1,12 @@
-FaceVeil — Third-Party Notices
+Redactly — Third-Party Notices
 ==============================
 
-FaceVeil bundles or links the third-party components listed below. Each is
+Redactly bundles or links the third-party components listed below. Each is
 distributed under its own license, reproduced in full in this file. These
-notices apply to the accompanying binary distribution of FaceVeil and are
-separate from FaceVeil's own license (GNU General Public License v3.0 or later).
+notices apply to the accompanying binary distribution of Redactly and are
+separate from Redactly's own license (GNU General Public License v3.0 or later).
 
-The SCRFD face-detection models are NOT bundled with FaceVeil; the application
+The SCRFD face-detection models are NOT bundled with Redactly; the application
 downloads them on first use from their source. They originate from InsightFace
 and are available for non-commercial research use only. See the README for
 details.
@@ -5549,7 +5549,7 @@ Exiv2  (GPL-2.0-or-later)
 --
 Exiv2 is used for reading and writing image metadata (EXIF, IPTC, XMP, and the
 ICC color profile) and is dynamically linked. Because Exiv2 is licensed under
-the GNU General Public License, FaceVeil as a whole is distributed under the
+the GNU General Public License, Redactly as a whole is distributed under the
 GNU General Public License v3.0 or later. The complete corresponding source
 code for the bundled Exiv2 version is available from
 https://github.com/Exiv2/exiv2 and https://exiv2.org/.

@@ -234,6 +234,51 @@ namespace
             assert(orientation->toInt64() == 1);
         }
     }
+
+    void testMetadataCopyStripsEmbeddedThumbnail()
+    {
+        QTemporaryDir temp;
+        assert(temp.isValid());
+        const std::filesystem::path base = std::filesystem::path(temp.path().toStdString());
+        const std::filesystem::path src = base / "src.jpg";
+        const std::filesystem::path dst = base / "dst.jpg";
+        const std::filesystem::path thumbFile = base / "thumb.jpg";
+
+        cv::Mat img(16, 16, CV_8UC3, cv::Scalar(120, 120, 120));
+        assert(cv::imwrite(src.string(), img));
+        assert(cv::imwrite(dst.string(), img));
+        assert(cv::imwrite(thumbFile.string(), img));
+
+        {
+            auto image = Exiv2::ImageFactory::open(src.string());
+            image->readMetadata();
+            image->exifData()["Exif.Image.Artist"] = "TestPhotographer";
+            Exiv2::ExifThumb thumb(image->exifData());
+            thumb.setJpegThumbnail(thumbFile.string());
+            image->writeMetadata();
+        }
+
+        {
+            auto image = Exiv2::ImageFactory::open(src.string());
+            image->readMetadata();
+            Exiv2::ExifThumb thumb(image->exifData());
+            assert(thumb.copy().size() > 0);
+        }
+
+        assert(redactly::copyMetadata(src, dst, true));
+
+        {
+            auto image = Exiv2::ImageFactory::open(dst.string());
+            image->readMetadata();
+            Exiv2::ExifThumb thumb(image->exifData());
+            assert(thumb.copy().size() == 0);
+
+            const Exiv2::ExifData &exif = image->exifData();
+            const auto artist = exif.findKey(Exiv2::ExifKey("Exif.Image.Artist"));
+            assert(artist != exif.end());
+            assert(artist->toString() == "TestPhotographer");
+        }
+    }
 #endif
 }
 
@@ -252,6 +297,7 @@ int main()
 #endif
 #ifdef REDACTLY_HAVE_EXIV2
     testMetadataCopyAndOrientationNormalize();
+    testMetadataCopyStripsEmbeddedThumbnail();
 #endif
     return 0;
 }

@@ -55,7 +55,7 @@ namespace redactly
                 }
             }
         }
-        catch (const Exiv2::Error &)
+        catch (const std::exception &)
         {
         }
 #else
@@ -167,6 +167,7 @@ namespace redactly
         }
         file.write(reinterpret_cast<const char *>(buffer.data()),
                    static_cast<std::streamsize>(buffer.size()));
+        file.close();
         return file.good();
     }
 
@@ -220,13 +221,27 @@ namespace redactly
             dst->readMetadata();
 
             Exiv2::ExifData exif = src->exifData();
+            Exiv2::ExifThumb thumb(exif);
+            thumb.erase();
             if (normalizeOrientation && !exif.empty())
             {
                 exif["Exif.Image.Orientation"] = static_cast<uint16_t>(1);
             }
             dst->setExifData(exif);
             dst->setIptcData(src->iptcData());
-            dst->setXmpData(src->xmpData());
+
+            Exiv2::XmpData xmp = src->xmpData();
+            for (auto it = xmp.begin(); it != xmp.end();)
+            {
+                if (it->key().starts_with("Xmp.xmp.Thumbnails"))
+                {
+                    it = xmp.erase(it);
+                } else
+                {
+                    ++it;
+                }
+            }
+            dst->setXmpData(xmp);
 
 #if EXIV2_TEST_VERSION(0, 28, 0)
             const Exiv2::DataBuf &icc = src->iccProfile();
@@ -246,7 +261,7 @@ namespace redactly
             dst->writeMetadata();
             return true;
         }
-        catch (const Exiv2::Error &)
+        catch (const std::exception &)
         {
             return false;
         }

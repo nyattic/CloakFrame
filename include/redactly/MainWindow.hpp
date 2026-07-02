@@ -143,10 +143,12 @@ namespace redactly
         QString cachedPlateModelPath_;
 
         QTranslator translator_;
+        QTranslator qtTranslator_;
         QString language_;
         ThemeMode themeMode_ = ThemeMode::System;
         bool checkForUpdatesOnStartup_ = true;
         bool fileLogging_ = true;
+        bool shuttingDown_ = false;
         std::vector<std::function<void()>> retranslators_;
     };
 }

@@ -1,6 +1,7 @@
 build/
 build-windows/
 build-release/
+build-check/
 dist/
 *.user
 *.DS_Store
