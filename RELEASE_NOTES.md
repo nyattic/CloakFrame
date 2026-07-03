@@ -17,10 +17,19 @@ instead of "Done", and an input file that already lives in the output folder is
 skipped instead of being overwritten in place.
 
 In the review dialog, Esc (or closing the window) now skips just the current
-image instead of cancelling the whole batch, and **Cancel All** asks for
-confirmation first. Korean users get localized Yes/No dialog buttons and the
-previously untranslated license-plate download prompt. Each release now ships
-a `SHA256SUMS` file so downloads can be verified.
+image instead of cancelling the whole batch, **Cancel All** asks for
+confirmation first, and the preview supports scroll-to-zoom and right-drag
+panning so small faces in large photos can be adjusted precisely. Korean users
+get localized Yes/No dialog buttons and the previously untranslated
+license-plate download prompt. Each release now ships a `SHA256SUMS` file so
+downloads can be verified.
+
+Quality-of-life improvements: selected inputs can be removed with Delete or a
+right-click menu, unsupported files are filtered out at drop time and the list
+highlights while dragging, an **Open Output Folder** button and the elapsed
+time appear when a run finishes, and the Settings button and Advanced Options
+toggle are now reachable by keyboard (Settings also via the standard
+Preferences shortcut).
 
 ---
 

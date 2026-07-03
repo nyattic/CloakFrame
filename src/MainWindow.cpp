@@ -1,5 +1,7 @@
 #include "redactly/MainWindow.hpp"
 
+#include "redactly/ImageScanner.hpp"
+#include "redactly/PathUtil.hpp"
 #include "redactly/PlateDetector.hpp"
 #include "redactly/ProcessorWorker.hpp"
 #include "redactly/ReviewDialog.hpp"
@@ -11,16 +13,20 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QContextMenuEvent>
+#include <QDesktopServices>
 #include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QLocale>
+#include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPlainTextEdit>
@@ -29,6 +35,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSettings>
+#include <QShortcut>
 #include <QSpinBox>
 #include <QStandardPaths>
 #include <QStatusBar>
@@ -371,6 +378,15 @@ namespace redactly
                 viewport()->update();
             }
 
+            void removeSelectedItems()
+            {
+                const auto items = selectedItems();
+                for (auto *item: items)
+                {
+                    delete item;
+                }
+            }
+
         protected:
             void paintEvent(QPaintEvent *event) override
             {
@@ -383,6 +399,36 @@ namespace redactly
                 painter.setPen(palette().placeholderText().color());
                 painter.drawText(viewport()->rect().adjusted(24, 0, -24, 0),
                                  Qt::AlignCenter | Qt::TextWordWrap, placeholder_);
+            }
+
+            void keyPressEvent(QKeyEvent *event) override
+            {
+                if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
+                {
+                    removeSelectedItems();
+                    return;
+                }
+                QListWidget::keyPressEvent(event);
+            }
+
+            void contextMenuEvent(QContextMenuEvent *event) override
+            {
+                QMenu menu(this);
+                QAction *removeAction = menu.addAction(
+                    QCoreApplication::translate("redactly::MainWindow", "Remove Selected"));
+                removeAction->setEnabled(!selectedItems().isEmpty());
+                QAction *clearAction = menu.addAction(
+                    QCoreApplication::translate("redactly::MainWindow", "Clear All"));
+                clearAction->setEnabled(count() > 0);
+                QAction *chosen = menu.exec(event->globalPos());
+                if (chosen == removeAction)
+                {
+                    removeSelectedItems();
+                }
+                else if (chosen == clearAction)
+                {
+                    clear();
+                }
             }
 
         private:
@@ -427,11 +473,16 @@ namespace redactly
         settingsButton_ = new QToolButton(header);
         settingsButton_->setObjectName("settingsButton");
         settingsButton_->setFixedSize(36, 36);
-        settingsButton_->setFocusPolicy(Qt::NoFocus);
         settingsButton_->setCursor(Qt::PointingHandCursor);
         updateSettingsIcon();
-        addRetranslation([this]{ settingsButton_->setToolTip(tr("Settings")); });
+        addRetranslation([this]
+                         {
+                             settingsButton_->setToolTip(tr("Settings"));
+                             settingsButton_->setAccessibleName(tr("Settings"));
+                         });
         connect(settingsButton_, &QToolButton::clicked, this, &MainWindow::openSettings);
+        auto *settingsShortcut = new QShortcut(QKeySequence::Preferences, this);
+        connect(settingsShortcut, &QShortcut::activated, this, &MainWindow::openSettings);
 
         auto *versionLabel = new QLabel(QString("v%1").arg(QCoreApplication::applicationVersion()), header);
         versionLabel->setObjectName("subtitleLabel");
@@ -456,7 +507,7 @@ namespace redactly
 
         auto *subtitle = new QLabel(header);
         subtitle->setObjectName("subtitleLabel");
-        addRetranslation([subtitle]{ subtitle->setText(tr("Local, private face anonymization for photos")); });
+        addRetranslation([subtitle]{ subtitle->setText(tr("Local, private redaction of faces and license plates in photos")); });
         headerLayout->addLayout(titleRow);
         headerLayout->addWidget(subtitle);
         root->addWidget(header);
@@ -545,8 +596,12 @@ namespace redactly
             inputList_->setSelectionMode(QAbstractItemView::ExtendedSelection);
             inputList_->setMinimumHeight(140);
             inputList_->setAlternatingRowColors(false);
-            addRetranslation([dropList]
-                             { dropList->setPlaceholderText(tr("Drop images or folders here")); });
+            addRetranslation([this, dropList]
+                             {
+                                 dropList->setPlaceholderText(tr("Drop images or folders here"));
+                                 inputList_->setAccessibleName(tr("Input images and folders"));
+                                 inputList_->setToolTip(tr("Right-click for options · Delete removes selected items"));
+                             });
             cardLayout->addWidget(inputList_);
 
             auto *buttonRow = new QHBoxLayout();
@@ -649,7 +704,6 @@ namespace redactly
             advancedToggle_->setArrowType(Qt::RightArrow);
             advancedToggle_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
             advancedToggle_->setCursor(Qt::PointingHandCursor);
-            advancedToggle_->setFocusPolicy(Qt::NoFocus);
 
             auto *resetButton = new QPushButton(card);
             addRetranslation([resetButton]{ resetButton->setText(tr("Reset to defaults")); });
@@ -827,6 +881,20 @@ namespace redactly
         progressBar_->setValue(0);
         progressBar_->setTextVisible(false);
         progressBar_->setFixedHeight(6);
+        addRetranslation([this]{ progressBar_->setAccessibleName(tr("Processing progress")); });
+
+        openOutputButton_ = new QPushButton(bottomBar);
+        addRetranslation([this]{ openOutputButton_->setText(tr("Open Output Folder")); });
+        openOutputButton_->setCursor(Qt::PointingHandCursor);
+        openOutputButton_->setVisible(false);
+        connect(openOutputButton_, &QPushButton::clicked, this, [this]
+        {
+            const QString dir = outputDirEdit_->text();
+            if (!dir.isEmpty() && QFileInfo::exists(dir))
+            {
+                QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+            }
+        });
 
         stopButton_ = new QPushButton(bottomBar);
         stopButton_->setObjectName("dangerButton");
@@ -845,6 +913,7 @@ namespace redactly
 
         bottomLayout->addWidget(statusLabel_);
         bottomLayout->addWidget(progressBar_, 1);
+        bottomLayout->addWidget(openOutputButton_);
         bottomLayout->addWidget(stopButton_);
         bottomLayout->addWidget(startButton_);
 
@@ -892,6 +961,19 @@ namespace redactly
 
     namespace
     {
+        bool acceptableDropPath(const QFileInfo &info)
+        {
+            if (!info.exists())
+            {
+                return false;
+            }
+            if (info.isDir())
+            {
+                return true;
+            }
+            return info.isFile() && isSupportedImage(pathFromQString(info.filePath()));
+        }
+
         bool hasAcceptableLocalUrls(const QMimeData *mime)
         {
             if (mime == nullptr || !mime->hasUrls())
@@ -904,8 +986,7 @@ namespace redactly
                 {
                     continue;
                 }
-                const QFileInfo info(url.toLocalFile());
-                if (info.exists() && (info.isFile() || info.isDir()))
+                if (acceptableDropPath(QFileInfo(url.toLocalFile())))
                 {
                     return true;
                 }
@@ -918,6 +999,7 @@ namespace redactly
     {
         if (hasAcceptableLocalUrls(event->mimeData()))
         {
+            setDropHighlight(true);
             event->acceptProposedAction();
         } else
         {
@@ -925,13 +1007,21 @@ namespace redactly
         }
     }
 
+    void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
+    {
+        setDropHighlight(false);
+        QMainWindow::dragLeaveEvent(event);
+    }
+
     void MainWindow::dropEvent(QDropEvent *event)
     {
+        setDropHighlight(false);
         if (!hasAcceptableLocalUrls(event->mimeData()))
         {
             event->ignore();
             return;
         }
+        int unsupportedCount = 0;
         for (const auto &url: event->mimeData()->urls())
         {
             if (!url.isLocalFile())
@@ -939,10 +1029,18 @@ namespace redactly
                 continue;
             }
             const QFileInfo info(url.toLocalFile());
-            if (info.exists() && (info.isFile() || info.isDir()))
+            if (acceptableDropPath(info))
             {
                 addInputPath(url.toLocalFile());
             }
+            else if (info.exists() && info.isFile())
+            {
+                ++unsupportedCount;
+            }
+        }
+        if (unsupportedCount > 0)
+        {
+            appendLog(tr("Ignored %1 unsupported file(s).").arg(unsupportedCount));
         }
         event->acceptProposedAction();
     }
@@ -1098,6 +1196,8 @@ namespace redactly
         }
 
         setProcessing(true);
+        openOutputButton_->setVisible(false);
+        runTimer_.start();
         progressBar_->setValue(0);
         statusLabel_->setText(tr("Starting…"));
 
@@ -1164,15 +1264,21 @@ namespace redactly
     void MainWindow::onWorkerFinished(RunOutcome outcome)
     {
         setProcessing(false);
+        const qint64 seconds = runTimer_.isValid() ? runTimer_.elapsed() / 1000 : 0;
+        const QString elapsed = seconds >= 60
+                                    ? QStringLiteral("%1m %2s").arg(seconds / 60).arg(seconds % 60)
+                                    : QStringLiteral("%1s").arg(seconds);
         switch (outcome)
         {
             case RunOutcome::Completed:
                 appendLog(tr("Finished."));
-                statusLabel_->setText(tr("Done"));
+                statusLabel_->setText(tr("Done") + QStringLiteral("  ·  ") + elapsed);
+                openOutputButton_->setVisible(true);
                 break;
             case RunOutcome::Cancelled:
                 appendLog(tr("Cancelled."));
-                statusLabel_->setText(tr("Cancelled"));
+                statusLabel_->setText(tr("Cancelled") + QStringLiteral("  ·  ") + elapsed);
+                openOutputButton_->setVisible(true);
                 break;
             case RunOutcome::Failed:
                 appendLog(tr("Failed — check the log for details."));
@@ -1471,6 +1577,7 @@ namespace redactly
         startButton_->setEnabled(!processing);
         stopButton_->setEnabled(processing);
         settingsButton_->setEnabled(!processing);
+        detectCombo_->setEnabled(!processing);
         modelCombo_->setEnabled(!processing);
         methodCombo_->setEnabled(!processing);
         shapeCombo_->setEnabled(!processing);
@@ -1485,6 +1592,20 @@ namespace redactly
         nmsThresholdSpin_->setEnabled(!processing);
         blockSizeSpin_->setEnabled(!processing);
         paddingSpin_->setEnabled(!processing);
+
+        if (!processing)
+        {
+            const bool facesNeeded = detectCombo_->currentData().toString() != "plates";
+            modelCombo_->setEnabled(facesNeeded);
+            modelPathEdit_->setEnabled(facesNeeded);
+        }
+    }
+
+    void MainWindow::setDropHighlight(bool active) const
+    {
+        inputList_->setProperty("dragActive", active ? QVariant(true) : QVariant());
+        inputList_->style()->unpolish(inputList_);
+        inputList_->style()->polish(inputList_);
     }
 
     QStringList MainWindow::inputPaths() const

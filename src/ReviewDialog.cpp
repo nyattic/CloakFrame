@@ -13,9 +13,11 @@
 #include <QShortcut>
 #include <QSizePolicy>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 #include <QWidget>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <functional>
 #include <vector>
@@ -121,6 +123,13 @@ namespace redactly
             return QSize(420, 320);
         }
 
+        void resetView()
+        {
+            zoom_ = 1.0;
+            pan_ = QPointF();
+            update();
+        }
+
     protected:
         void paintEvent(QPaintEvent *) override
         {
@@ -186,8 +195,59 @@ namespace redactly
             }
         }
 
+        void wheelEvent(QWheelEvent *event) override
+        {
+            if (image_.isNull())
+            {
+                return;
+            }
+            const double steps = event->angleDelta().y() / 120.0;
+            if (steps == 0.0)
+            {
+                return;
+            }
+            const qreal factor = std::pow(1.25, steps);
+            const qreal newZoom = std::clamp(zoom_ * factor, 1.0, 8.0);
+            if (newZoom == zoom_)
+            {
+                event->accept();
+                return;
+            }
+            const QPointF pos = event->position();
+            const QRectF before = imageTargetRect();
+            const qreal relX = before.width() > 0 ? (pos.x() - before.x()) / before.width() : 0.5;
+            const qreal relY = before.height() > 0 ? (pos.y() - before.y()) / before.height() : 0.5;
+            zoom_ = newZoom;
+            if (zoom_ == 1.0)
+            {
+                pan_ = QPointF();
+            }
+            else
+            {
+                const QSizeF scaled = QSizeF(fitSize(image_.size())) * zoom_;
+                const qreal centeredX = (width() - scaled.width()) / 2.0;
+                const qreal centeredY = (height() - scaled.height()) / 2.0;
+                pan_ = QPointF(pos.x() - relX * scaled.width() - centeredX,
+                               pos.y() - relY * scaled.height() - centeredY);
+                clampPan();
+            }
+            update();
+            event->accept();
+        }
+
         void mousePressEvent(QMouseEvent *event) override
         {
+            if (event->button() == Qt::RightButton || event->button() == Qt::MiddleButton)
+            {
+                if (zoom_ > 1.0)
+                {
+                    panning_ = true;
+                    panStart_ = event->position();
+                    panOrigin_ = pan_;
+                    setCursor(Qt::ClosedHandCursor);
+                }
+                return;
+            }
             if (event->button() != Qt::LeftButton || image_.isNull())
             {
                 return;
@@ -222,6 +282,13 @@ namespace redactly
         void mouseMoveEvent(QMouseEvent *event) override
         {
             const QPointF pos = event->position();
+            if (panning_)
+            {
+                pan_ = panOrigin_ + (pos - panStart_);
+                clampPan();
+                update();
+                return;
+            }
             if (drawing_)
             {
                 dragCurrent_ = pos;
@@ -239,6 +306,14 @@ namespace redactly
 
         void mouseReleaseEvent(QMouseEvent *event) override
         {
+            if (panning_ &&
+                (event->button() == Qt::RightButton || event->button() == Qt::MiddleButton))
+            {
+                panning_ = false;
+                setCursor(hitTest(event->position()) >= 0 ? Qt::PointingHandCursor
+                                                          : Qt::CrossCursor);
+                return;
+            }
             if (!drawing_ || event->button() != Qt::LeftButton)
             {
                 return;
@@ -258,6 +333,16 @@ namespace redactly
             update();
         }
 
+        void keyPressEvent(QKeyEvent *event) override
+        {
+            if (event->key() == Qt::Key_0 || event->key() == Qt::Key_F)
+            {
+                resetView();
+                return;
+            }
+            QWidget::keyPressEvent(event);
+        }
+
     private:
         [[nodiscard]] QRectF imageTargetRect() const
         {
@@ -265,10 +350,19 @@ namespace redactly
             {
                 return {};
             }
-            const QSize fitted = fitSize(image_.size());
-            const double x = (width() - fitted.width()) / 2.0;
-            const double y = (height() - fitted.height()) / 2.0;
-            return QRectF(QPointF(x, y), QSizeF(fitted));
+            const QSizeF scaled = QSizeF(fitSize(image_.size())) * zoom_;
+            const double x = (width() - scaled.width()) / 2.0 + pan_.x();
+            const double y = (height() - scaled.height()) / 2.0 + pan_.y();
+            return QRectF(QPointF(x, y), scaled);
+        }
+
+        void clampPan()
+        {
+            const QSizeF scaled = QSizeF(fitSize(image_.size())) * zoom_;
+            const qreal maxX = std::max(0.0, (scaled.width() - width()) / 2.0 + 60.0);
+            const qreal maxY = std::max(0.0, (scaled.height() - height()) / 2.0 + 60.0);
+            pan_.setX(std::clamp(pan_.x(), -maxX, maxX));
+            pan_.setY(std::clamp(pan_.y(), -maxY, maxY));
         }
 
         [[nodiscard]] QSize fitSize(QSize source) const
@@ -355,6 +449,11 @@ namespace redactly
         bool drawing_ = false;
         QPointF dragStart_;
         QPointF dragCurrent_;
+        qreal zoom_ = 1.0;
+        QPointF pan_;
+        bool panning_ = false;
+        QPointF panStart_;
+        QPointF panOrigin_;
         std::vector<QVector<Box>> undoStack_;
         std::vector<QVector<Box>> redoStack_;
         std::function<void()> historyChanged_;
@@ -378,22 +477,27 @@ namespace redactly
         root->setSpacing(12);
 
         auto *header = new QLabel(
-            QString("<b>%1</b> &nbsp;·&nbsp; <span style='color:#6B7280'>%2 / %3</span>")
-                .arg(sourceName.toHtmlEscaped()).arg(currentIndex).arg(total), this);
+            QString("<b>%1</b> &nbsp;·&nbsp; <span style='color:%2'>%3 / %4</span>")
+                .arg(sourceName.toHtmlEscaped(),
+                     palette().placeholderText().color().name())
+                .arg(currentIndex).arg(total), this);
         header->setTextFormat(Qt::RichText);
         root->addWidget(header);
 
         canvas_ = new ReviewCanvas(image, detected, this);
         canvas_->setStyleSheet("background-color: #111827; border-radius: 8px;");
+        canvas_->setAccessibleName(tr("Review image"));
         root->addWidget(canvas_, 1);
 
         hintLabel_ = new QLabel(
             tr("Click a box to toggle · Drag an empty area to add · "
                "Click a blue box to delete · %1 / %2 to undo/redo · "
+               "Scroll to zoom, right-drag to pan, 0 resets · "
                "Esc skips this image without saving")
                 .arg(QKeySequence(QKeySequence::Undo).toString(QKeySequence::NativeText),
                      QKeySequence(QKeySequence::Redo).toString(QKeySequence::NativeText)), this);
-        hintLabel_->setStyleSheet("color: #6B7280; font-size: 12px;");
+        hintLabel_->setProperty("role", "sectionHint");
+        hintLabel_->setWordWrap(true);
         root->addWidget(hintLabel_);
 
         auto *buttonRow = new QHBoxLayout();

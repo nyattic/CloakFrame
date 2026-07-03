@@ -124,8 +124,36 @@ Continue?</source>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="554"/>
-        <source>Local, private face anonymization for photos</source>
-        <translation>사진 속 얼굴 자동 모자이크</translation>
+        <source>Local, private redaction of faces and license plates in photos</source>
+        <translation>사진 속 얼굴과 번호판을 내 컴퓨터에서만 비공개로 가립니다</translation>
+    </message>
+    <message>
+        <source>Remove Selected</source>
+        <translation>선택 항목 제거</translation>
+    </message>
+    <message>
+        <source>Clear All</source>
+        <translation>목록 비우기</translation>
+    </message>
+    <message>
+        <source>Ignored %1 unsupported file(s).</source>
+        <translation>지원되지 않는 파일 %1개를 무시했습니다.</translation>
+    </message>
+    <message>
+        <source>Input images and folders</source>
+        <translation>입력 이미지 및 폴더</translation>
+    </message>
+    <message>
+        <source>Right-click for options · Delete removes selected items</source>
+        <translation>우클릭으로 메뉴 열기 · Delete 키로 선택 항목 제거</translation>
+    </message>
+    <message>
+        <source>Processing progress</source>
+        <translation>처리 진행률</translation>
+    </message>
+    <message>
+        <source>Open Output Folder</source>
+        <translation>출력 폴더 열기</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="567"/>
@@ -180,7 +208,7 @@ Continue?</source>
     <message>
         <location filename="../src/MainWindow.cpp" line="625"/>
         <source>Clear</source>
-        <translation>지우기</translation>
+        <translation>목록 비우기</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="630"/>
@@ -749,8 +777,12 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
     </message>
     <message>
         <location filename="../src/ReviewDialog.cpp" line="389"/>
-        <source>Click a box to toggle · Drag an empty area to add · Click a blue box to delete · %1 / %2 to undo/redo · Esc skips this image without saving</source>
-        <translation>상자를 클릭해 전환 · 빈 영역을 드래그해 추가 · 파란 상자를 클릭해 삭제 · %1 / %2 실행 취소/다시 실행 · Esc는 저장하지 않고 건너뜀</translation>
+        <source>Click a box to toggle · Drag an empty area to add · Click a blue box to delete · %1 / %2 to undo/redo · Scroll to zoom, right-drag to pan, 0 resets · Esc skips this image without saving</source>
+        <translation>상자를 클릭해 전환 · 빈 영역을 드래그해 추가 · 파란 상자를 클릭해 삭제 · %1 / %2 실행 취소/다시 실행 · 휠 스크롤 확대, 우클릭 드래그 이동, 0 초기화 · Esc는 저장하지 않고 건너뜀</translation>
+    </message>
+    <message>
+        <source>Review image</source>
+        <translation>검토 이미지</translation>
     </message>
     <message>
         <location filename="../src/ReviewDialog.cpp" line="399"/>

@@ -4,6 +4,7 @@
 #include "redactly/ReviewTypes.hpp"
 #include "redactly/Theme.hpp"
 
+#include <QElapsedTimer>
 #include <QMainWindow>
 #include <QTranslator>
 #include <QVector>
@@ -50,6 +51,8 @@ namespace redactly
     protected:
         void dragEnterEvent(QDragEnterEvent *event) override;
 
+        void dragLeaveEvent(QDragLeaveEvent *event) override;
+
         void dropEvent(QDropEvent *event) override;
 
         void closeEvent(QCloseEvent *event) override;
@@ -89,6 +92,8 @@ namespace redactly
         [[nodiscard]] QString selectedModelPath() const;
 
         void setProcessing(bool processing) const;
+
+        void setDropHighlight(bool active) const;
 
         void updateSettingsIcon() const;
 
@@ -131,12 +136,14 @@ namespace redactly
         QPlainTextEdit *logEdit_ = nullptr;
         QPushButton *startButton_ = nullptr;
         QPushButton *stopButton_ = nullptr;
+        QPushButton *openOutputButton_ = nullptr;
         QLabel *statusLabel_ = nullptr;
         QToolButton *advancedToggle_ = nullptr;
         QWidget *advancedBody_ = nullptr;
 
         QThread *workerThread_ = nullptr;
         ProcessorWorker *worker_ = nullptr;
+        QElapsedTimer runTimer_;
 
         std::shared_ptr<ScrfdFaceDetector> cachedDetector_;
         QString cachedDetectorModelPath_;

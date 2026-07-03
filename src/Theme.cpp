@@ -4,7 +4,10 @@
 #include <QColor>
 #include <QGuiApplication>
 #include <QPalette>
+#include <QScreen>
 #include <QStyleHints>
+
+#include <algorithm>
 
 #ifdef REDACTLY_HAVE_SVG
 #include <QPainter>
@@ -351,6 +354,10 @@ namespace redactly
             QListWidget[invalid="true"] {
                 border: 1px solid @invalidBorder@;
             }
+            QListWidget[dragActive="true"] {
+                border: 1px solid @focusBorder@;
+                background-color: @buttonHoverBg@;
+            }
             QToolButton#advancedToggle {
                 background: transparent;
                 border: none;
@@ -537,7 +544,11 @@ namespace redactly
             "a1.65 1.65 0 0 0-1.51 1z'/></svg>").arg(color);
 
         constexpr int logical = 20;
-        constexpr qreal dpr = 2.0;
+        qreal dpr = 1.0;
+        for (const QScreen *screen: QGuiApplication::screens())
+        {
+            dpr = std::max(dpr, screen->devicePixelRatio());
+        }
         QPixmap pixmap(QSize(logical, logical) * dpr);
         pixmap.fill(Qt::transparent);
         QSvgRenderer renderer(svg.toUtf8());
