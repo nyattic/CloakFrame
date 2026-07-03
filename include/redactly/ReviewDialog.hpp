@@ -21,6 +21,7 @@ namespace redactly
     {
         AnonymizationMethod method = AnonymizationMethod::Mosaic;
         MaskShape shape = MaskShape::Rectangle;
+        bool softEdges = false;
         int blockSize = 14;
         float padding = 0.18F;
         double previewScale = 1.0;

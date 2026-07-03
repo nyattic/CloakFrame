@@ -373,7 +373,7 @@ namespace redactly
         }
 
         QPixmap anonymizationSamplePixmap(AnonymizationMethod method, MaskShape shape,
-                                          int blockSize, float padding)
+                                          int blockSize, float padding, bool softEdges)
         {
             qreal dpr = 1.0;
             for (const QScreen *screen: QGuiApplication::screens())
@@ -402,7 +402,7 @@ namespace redactly
             detections.push_back({cv::Rect2f(w * 0.3F, h * 0.2F, w * 0.4F, h * 0.6F), 1.0F});
             applyAnonymization(sample, detections, method,
                                std::max(2, static_cast<int>(std::lround(blockSize * dpr))),
-                               padding, shape);
+                               padding, shape, softEdges);
 
             const QImage image(sample.data, sample.cols, sample.rows,
                                static_cast<int>(sample.step), QImage::Format_BGR888);
@@ -805,6 +805,17 @@ namespace redactly
                                      "Default: Rectangle"));
                              });
 
+            softEdgeCheck_ = new QCheckBox(advancedBody_);
+            addRetranslation([this]
+                             {
+                                 softEdgeCheck_->setAccessibleName(tr("Soft edges"));
+                                 softEdgeCheck_->setToolTip(tr(
+                                     "Fades the edge of the obscured region into the photo "
+                                     "instead of a hard cutoff.\n"
+                                     "The fade only extends outward, so the detected area "
+                                     "stays fully covered. Default: off"));
+                             });
+
             scoreThresholdSpin_ = new QDoubleSpinBox(advancedBody_);
             scoreThresholdSpin_->setRange(0.05, 0.99);
             scoreThresholdSpin_->setSingleStep(0.05);
@@ -866,6 +877,9 @@ namespace redactly
             auto *shapeLabel = makeFieldLabel(advancedBody_);
             addRetranslation([shapeLabel]{ shapeLabel->setText(tr("Shape")); });
             grid->addRow(shapeLabel, shapeCombo_);
+            auto *softEdgeLabel = makeFieldLabel(advancedBody_);
+            addRetranslation([softEdgeLabel]{ softEdgeLabel->setText(tr("Soft edges")); });
+            grid->addRow(softEdgeLabel, softEdgeCheck_);
             auto *scoreLabel = makeFieldLabel(advancedBody_);
             addRetranslation([scoreLabel]{ scoreLabel->setText(tr("Score threshold")); });
             grid->addRow(scoreLabel, scoreThresholdSpin_);
@@ -900,6 +914,8 @@ namespace redactly
             connect(methodCombo_, &QComboBox::currentIndexChanged, this,
                     [this]{ updateAnonymizationSample(); });
             connect(shapeCombo_, &QComboBox::currentIndexChanged, this,
+                    [this]{ updateAnonymizationSample(); });
+            connect(softEdgeCheck_, &QCheckBox::toggled, this,
                     [this]{ updateAnonymizationSample(); });
             connect(blockSizeSpin_, &QSpinBox::valueChanged, this,
                     [this]{ updateAnonymizationSample(); });
@@ -1283,6 +1299,7 @@ namespace redactly
                                       static_cast<float>(paddingSpin_->value()),
                                       static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt()),
                                       static_cast<MaskShape>(shapeCombo_->currentData().toInt()),
+                                      softEdgeCheck_->isChecked(),
                                       preserveMetaCheck_->isChecked(),
                                       reviewCheck_->isChecked(),
                                       this,
@@ -1401,6 +1418,7 @@ namespace redactly
         paddingSpin_->setValue(kDefaultPadding);
         methodCombo_->setCurrentIndex(0);
         shapeCombo_->setCurrentIndex(0);
+        softEdgeCheck_->setChecked(false);
     }
 
     void MainWindow::closeEvent(QCloseEvent *event)
@@ -1462,6 +1480,11 @@ namespace redactly
             shapeCombo_->setCurrentIndex(savedShape);
         }
 
+        if (softEdgeCheck_ != nullptr)
+        {
+            softEdgeCheck_->setChecked(settings.value("softEdges", false).toBool());
+        }
+
         const auto savedDetect = settings.value("detectTarget", 0).toInt();
         if (detectCombo_ != nullptr && savedDetect >= 0 && savedDetect < detectCombo_->count())
         {
@@ -1519,6 +1542,7 @@ namespace redactly
         settings.setValue("padding", paddingSpin_->value());
         settings.setValue("method", methodCombo_ ? methodCombo_->currentIndex() : 0);
         settings.setValue("shape", shapeCombo_ ? shapeCombo_->currentIndex() : 0);
+        settings.setValue("softEdges", softEdgeCheck_ != nullptr && softEdgeCheck_->isChecked());
         settings.setValue("detectTarget", detectCombo_ ? detectCombo_->currentIndex() : 0);
         settings.setValue("advancedExpanded", advancedToggle_ ? advancedToggle_->isChecked() : false);
         settings.endGroup();
@@ -1596,7 +1620,8 @@ namespace redactly
             static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt()),
             static_cast<MaskShape>(shapeCombo_->currentData().toInt()),
             blockSizeSpin_->value(),
-            static_cast<float>(paddingSpin_->value())));
+            static_cast<float>(paddingSpin_->value()),
+            softEdgeCheck_->isChecked()));
     }
 
     void MainWindow::updateSettingsIcon() const
@@ -1681,6 +1706,7 @@ namespace redactly
         modelCombo_->setEnabled(!processing);
         methodCombo_->setEnabled(!processing);
         shapeCombo_->setEnabled(!processing);
+        softEdgeCheck_->setEnabled(!processing);
         modelPathEdit_->setEnabled(!processing);
         downloadButton_->setEnabled(!processing);
         outputDirEdit_->setEnabled(!processing);
@@ -1889,6 +1915,7 @@ namespace redactly
         ReviewPreviewSpec spec;
         spec.method = static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt());
         spec.shape = static_cast<MaskShape>(shapeCombo_->currentData().toInt());
+        spec.softEdges = softEdgeCheck_ != nullptr && softEdgeCheck_->isChecked();
         spec.blockSize = blockSizeSpin_->value();
         spec.padding = static_cast<float>(paddingSpin_->value());
         spec.previewScale = previewScale;

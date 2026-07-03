@@ -377,6 +377,16 @@ Covers ears, hairline, and chin that the detector may miss.
         <translation>모양</translation>
     </message>
     <message>
+        <source>Soft edges</source>
+        <translation>부드러운 가장자리</translation>
+    </message>
+    <message>
+        <source>Fades the edge of the obscured region into the photo instead of a hard cutoff.
+The fade only extends outward, so the detected area stays fully covered. Default: off</source>
+        <translation>가린 영역의 가장자리를 딱 끊는 대신 사진에 자연스럽게 녹아들게 합니다.
+번짐은 바깥쪽으로만 퍼지므로 탐지된 영역은 온전히 가려집니다. 기본값: 꺼짐</translation>
+    </message>
+    <message>
         <location filename="../src/MainWindow.cpp" line="747"/>
         <source>Rectangle</source>
         <translation>사각형</translation>

@@ -517,7 +517,7 @@ namespace redactly
             const int blockSize = std::max(
                 2, static_cast<int>(std::round(spec_.blockSize * spec_.previewScale)));
             applyAnonymization(mat, detections, spec_.method, blockSize, spec_.padding,
-                               spec_.shape);
+                               spec_.shape, spec_.softEdges);
             return base;
         }
 

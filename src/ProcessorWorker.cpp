@@ -225,6 +225,7 @@ namespace redactly
                                      float paddingRatio,
                                      AnonymizationMethod method,
                                      MaskShape shape,
+                                     bool softEdges,
                                      bool preserveMetadata,
                                      bool reviewEnabled,
                                      QObject *reviewReceiver,
@@ -243,6 +244,7 @@ namespace redactly
           paddingRatio_(paddingRatio),
           method_(method),
           shape_(shape),
+          softEdges_(softEdges),
           preserveMetadata_(preserveMetadata),
           reviewEnabled_(reviewEnabled),
           reviewReceiver_(reviewReceiver),
@@ -571,7 +573,8 @@ namespace redactly
                     }
 
                     emit stageChanged(index, total, tr("Applying mosaic"), fileName);
-                    applyAnonymization(image, finalFaces, method_, mosaicBlockSize_, paddingRatio_, shape_);
+                    applyAnonymization(image, finalFaces, method_, mosaicBlockSize_, paddingRatio_,
+                                       shape_, softEdges_);
 
                     if (cancelled_.load(std::memory_order_acquire))
                     {

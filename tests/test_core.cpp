@@ -93,6 +93,68 @@ namespace
         assert(image.at<cv::Vec3b>(3, 3) != insideBefore);
     }
 
+    void testSoftEdgesKeepDetectedRegionFullyCovered()
+    {
+        cv::Mat image(64, 64, CV_8UC3, cv::Scalar(100, 100, 100));
+        const cv::Rect box(24, 24, 16, 16);
+
+        redactly::FaceDetections detections;
+        detections.push_back({cv::Rect2f(box), 1.0F});
+        redactly::applyAnonymization(image, detections, redactly::AnonymizationMethod::Fill,
+                                     4, 0.0F, redactly::MaskShape::Rectangle, true);
+
+        for (int y = box.y; y < box.y + box.height; ++y)
+        {
+            for (int x = box.x; x < box.x + box.width; ++x)
+            {
+                assert(image.at<cv::Vec3b>(y, x) == cv::Vec3b(0, 0, 0));
+            }
+        }
+
+        assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(100, 100, 100));
+
+        const cv::Vec3b feathered = image.at<cv::Vec3b>(box.y + box.height / 2, box.x + box.width + 1);
+        assert(feathered != cv::Vec3b(0, 0, 0));
+        assert(feathered != cv::Vec3b(100, 100, 100));
+    }
+
+    void testSoftEdgesEllipseKeepsCoreCovered()
+    {
+        cv::Mat image(64, 64, CV_8UC3, cv::Scalar(100, 100, 100));
+        const cv::Rect box(20, 20, 24, 24);
+
+        redactly::FaceDetections detections;
+        detections.push_back({cv::Rect2f(box), 1.0F});
+        redactly::applyAnonymization(image, detections, redactly::AnonymizationMethod::Fill,
+                                     4, 0.0F, redactly::MaskShape::Ellipse, true);
+
+        const int centerX = box.x + box.width / 2;
+        const int centerY = box.y + box.height / 2;
+        for (int dy = -box.height / 4; dy <= box.height / 4; ++dy)
+        {
+            for (int dx = -box.width / 4; dx <= box.width / 4; ++dx)
+            {
+                assert(image.at<cv::Vec3b>(centerY + dy, centerX + dx) == cv::Vec3b(0, 0, 0));
+            }
+        }
+
+        assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(100, 100, 100));
+    }
+
+    void testSoftEdgesAtImageBorderStayInBounds()
+    {
+        cv::Mat image(32, 32, CV_8UC3, cv::Scalar(100, 100, 100));
+
+        redactly::FaceDetections detections;
+        detections.push_back({cv::Rect2f(0.0F, 0.0F, 12.0F, 12.0F), 1.0F});
+        detections.push_back({cv::Rect2f(24.0F, 24.0F, 8.0F, 8.0F), 1.0F});
+        redactly::applyAnonymization(image, detections, redactly::AnonymizationMethod::Fill,
+                                     4, 0.0F, redactly::MaskShape::Rectangle, true);
+
+        assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(0, 0, 0));
+        assert(image.at<cv::Vec3b>(31, 31) == cv::Vec3b(0, 0, 0));
+    }
+
     void testOrientationTransforms()
     {
         cv::Mat base(2, 3, CV_8UC1);
@@ -299,6 +361,9 @@ int main()
     testSupportedImageExtensions();
     testScanImagesRecursesAndDeduplicates();
     testApplyMosaicTouchesOnlyDetectedRegion();
+    testSoftEdgesKeepDetectedRegionFullyCovered();
+    testSoftEdgesEllipseKeepsCoreCovered();
+    testSoftEdgesAtImageBorderStayInBounds();
     testOrientationTransforms();
     testEncodeParams();
     testIntersectionOverUnion();

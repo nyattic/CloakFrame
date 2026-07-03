@@ -122,6 +122,7 @@ namespace redactly
         QComboBox *detectCombo_ = nullptr;
         QComboBox *methodCombo_ = nullptr;
         QComboBox *shapeCombo_ = nullptr;
+        QCheckBox *softEdgeCheck_ = nullptr;
         QToolButton *settingsButton_ = nullptr;
         QLineEdit *modelPathEdit_ = nullptr;
         QPushButton *downloadButton_ = nullptr;
