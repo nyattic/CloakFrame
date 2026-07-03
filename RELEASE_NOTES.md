@@ -39,6 +39,17 @@ order.
 
 ---
 
+# Redactly 1.5.2
+
+Adds a **Soft edges** option to the Advanced panel. When enabled, the edge of
+each obscured region fades into the photo like an airbrush instead of ending
+in a hard cutoff. The fade only extends outward from the detected area, so
+the region itself stays fully obscured. It works with every anonymization
+method and both shapes, and is reflected in the style preview and the review
+dialog. Off by default.
+
+---
+
 # Redactly 1.5.1
 
 Polishes the Korean translation. The header subtitle drops the redundant
