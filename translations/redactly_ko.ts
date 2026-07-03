@@ -124,8 +124,8 @@ Continue?</source>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="554"/>
-        <source>Local, private redaction of faces and license plates in photos</source>
-        <translation>사진 속 얼굴과 번호판을 가립니다</translation>
+        <source>Local, private redaction of faces and license plates in photos and videos</source>
+        <translation>사진과 동영상 속 얼굴과 번호판을 가립니다</translation>
     </message>
     <message>
         <source>Remove Selected</source>
@@ -199,13 +199,13 @@ Continue?</source>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="610"/>
-        <source>Drag images or folders here, or use the buttons below.</source>
-        <translation>이미지나 폴더를 여기로 끌어놓거나 아래 버튼을 사용하세요.</translation>
+        <source>Drag images, videos, or folders here, or use the buttons below.</source>
+        <translation>이미지, 동영상, 폴더를 여기로 끌어놓거나 아래 버튼을 사용하세요.</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="620"/>
-        <source>Drop images or folders here</source>
-        <translation>이미지나 폴더를 여기로 드래그하세요</translation>
+        <source>Drop images, videos, or folders here</source>
+        <translation>이미지, 동영상, 폴더를 여기로 드래그하세요</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="621"/>
@@ -236,10 +236,12 @@ Continue?</source>
         <location filename="../src/MainWindow.cpp" line="637"/>
         <source>Before saving each image, open a preview where you can:
   • Click a detected box to exclude it
-  • Drag an empty area to add a box the model missed</source>
+  • Drag an empty area to add a box the model missed
+Videos are processed without review.</source>
         <translation>각 이미지를 저장하기 전에 미리보기를 열어:
   • 감지된 상자를 클릭해 제외하거나
-  • 빈 영역을 드래그해 놓친 상자를 추가할 수 있습니다</translation>
+  • 빈 영역을 드래그해 놓친 상자를 추가할 수 있습니다
+동영상은 검토 없이 처리됩니다.</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="666"/>
@@ -468,13 +470,13 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="981"/>
-        <source>Select Images</source>
-        <translation>이미지 선택</translation>
+        <source>Select Images or Videos</source>
+        <translation>이미지 또는 동영상 선택</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="984"/>
-        <source>Images (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp)</source>
-        <translation>이미지 (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp)</translation>
+        <source>Images &amp; Videos (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp *.mp4 *.mov *.m4v)</source>
+        <translation>이미지·동영상 (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp *.mp4 *.mov *.m4v)</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="993"/>
@@ -644,17 +646,17 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="309"/>
-        <source>Scanning images...</source>
-        <translation>이미지 스캔 중...</translation>
+        <source>Scanning inputs...</source>
+        <translation>입력 스캔 중...</translation>
     </message>
     <message numerus="yes">
-        <source>Preflight: found %n supported image(s).</source>
-        <translation><numerusform>사전 점검: 지원되는 이미지 %n장을 찾았습니다.</numerusform></translation>
+        <source>Preflight: found %n supported file(s).</source>
+        <translation><numerusform>사전 점검: 지원되는 파일 %n개를 찾았습니다.</numerusform></translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="323"/>
-        <source>No supported images were found.</source>
-        <translation>지원되는 이미지를 찾지 못했습니다.</translation>
+        <source>No supported files were found.</source>
+        <translation>지원되는 파일을 찾지 못했습니다.</translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="333"/>
@@ -794,6 +796,46 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/ProcessorWorker.cpp" line="575"/>
         <source>Error: %1</source>
         <translation>오류: %1</translation>
+    </message>
+    <message>
+        <source>Error processing %1</source>
+        <translation>%1 처리 중 오류</translation>
+    </message>
+    <message>
+        <source>Videos are processed without review: %1</source>
+        <translation>동영상은 검토 없이 처리됩니다: %1</translation>
+    </message>
+    <message>
+        <source>Metadata preservation is not available for videos; metadata was removed: %1</source>
+        <translation>동영상은 메타데이터 보존이 지원되지 않아 메타데이터가 제거되었습니다: %1</translation>
+    </message>
+    <message>
+        <source>Failed (%1): %2</source>
+        <translation>실패 (%1): %2</translation>
+    </message>
+    <message>
+        <source>Inspecting</source>
+        <translation>확인 중</translation>
+    </message>
+    <message>
+        <source>Failed (unsupported video: %1): %2</source>
+        <translation>실패 (지원되지 않는 동영상: %1): %2</translation>
+    </message>
+    <message>
+        <source>Note: variable frame rate is converted to a constant frame rate: %1</source>
+        <translation>참고: 가변 프레임레이트는 고정 프레임레이트로 변환됩니다: %1</translation>
+    </message>
+    <message>
+        <source>Analyzing %1%</source>
+        <translation>분석 중 %1%</translation>
+    </message>
+    <message>
+        <source>Encoding %1%</source>
+        <translation>인코딩 중 %1%</translation>
+    </message>
+    <message>
+        <source>Failed to process video %1: %2</source>
+        <translation>동영상 처리 실패 %1: %2</translation>
     </message>
 </context>
 <context>
@@ -937,9 +979,127 @@ Continue?</source>
         <translation>가능한 경우 탐지 모델을 GPU에서 실행합니다. 다음 실행부터 적용됩니다.</translation>
     </message>
     <message>
+        <source>Video quality</source>
+        <translation>동영상 화질</translation>
+    </message>
+    <message>
+        <source>High (near-original)</source>
+        <translation>높음 (원본 수준)</translation>
+    </message>
+    <message>
+        <source>Balanced</source>
+        <translation>균형</translation>
+    </message>
+    <message>
+        <source>Smaller files</source>
+        <translation>용량 절약</translation>
+    </message>
+    <message>
+        <source>Quality of re-encoded videos. Higher quality produces larger files.</source>
+        <translation>다시 인코딩되는 동영상의 화질입니다. 화질이 높을수록 파일이 커집니다.</translation>
+    </message>
+    <message>
         <location filename="../src/SettingsDialog.cpp" line="87"/>
         <source>Close</source>
         <translation>닫기</translation>
+    </message>
+</context>
+<context>
+    <name>redactly::VideoIo</name>
+    <message>
+        <source>FFmpeg was not found. Video processing is unavailable.</source>
+        <translation>FFmpeg를 찾을 수 없습니다. 동영상 처리를 사용할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>FFmpeg was found but could not be executed.</source>
+        <translation>FFmpeg를 찾았지만 실행할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>Could not read the FFmpeg checksum manifest.</source>
+        <translation>FFmpeg 체크섬 목록을 읽지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>Could not read the bundled FFmpeg binary.</source>
+        <translation>내장 FFmpeg 실행 파일을 읽지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>The bundled FFmpeg binary failed its integrity check.</source>
+        <translation>내장 FFmpeg 실행 파일이 무결성 검사를 통과하지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>Could not inspect the video (ffprobe did not respond).</source>
+        <translation>동영상을 확인하지 못했습니다 (ffprobe가 응답하지 않음).</translation>
+    </message>
+    <message>
+        <source>Could not inspect the video: %1</source>
+        <translation>동영상을 확인하지 못했습니다: %1</translation>
+    </message>
+    <message>
+        <source>The file contains no video stream.</source>
+        <translation>파일에 비디오 스트림이 없습니다.</translation>
+    </message>
+    <message>
+        <source>the video stream could not be read</source>
+        <translation>비디오 스트림을 읽을 수 없음</translation>
+    </message>
+    <message>
+        <source>unsupported video codec '%1' (H.264/HEVC only)</source>
+        <translation>지원되지 않는 비디오 코덱 '%1' (H.264/HEVC만 지원)</translation>
+    </message>
+    <message>
+        <source>10-bit or higher bit depth is not supported yet</source>
+        <translation>10비트 이상 비트 심도는 아직 지원되지 않음</translation>
+    </message>
+    <message>
+        <source>HDR video is not supported yet</source>
+        <translation>HDR 동영상은 아직 지원되지 않음</translation>
+    </message>
+    <message>
+        <source>Invalid video dimensions.</source>
+        <translation>동영상 해상도가 올바르지 않습니다.</translation>
+    </message>
+    <message>
+        <source>Could not start FFmpeg for decoding.</source>
+        <translation>디코딩을 위한 FFmpeg를 시작하지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>Decoding failed: %1</source>
+        <translation>디코딩 실패: %1</translation>
+    </message>
+    <message>
+        <source>Decoding ended mid-frame: %1</source>
+        <translation>디코딩이 프레임 중간에 끊겼습니다: %1</translation>
+    </message>
+    <message>
+        <source>Decoding timed out.</source>
+        <translation>디코딩 시간이 초과되었습니다.</translation>
+    </message>
+    <message>
+        <source>Could not start FFmpeg for encoding.</source>
+        <translation>인코딩을 위한 FFmpeg를 시작하지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>Encoding failed: %1</source>
+        <translation>인코딩 실패: %1</translation>
+    </message>
+    <message>
+        <source>Internal error: frame does not match the video format.</source>
+        <translation>내부 오류: 프레임이 동영상 형식과 일치하지 않습니다.</translation>
+    </message>
+    <message>
+        <source>Encoding timed out while finalizing.</source>
+        <translation>마무리 중 인코딩 시간이 초과되었습니다.</translation>
+    </message>
+    <message>
+        <source>Could not move the finished video into place.</source>
+        <translation>완성된 동영상을 제자리로 옮기지 못했습니다.</translation>
+    </message>
+</context>
+<context>
+    <name>redactly::VideoProcessor</name>
+    <message>
+        <source>No frames could be decoded.</source>
+        <translation>디코딩할 수 있는 프레임이 없습니다.</translation>
     </message>
 </context>
 </TS>

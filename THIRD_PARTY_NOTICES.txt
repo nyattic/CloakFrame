@@ -12,6 +12,21 @@ and are available for non-commercial research use only. See the README for
 details.
 
 ================================================================================
+FFmpeg  (LGPL-2.1-or-later, with optional GPL-2.0-or-later components)
+--
+Redactly invokes the FFmpeg and FFprobe command-line tools as separate
+processes for video decoding and encoding. Distributions of Redactly may
+bundle unmodified FFmpeg binaries; otherwise a system-installed FFmpeg found
+on PATH is used. FFmpeg source code is available from https://ffmpeg.org/.
+Builds that enable libx264 are covered by the GNU General Public License
+version 2 or later, which is compatible with Redactly's GPL-3.0-or-later
+license.
+
+FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+Copyright (c) the FFmpeg developers.
+================================================================================
+
+================================================================================
 Qt  (LGPL-3.0)
 --
 Qt is used under the GNU Lesser General Public License, version 3 (LGPLv3),

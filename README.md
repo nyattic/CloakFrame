@@ -29,7 +29,9 @@ Originals are never modified. Enable **Review each image** to inspect detections
 
 Redactly refuses to start if two inputs would write to the same output path, so existing results are not silently overwritten.
 
-Supported inputs: `.jpg` `.jpeg` `.png` `.bmp` `.tif` `.tiff` `.webp`.
+Supported inputs: `.jpg` `.jpeg` `.png` `.bmp` `.tif` `.tiff` `.webp` images, and `.mp4` `.mov` `.m4v` videos (H.264/HEVC, 8-bit SDR).
+
+Videos are processed in two passes — detection with bidirectional tracking, then encoding — so faces stay covered through motion blur and brief occlusions. Output is always H.264 MP4 with the original audio, container metadata removed, and rotation baked into the pixels. Variable frame rate input is converted to a constant frame rate; 10-bit/HDR input is rejected rather than silently degraded. Video processing requires FFmpeg (bundled with packaged releases, or found on `PATH`). Videos are processed without the review step, and the video quality preset lives in Settings.
 
 ## Build from source
 
