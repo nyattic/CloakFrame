@@ -3,6 +3,8 @@
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <vector>
 
 namespace redactly
 {
@@ -55,6 +57,63 @@ namespace redactly
         {
             roi.setTo(cv::Scalar(0, 0, 0));
         }
+
+        constexpr float kFeatherRatio = 0.3F;
+        constexpr int kMinFeather = 4;
+
+        int featherSizeFor(const cv::Rect &region)
+        {
+            const int base = std::min(region.width, region.height);
+            return std::max(kMinFeather, static_cast<int>(std::lround(static_cast<float>(base) * kFeatherRatio)));
+        }
+
+        cv::Rect expandedRegion(const cv::Rect &region, int width, int height, int feather)
+        {
+            const int x = std::max(0, region.x - feather);
+            const int y = std::max(0, region.y - feather);
+            const int right = std::min(width, region.x + region.width + feather);
+            const int bottom = std::min(height, region.y + region.height + feather);
+            return {x, y, right - x, bottom - y};
+        }
+
+        cv::Mat softCoreMask(const cv::Size &size, const cv::Rect &core, MaskShape shape, int feather)
+        {
+            cv::Mat outside(size, CV_8UC1, cv::Scalar(255));
+            if (shape == MaskShape::Ellipse)
+            {
+                cv::ellipse(outside,
+                            cv::Point(core.x + core.width / 2, core.y + core.height / 2),
+                            cv::Size(core.width / 2, core.height / 2),
+                            0.0, 0.0, 360.0, cv::Scalar(0), cv::FILLED, cv::LINE_8);
+            }
+            else
+            {
+                cv::rectangle(outside, core, cv::Scalar(0), cv::FILLED);
+            }
+
+            cv::Mat distance;
+            cv::distanceTransform(outside, distance, cv::DIST_L2, cv::DIST_MASK_PRECISE);
+
+            cv::Mat ramp = 1.0F - distance / static_cast<float>(feather);
+            ramp = cv::min(ramp, 1.0F);
+            ramp = cv::max(ramp, 0.0F);
+            return ramp.mul(ramp).mul(3.0F - 2.0F * ramp);
+        }
+
+        void blendWithMask(cv::Mat roi, const cv::Mat &anonymized, const cv::Mat &alpha)
+        {
+            cv::Mat roiFloat;
+            cv::Mat anonymizedFloat;
+            roi.convertTo(roiFloat, CV_32F);
+            anonymized.convertTo(anonymizedFloat, CV_32F);
+
+            const std::vector<cv::Mat> alphaChannels(static_cast<size_t>(roi.channels()), alpha);
+            cv::Mat alphaMerged;
+            cv::merge(alphaChannels, alphaMerged);
+
+            cv::Mat blended = roiFloat + (anonymizedFloat - roiFloat).mul(alphaMerged);
+            blended.convertTo(roi, roi.type());
+        }
     }
 
     void applyEffect(cv::Mat roi, AnonymizationMethod method, int blockSize)
@@ -76,7 +135,7 @@ namespace redactly
 
     void applyAnonymization(cv::Mat &image, const FaceDetections &detections,
                             AnonymizationMethod method, int blockSize, float paddingRatio,
-                            MaskShape shape)
+                            MaskShape shape, bool softEdges)
     {
         if (image.empty())
         {
@@ -91,6 +150,23 @@ namespace redactly
         for (const auto &detection: detections)
         {
             const cv::Rect roiRect = paddedRegion(detection.box, width, height, paddingRatio);
+
+            if (softEdges)
+            {
+                const int feather = featherSizeFor(roiRect);
+                const cv::Rect outer = expandedRegion(roiRect, width, height, feather);
+                cv::Mat roi = image(outer);
+
+                cv::Mat anonymized = roi.clone();
+                applyEffect(anonymized, method, blockSize);
+
+                const cv::Rect core(roiRect.x - outer.x, roiRect.y - outer.y,
+                                    roiRect.width, roiRect.height);
+                const cv::Mat alpha = softCoreMask(roi.size(), core, shape, feather);
+                blendWithMask(roi, anonymized, alpha);
+                continue;
+            }
+
             cv::Mat roi = image(roiRect);
 
             if (shape == MaskShape::Ellipse)

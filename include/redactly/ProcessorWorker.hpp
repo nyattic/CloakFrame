@@ -37,6 +37,7 @@ namespace redactly
                         float paddingRatio,
                         AnonymizationMethod method,
                         MaskShape shape,
+                        bool softEdges,
                         bool preserveMetadata,
                         bool reviewEnabled,
                         QObject *reviewReceiver,
@@ -78,6 +79,7 @@ namespace redactly
         float paddingRatio_;
         AnonymizationMethod method_;
         MaskShape shape_;
+        bool softEdges_;
         bool preserveMetadata_;
         bool reviewEnabled_;
         QPointer<QObject> reviewReceiver_;
