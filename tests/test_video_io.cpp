@@ -1,0 +1,230 @@
+#include "redactly/VideoIo.hpp"
+
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QProcess>
+#include <QTemporaryDir>
+
+#include <opencv2/core.hpp>
+
+#include <cassert>
+#include <cstdio>
+
+namespace
+{
+    constexpr int kSkipExitCode = 77;
+
+    bool generateSample(const redactly::FfmpegTools &tools, const QString &path)
+    {
+        QProcess process;
+        process.start(tools.ffmpegPath,
+                      {"-v", "error", "-y",
+                       "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=2",
+                       "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+                       "-metadata", "title=RedactlyTestTitle",
+                       "-metadata", "location=+37.5665+126.9780/",
+                       "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                       "-c:a", "aac", "-shortest", path});
+        if (!process.waitForStarted(15000) || !process.waitForFinished(60000))
+        {
+            process.kill();
+            return false;
+        }
+        return process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
+    }
+
+    QString rawProbeOutput(const redactly::FfmpegTools &tools, const QString &path)
+    {
+        QProcess process;
+        process.start(tools.ffprobePath,
+                      {"-v", "error", "-print_format", "json",
+                       "-show_streams", "-show_format", path});
+        process.waitForStarted(15000);
+        process.waitForFinished(60000);
+        return QString::fromUtf8(process.readAllStandardOutput());
+    }
+
+    void testUnsupportedReasons()
+    {
+        redactly::VideoInfo info;
+        info.width = 1920;
+        info.height = 1080;
+        info.fpsNum = 30;
+        info.fpsDen = 1;
+        info.videoCodec = "h264";
+        info.pixelFormat = "yuv420p";
+        assert(redactly::videoUnsupportedReason(info).isEmpty());
+
+        info.videoCodec = "hevc";
+        assert(redactly::videoUnsupportedReason(info).isEmpty());
+
+        info.videoCodec = "vp9";
+        assert(!redactly::videoUnsupportedReason(info).isEmpty());
+        info.videoCodec = "h264";
+
+        info.pixelFormat = "yuv420p10le";
+        assert(!redactly::videoUnsupportedReason(info).isEmpty());
+        info.pixelFormat = "yuv420p";
+
+        info.colorTransfer = "smpte2084";
+        assert(!redactly::videoUnsupportedReason(info).isEmpty());
+        info.colorTransfer.clear();
+
+        info.fpsNum = 0;
+        assert(!redactly::videoUnsupportedReason(info).isEmpty());
+    }
+
+    void testSupportedExtensions()
+    {
+        assert(redactly::isSupportedVideo("clip.mp4"));
+        assert(redactly::isSupportedVideo("CLIP.MOV"));
+        assert(redactly::isSupportedVideo("clip.m4v"));
+        assert(!redactly::isSupportedVideo("clip.webm"));
+        assert(!redactly::isSupportedVideo("clip.mkv"));
+        assert(!redactly::isSupportedVideo("clip.jpg"));
+    }
+
+    void testCrfPresets()
+    {
+        assert(redactly::crfForQuality(redactly::VideoQuality::HighQuality) == 18);
+        assert(redactly::crfForQuality(redactly::VideoQuality::Balanced) == 21);
+        assert(redactly::crfForQuality(redactly::VideoQuality::SpaceSaver) == 24);
+    }
+}
+
+int main(int argc, char **argv)
+{
+    QCoreApplication app(argc, argv);
+
+    testUnsupportedReasons();
+    std::puts("unsupported reasons: ok");
+    testSupportedExtensions();
+    std::puts("supported extensions: ok");
+    testCrfPresets();
+    std::puts("crf presets: ok");
+
+    QString locateError;
+    const auto tools = redactly::locateFfmpegTools(&locateError);
+    if (!tools)
+    {
+        std::printf("SKIP: %s\n", locateError.toUtf8().constData());
+        return kSkipExitCode;
+    }
+    std::printf("using %s\n", tools->versionLine.toUtf8().constData());
+
+    QTemporaryDir tempDir;
+    assert(tempDir.isValid());
+    const QString samplePath = tempDir.filePath("sample.mp4");
+    const QString outputPath = tempDir.filePath("out/redacted.mp4");
+    QDir().mkpath(tempDir.filePath("out"));
+
+    assert(generateSample(*tools, samplePath));
+    std::puts("sample generated: ok");
+
+    QString probeError;
+    const auto info = redactly::probeVideo(*tools, samplePath, &probeError);
+    assert(info.has_value());
+    assert(info->width == 320);
+    assert(info->height == 240);
+    assert(info->fpsNum == 30 && info->fpsDen == 1);
+    assert(info->videoCodec == "h264");
+    assert(info->hasAudio);
+    assert(info->audioCodec == "aac");
+    assert(!info->isVfr);
+    assert(redactly::videoUnsupportedReason(*info).isEmpty());
+    assert(info->estimatedFrameCount >= 55 && info->estimatedFrameCount <= 65);
+    std::puts("probe: ok");
+
+    redactly::VideoFrameReader reader;
+    assert(reader.open(*tools, samplePath, *info));
+
+    redactly::VideoFrameWriter writer;
+    assert(writer.open(*tools, outputPath, samplePath, *info,
+                       redactly::crfForQuality(redactly::VideoQuality::HighQuality)));
+
+    int frameCount = 0;
+    cv::Mat frame;
+    while (reader.readFrame(frame))
+    {
+        cv::bitwise_not(frame, frame);
+        assert(writer.writeFrame(frame));
+        ++frameCount;
+    }
+    assert(reader.errorString().isEmpty());
+    assert(frameCount >= 55 && frameCount <= 65);
+    assert(writer.finish());
+    std::printf("round trip (%d frames): ok\n", frameCount);
+
+    const auto outInfo = redactly::probeVideo(*tools, outputPath, &probeError);
+    assert(outInfo.has_value());
+    assert(outInfo->width == 320);
+    assert(outInfo->height == 240);
+    assert(outInfo->videoCodec == "h264");
+    assert(outInfo->hasAudio);
+    assert(outInfo->audioCodec == "aac");
+    assert(outInfo->durationSeconds > 1.5 && outInfo->durationSeconds < 2.5);
+
+    const QString rawOutput = rawProbeOutput(*tools, outputPath);
+    assert(!rawOutput.contains("RedactlyTestTitle"));
+    assert(!rawOutput.contains("37.5665"));
+    std::puts("output verification: ok");
+
+    const QString bogusPath = tempDir.filePath("bogus.mp4");
+    {
+        QFile bogus(bogusPath);
+        assert(bogus.open(QIODevice::WriteOnly));
+        assert(bogus.write("this is not a video file") > 0);
+    }
+    QString corruptError;
+    const auto corruptInfo = redactly::probeVideo(*tools, bogusPath, &corruptError);
+    assert(!corruptInfo.has_value());
+    assert(!corruptError.isEmpty());
+    std::puts("corrupt input rejection: ok");
+
+    const QString rotatedPath = tempDir.filePath("rotated.mp4");
+    QProcess remux;
+    remux.start(tools->ffmpegPath,
+                {"-v", "error", "-y", "-display_rotation", "90",
+                 "-i", samplePath, "-c", "copy", rotatedPath});
+    remux.waitForStarted(15000);
+    remux.waitForFinished(60000);
+    if (remux.exitStatus() == QProcess::NormalExit && remux.exitCode() == 0)
+    {
+        const auto rotatedInfo = redactly::probeVideo(*tools, rotatedPath, &probeError);
+        assert(rotatedInfo.has_value());
+        assert(rotatedInfo->rotation == 90 || rotatedInfo->rotation == 270);
+        assert(rotatedInfo->displayWidth() == 240);
+        assert(rotatedInfo->displayHeight() == 320);
+
+        redactly::VideoFrameReader rotatedReader;
+        assert(rotatedReader.open(*tools, rotatedPath, *rotatedInfo));
+        cv::Mat rotatedFrame;
+        assert(rotatedReader.readFrame(rotatedFrame));
+        assert(rotatedFrame.cols == 240);
+        assert(rotatedFrame.rows == 320);
+        rotatedReader.close();
+
+        redactly::VideoFrameWriter rotatedWriter;
+        assert(rotatedWriter.open(*tools, tempDir.filePath("rotated-out.mp4"),
+                                  rotatedPath, *rotatedInfo,
+                                  redactly::crfForQuality(redactly::VideoQuality::SpaceSaver)));
+        assert(rotatedWriter.writeFrame(rotatedFrame));
+        assert(rotatedWriter.finish());
+
+        const auto rotatedOut = redactly::probeVideo(
+            *tools, tempDir.filePath("rotated-out.mp4"), &probeError);
+        assert(rotatedOut.has_value());
+        assert(rotatedOut->rotation == 0);
+        assert(rotatedOut->width == 240);
+        assert(rotatedOut->height == 320);
+        std::puts("rotation handling: ok");
+    }
+    else
+    {
+        std::puts("rotation handling: skipped (-display_rotation unsupported)");
+    }
+
+    std::puts("all video io tests passed");
+    return 0;
+}

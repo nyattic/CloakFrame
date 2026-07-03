@@ -99,6 +99,7 @@ add_library(redactly_core STATIC
     src/ProcessorWorker.cpp
     src/ScrfdFaceDetector.cpp
     src/Tracking.cpp
+    src/VideoIo.cpp
     include/redactly/DetectionGeometry.hpp
     include/redactly/Detector.hpp
     include/redactly/FaceDetection.hpp
@@ -114,6 +115,7 @@ add_library(redactly_core STATIC
     include/redactly/ReviewTypes.hpp
     include/redactly/ScrfdFaceDetector.hpp
     include/redactly/Tracking.hpp
+    include/redactly/VideoIo.hpp
 )
 
 target_include_directories(redactly_core PUBLIC include)
@@ -281,4 +283,16 @@ if(BUILD_TESTING)
     endif()
     target_link_libraries(redactly_parallel_tests PRIVATE redactly_core)
     add_test(NAME redactly_parallel_tests COMMAND redactly_parallel_tests)
+
+    add_executable(redactly_video_io_tests
+        tests/test_video_io.cpp
+    )
+    if(MSVC)
+        target_compile_options(redactly_video_io_tests PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(redactly_video_io_tests PRIVATE -UNDEBUG)
+    endif()
+    target_link_libraries(redactly_video_io_tests PRIVATE redactly_core)
+    add_test(NAME redactly_video_io_tests COMMAND redactly_video_io_tests)
+    set_tests_properties(redactly_video_io_tests PROPERTIES SKIP_RETURN_CODE 77)
 endif()
