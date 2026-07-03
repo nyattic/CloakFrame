@@ -160,6 +160,7 @@ namespace redactly
         ThemeMode themeMode_ = ThemeMode::System;
         bool checkForUpdatesOnStartup_ = true;
         bool fileLogging_ = true;
+        bool gpuAcceleration_ = true;
         bool shuttingDown_ = false;
         std::vector<std::function<void()>> retranslators_;
     };

@@ -2,6 +2,7 @@
 
 #include "redactly/Detector.hpp"
 #include "redactly/FaceDetection.hpp"
+#include "redactly/OrtAcceleration.hpp"
 
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/core.hpp>
@@ -14,13 +15,16 @@ namespace redactly
     class PlateDetector final : public Detector
     {
     public:
-        explicit PlateDetector(const std::string &modelPath);
+        explicit PlateDetector(const std::string &modelPath, bool enableAcceleration = false);
 
         FaceDetections detect(const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
+
+        [[nodiscard]] OrtAccelerator accelerator() const noexcept { return accelerator_; }
 
     private:
         int inputWidth_;
         int inputHeight_;
+        OrtAccelerator accelerator_ = OrtAccelerator::None;
         Ort::Env env_;
         Ort::SessionOptions sessionOptions_;
         Ort::Session session_;

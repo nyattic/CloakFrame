@@ -232,7 +232,8 @@ namespace redactly
                                      bool detectFaces,
                                      bool detectPlates,
                                      QString plateModelPath,
-                                     std::shared_ptr<PlateDetector> cachedPlateDetector)
+                                     std::shared_ptr<PlateDetector> cachedPlateDetector,
+                                     bool gpuAcceleration)
         : modelPath_(std::move(modelPath)),
           inputs_(std::move(inputs)),
           outputDirectory_(std::move(outputDirectory)),
@@ -249,6 +250,7 @@ namespace redactly
           detectFaces_(detectFaces),
           detectPlates_(detectPlates),
           plateModelPath_(std::move(plateModelPath)),
+          gpuAcceleration_(gpuAcceleration),
           detector_(std::move(cachedDetector)),
           plateDetector_(std::move(cachedPlateDetector))
     {
@@ -277,11 +279,14 @@ namespace redactly
                 if (!detector_)
                 {
                     emit logMessage(tr("Loading face detection model..."));
-                    detector_ = std::make_shared<ScrfdFaceDetector>(modelPath_.toStdString());
+                    detector_ = std::make_shared<ScrfdFaceDetector>(modelPath_.toStdString(), 640,
+                                                                    gpuAcceleration_);
                 } else
                 {
                     emit logMessage(tr("Reusing loaded face detection model."));
                 }
+                emit logMessage(tr("Face detection backend: %1")
+                                    .arg(QString::fromLatin1(ortAcceleratorName(detector_->accelerator()))));
             }
 
             if (detectPlates_)
@@ -290,11 +295,13 @@ namespace redactly
                 {
                     emit logMessage(tr("Loading license plate detection model..."));
                     plateDetector_ = std::make_shared<PlateDetector>(
-                        pathToUtf8(pathFromQString(plateModelPath_)));
+                        pathToUtf8(pathFromQString(plateModelPath_)), gpuAcceleration_);
                 } else
                 {
                     emit logMessage(tr("Reusing loaded license plate detection model."));
                 }
+                emit logMessage(tr("License plate detection backend: %1")
+                                    .arg(QString::fromLatin1(ortAcceleratorName(plateDetector_->accelerator()))));
             }
 
             emit logMessage(tr("Scanning images..."));

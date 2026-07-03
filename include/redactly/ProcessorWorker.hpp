@@ -44,7 +44,8 @@ namespace redactly
                         bool detectFaces = true,
                         bool detectPlates = false,
                         QString plateModelPath = {},
-                        std::shared_ptr<PlateDetector> cachedPlateDetector = {});
+                        std::shared_ptr<PlateDetector> cachedPlateDetector = {},
+                        bool gpuAcceleration = false);
 
         ~ProcessorWorker() override;
 
@@ -83,6 +84,7 @@ namespace redactly
         bool detectFaces_;
         bool detectPlates_;
         QString plateModelPath_;
+        bool gpuAcceleration_;
         std::atomic<bool> cancelled_{false};
         std::shared_ptr<ScrfdFaceDetector> detector_;
         std::shared_ptr<PlateDetector> plateDetector_;

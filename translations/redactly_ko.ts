@@ -617,6 +617,14 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <translation>이미 불러온 얼굴 탐지 모델을 재사용합니다.</translation>
     </message>
     <message>
+        <source>Face detection backend: %1</source>
+        <translation>얼굴 탐지 백엔드: %1</translation>
+    </message>
+    <message>
+        <source>License plate detection backend: %1</source>
+        <translation>번호판 탐지 백엔드: %1</translation>
+    </message>
+    <message>
         <source>Loading license plate detection model...</source>
         <translation>번호판 탐지 모델 불러오는 중...</translation>
     </message>
@@ -909,6 +917,14 @@ Continue?</source>
     <message>
         <source>The log may include the names of files you process. Stored on this device only. Takes effect on the next launch.</source>
         <translation>로그에는 처리한 파일 이름이 포함될 수 있습니다. 이 기기에만 저장됩니다. 다음 실행부터 적용됩니다.</translation>
+    </message>
+    <message>
+        <source>Use GPU acceleration</source>
+        <translation>GPU 가속 사용</translation>
+    </message>
+    <message>
+        <source>Runs detection models on the GPU when available. Applies from the next run.</source>
+        <translation>가능한 경우 탐지 모델을 GPU에서 실행합니다. 다음 실행부터 적용됩니다.</translation>
     </message>
     <message>
         <location filename="../src/SettingsDialog.cpp" line="87"/>

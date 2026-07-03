@@ -12,7 +12,7 @@
 namespace redactly
 {
     SettingsDialog::SettingsDialog(ThemeMode theme, const QString &language, bool checkForUpdates,
-                                   bool fileLogging, QWidget *parent)
+                                   bool fileLogging, bool gpuAcceleration, QWidget *parent)
         : QDialog(parent)
     {
         setModal(true);
@@ -54,6 +54,10 @@ namespace redactly
         logCheck_->setChecked(fileLogging);
         root->addWidget(logCheck_);
 
+        gpuCheck_ = new QCheckBox(this);
+        gpuCheck_->setChecked(gpuAcceleration);
+        root->addWidget(gpuCheck_);
+
         auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
         closeButton_ = buttons->button(QDialogButtonBox::Close);
         closeButton_->setObjectName("primaryButton");
@@ -76,6 +80,10 @@ namespace redactly
         {
             emit fileLoggingChanged(enabled);
         });
+        connect(gpuCheck_, &QCheckBox::toggled, this, [this](bool enabled)
+        {
+            emit gpuAccelerationChanged(enabled);
+        });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
         retranslate();
@@ -93,6 +101,9 @@ namespace redactly
         logCheck_->setText(tr("Write a local log file"));
         logCheck_->setToolTip(tr("The log may include the names of files you process. "
                                  "Stored on this device only. Takes effect on the next launch."));
+        gpuCheck_->setText(tr("Use GPU acceleration"));
+        gpuCheck_->setToolTip(tr("Runs detection models on the GPU when available. "
+                                 "Applies from the next run."));
         if (closeButton_ != nullptr)
         {
             closeButton_->setText(tr("Close"));

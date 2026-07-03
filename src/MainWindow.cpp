@@ -1290,7 +1290,8 @@ namespace redactly
                                       detectFaces,
                                       detectPlates,
                                       plateModelPath,
-                                      std::move(plateForRun));
+                                      std::move(plateForRun),
+                                      gpuAcceleration_);
 
         worker_->moveToThread(workerThread_);
         connect(workerThread_, &QThread::started, worker_, &ProcessorWorker::process);
@@ -1477,6 +1478,7 @@ namespace redactly
         themeMode_ = themeModeFromString(settings.value("theme", "system").toString());
         checkForUpdatesOnStartup_ = settings.value("checkForUpdates", true).toBool();
         fileLogging_ = settings.value("fileLogging", true).toBool();
+        gpuAcceleration_ = settings.value("gpuAcceleration", true).toBool();
 
         const auto savedLanguage = settings.value("language").toString();
         QString language = savedLanguage;
@@ -1526,6 +1528,7 @@ namespace redactly
         settings.setValue("theme", themeModeToString(themeMode_));
         settings.setValue("checkForUpdates", checkForUpdatesOnStartup_);
         settings.setValue("fileLogging", fileLogging_);
+        settings.setValue("gpuAcceleration", gpuAcceleration_);
 
         settings.setValue("language", language_);
     }
@@ -1555,7 +1558,8 @@ namespace redactly
 
     void MainWindow::openSettings()
     {
-        SettingsDialog dialog(themeMode_, language_, checkForUpdatesOnStartup_, fileLogging_, this);
+        SettingsDialog dialog(themeMode_, language_, checkForUpdatesOnStartup_, fileLogging_,
+                              gpuAcceleration_, this);
 
         connect(&dialog, &SettingsDialog::themeChanged, this, [this](ThemeMode mode)
         {
@@ -1581,6 +1585,18 @@ namespace redactly
         {
             fileLogging_ = enabled;
             saveSettings();
+        });
+        connect(&dialog, &SettingsDialog::gpuAccelerationChanged, this, [this](bool enabled)
+        {
+            if (gpuAcceleration_ != enabled)
+            {
+                gpuAcceleration_ = enabled;
+                cachedDetector_.reset();
+                cachedDetectorModelPath_.clear();
+                cachedPlateDetector_.reset();
+                cachedPlateModelPath_.clear();
+                saveSettings();
+            }
         });
 
         dialog.exec();

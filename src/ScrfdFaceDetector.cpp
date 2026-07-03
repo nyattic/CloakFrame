@@ -29,7 +29,7 @@ namespace redactly
         }
     }
 
-    ScrfdFaceDetector::ScrfdFaceDetector(const std::string &modelPath, int inputSize)
+    ScrfdFaceDetector::ScrfdFaceDetector(const std::string &modelPath, int inputSize, bool enableAcceleration)
         : inputSize_(inputSize),
           env_(ORT_LOGGING_LEVEL_WARNING, "Redactly"),
           sessionOptions_(),
@@ -37,6 +37,7 @@ namespace redactly
     {
         sessionOptions_.SetIntraOpNumThreads(1);
         sessionOptions_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+        accelerator_ = applyOrtAcceleration(sessionOptions_, enableAcceleration);
         const std::u8string modelU8(modelPath.begin(), modelPath.end());
         const std::filesystem::path modelFsPath(modelU8);
         session_ = Ort::Session(env_, modelFsPath.c_str(), sessionOptions_);

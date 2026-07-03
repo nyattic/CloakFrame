@@ -3,6 +3,7 @@
 #include "redactly/DetectionGeometry.hpp"
 #include "redactly/Detector.hpp"
 #include "redactly/FaceDetection.hpp"
+#include "redactly/OrtAcceleration.hpp"
 
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/core.hpp>
@@ -15,9 +16,12 @@ namespace redactly
     class ScrfdFaceDetector final : public Detector
     {
     public:
-        explicit ScrfdFaceDetector(const std::string &modelPath, int inputSize = 640);
+        explicit ScrfdFaceDetector(const std::string &modelPath, int inputSize = 640,
+                                   bool enableAcceleration = false);
 
         FaceDetections detect(const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
+
+        [[nodiscard]] OrtAccelerator accelerator() const noexcept { return accelerator_; }
 
     private:
         struct PreparedImage
@@ -40,6 +44,7 @@ namespace redactly
         [[nodiscard]] static std::vector<cv::Point2f> anchorCenters(int featureHeight, int featureWidth, int stride);
 
         int inputSize_;
+        OrtAccelerator accelerator_ = OrtAccelerator::None;
         Ort::Env env_;
         Ort::SessionOptions sessionOptions_;
         Ort::Session session_;

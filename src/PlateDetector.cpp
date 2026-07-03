@@ -22,7 +22,7 @@ namespace redactly
         }
     }
 
-    PlateDetector::PlateDetector(const std::string &modelPath)
+    PlateDetector::PlateDetector(const std::string &modelPath, bool enableAcceleration)
         : inputWidth_(512),
           inputHeight_(512),
           env_(ORT_LOGGING_LEVEL_WARNING, "Redactly-Plate"),
@@ -31,6 +31,7 @@ namespace redactly
     {
         sessionOptions_.SetIntraOpNumThreads(1);
         sessionOptions_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+        accelerator_ = applyOrtAcceleration(sessionOptions_, enableAcceleration);
         const std::filesystem::path modelFsPath = modelPathFromUtf8(modelPath);
         session_ = Ort::Session(env_, modelFsPath.c_str(), sessionOptions_);
 

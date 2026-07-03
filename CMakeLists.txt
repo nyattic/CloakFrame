@@ -96,6 +96,7 @@ qt_add_executable(Redactly ${REDACTLY_APP_OPTIONS}
     src/ImageScanner.cpp
     src/ImageIo.cpp
     src/Mosaic.cpp
+    src/OrtAcceleration.cpp
     src/PlateDetector.cpp
     src/ProcessorWorker.cpp
     src/ReviewDialog.cpp
@@ -110,6 +111,7 @@ qt_add_executable(Redactly ${REDACTLY_APP_OPTIONS}
     include/redactly/ImageScanner.hpp
     include/redactly/MainWindow.hpp
     include/redactly/Mosaic.hpp
+    include/redactly/OrtAcceleration.hpp
     include/redactly/PathSafety.hpp
     include/redactly/PlateDetector.hpp
     include/redactly/ProcessorWorker.hpp

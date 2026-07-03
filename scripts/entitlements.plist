@@ -9,16 +9,18 @@
       (bundled dylibs are signed by the same Team ID; library validation passes)
     - com.apple.security.cs.allow-unsigned-executable-memory
       (no mapped-then-executed pages in our code path)
-    - com.apple.security.cs.allow-jit
-      (ONNX Runtime CPU execution provider does not JIT; enable only if CoreML
-       or a similar provider that requires JIT is introduced)
-
   If a future dependency genuinely needs one of these, add it back with a
   comment explaining why, rather than re-enabling the whole relaxed set.
+
+  allow-jit is enabled because the CoreML execution provider compiles model
+  programs at runtime (MLProgram path); without it session creation fails
+  under the hardened runtime.
 -->
 <plist version="1.0">
 <dict>
     <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.cs.allow-jit</key>
     <true/>
 </dict>
 </plist>
