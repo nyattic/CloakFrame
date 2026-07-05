@@ -1,3 +1,20 @@
+# Redactly 1.6.1
+
+Video redaction now understands scene changes. In footage with fast cuts,
+mosaics could linger for up to a second after a hard cut — drifting across
+the new shot — or attach themselves to a different person who appeared in a
+similar position after the cut. The analysis pass now detects shot
+boundaries and face tracks stop cleanly at every cut: no track survives a
+scene change, no gap is interpolated across one, and track ends are never
+extended past one. Detection compares consecutive frames and requires a
+change well above the recent motion level that persists for a couple of
+frames, so camera flashes, strobes, and fast pans within a shot do not
+split tracks. Coverage inside a shot — through motion blur, side profiles,
+and brief occlusions — is unchanged. The log reports how many scene cuts
+each video contained.
+
+---
+
 # Redactly 1.6.0
 
 Adds video redaction (beta) and GPU acceleration.
