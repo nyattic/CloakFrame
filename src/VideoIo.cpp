@@ -35,6 +35,7 @@ namespace redactly
         constexpr int kProcessIoTimeoutMs = 60000;
         constexpr int kProcessFinishTimeoutMs = 300000;
         constexpr qint64 kDecodeBufferBytes = 64LL * 1024 * 1024;
+        constexpr qint64 kMaxEncodeBacklogBytes = 256LL * 1024 * 1024;
 
         QString trVideo(const char *text)
         {
@@ -861,7 +862,7 @@ namespace redactly
                 return false;
             }
             written += chunk;
-            while (process_->bytesToWrite() > 0)
+            while (process_->bytesToWrite() > kMaxEncodeBacklogBytes)
             {
                 if (!process_->waitForBytesWritten(kProcessIoTimeoutMs))
                 {

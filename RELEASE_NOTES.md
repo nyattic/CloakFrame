@@ -1,3 +1,28 @@
+# Redactly 1.7.0
+
+Video redaction is dramatically faster, and mosaics now fully cover close-up
+faces.
+
+## Improvements
+- Video processing is several times faster — a 3-minute 1080p clip that used to
+  take over ten minutes now finishes in under a minute
+- Blur redaction is no longer the bottleneck: it renders at a fraction of the
+  previous cost with the same visual strength
+- Mosaics on large, close-up faces are now properly coarse, so a face stays
+  unrecognizable no matter how much of the frame it fills
+
+## Details
+- Blur now runs on a downscaled copy of each region and is scaled back up,
+  capping the kernel cost while preserving the same blur strength
+- The soft-edge feather mask is computed once per face size and reused across
+  frames regardless of position, instead of being rebuilt for every frame
+- The mosaic block count is capped so a face is always reduced to at most a
+  dozen cells across, keeping large faces obscured
+- Frame redaction runs in parallel across CPU cores, and encode writes overlap
+  the masking work, so both passes use the machine more fully
+
+---
+
 # Redactly 1.6.1
 
 Video tracking is now scene-cut aware, fixing mosaic ghosting in fast-cut

@@ -4,6 +4,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <mutex>
+#include <tuple>
 #include <vector>
 
 namespace redactly
@@ -28,29 +31,50 @@ namespace redactly
             return cv::Rect(x, y, right - x, bottom - y);
         }
 
+        constexpr int kMaxMosaicCells = 12;
+
         void mosaicRegion(cv::Mat roi, int blockSize)
         {
-            const int smallWidth = std::clamp(roi.cols / blockSize, 1, std::max(1, roi.cols / 2));
-            const int smallHeight = std::clamp(roi.rows / blockSize, 1, std::max(1, roi.rows / 2));
+            const int widthCap = std::min(kMaxMosaicCells, std::max(1, roi.cols / 2));
+            const int heightCap = std::min(kMaxMosaicCells, std::max(1, roi.rows / 2));
+            const int smallWidth = std::clamp(roi.cols / blockSize, 1, widthCap);
+            const int smallHeight = std::clamp(roi.rows / blockSize, 1, heightCap);
 
             cv::Mat small;
             cv::resize(roi, small, cv::Size(smallWidth, smallHeight), 0.0, 0.0, cv::INTER_LINEAR);
             cv::resize(small, roi, roi.size(), 0.0, 0.0, cv::INTER_NEAREST);
         }
 
+        int oddKernelFor(double sigma)
+        {
+            int kernel = static_cast<int>(std::lround(sigma * 3.0)) | 1;
+            return std::max(3, kernel);
+        }
+
         void blurRegion(cv::Mat roi)
         {
-            int kernel = std::min(roi.cols, roi.rows) / 2;
-            if (kernel < 1)
+            const int minEdge = std::min(roi.cols, roi.rows);
+            if (minEdge < 2)
             {
-                kernel = 1;
+                return;
             }
-            if (kernel % 2 == 0)
+
+            const double sigma = static_cast<double>(minEdge) / 6.0;
+            int down = std::max(1, static_cast<int>(std::lround(sigma / 2.5)));
+            down = std::min(down, minEdge / 2);
+            if (down <= 1)
             {
-                ++kernel;
+                cv::GaussianBlur(roi, roi, cv::Size(oddKernelFor(sigma), oddKernelFor(sigma)), sigma);
+                return;
             }
-            const double sigma = static_cast<double>(kernel) / 3.0;
-            cv::GaussianBlur(roi, roi, cv::Size(kernel, kernel), sigma);
+
+            cv::Mat small;
+            const cv::Size smallSize(std::max(1, roi.cols / down), std::max(1, roi.rows / down));
+            cv::resize(roi, small, smallSize, 0.0, 0.0, cv::INTER_AREA);
+            const double smallSigma = sigma / down;
+            cv::GaussianBlur(small, small, cv::Size(oddKernelFor(smallSigma), oddKernelFor(smallSigma)),
+                             smallSigma);
+            cv::resize(small, roi, roi.size(), 0.0, 0.0, cv::INTER_LINEAR);
         }
 
         void fillRegion(cv::Mat roi)
@@ -60,6 +84,7 @@ namespace redactly
 
         constexpr float kFeatherRatio = 0.3F;
         constexpr int kMinFeather = 4;
+        constexpr int kSizeQuantum = 4;
 
         int featherSizeFor(const cv::Rect &region)
         {
@@ -67,13 +92,15 @@ namespace redactly
             return std::max(kMinFeather, static_cast<int>(std::lround(static_cast<float>(base) * kFeatherRatio)));
         }
 
-        cv::Rect expandedRegion(const cv::Rect &region, int width, int height, int feather)
+        cv::Rect quantizeRegionSize(const cv::Rect &region, int quantum)
         {
-            const int x = std::max(0, region.x - feather);
-            const int y = std::max(0, region.y - feather);
-            const int right = std::min(width, region.x + region.width + feather);
-            const int bottom = std::min(height, region.y + region.height + feather);
-            return {x, y, right - x, bottom - y};
+            if (quantum <= 1)
+            {
+                return region;
+            }
+            const int qw = ((region.width + quantum - 1) / quantum) * quantum;
+            const int qh = ((region.height + quantum - 1) / quantum) * quantum;
+            return {region.x, region.y, qw, qh};
         }
 
         cv::Mat softCoreMask(const cv::Size &size, const cv::Rect &core, MaskShape shape, int feather)
@@ -98,6 +125,41 @@ namespace redactly
             ramp = cv::min(ramp, 1.0F);
             ramp = cv::max(ramp, 0.0F);
             return ramp.mul(ramp).mul(3.0F - 2.0F * ramp);
+        }
+
+        using MaskKey = std::tuple<int, int, int, int, int, int, int, int>;
+
+        std::mutex g_maskCacheMutex;
+        std::map<MaskKey, cv::Mat> g_maskCache;
+        constexpr std::size_t kMaskCacheCap = 2048;
+
+        cv::Mat cachedSoftCoreMask(const cv::Size &size, const cv::Rect &core, MaskShape shape, int feather)
+        {
+            const MaskKey key{size.width, size.height, core.x, core.y,
+                              core.width, core.height, static_cast<int>(shape), feather};
+            {
+                const std::lock_guard<std::mutex> lock(g_maskCacheMutex);
+                const auto it = g_maskCache.find(key);
+                if (it != g_maskCache.end())
+                {
+                    return it->second;
+                }
+            }
+
+            cv::Mat mask = softCoreMask(size, core, shape, feather);
+
+            const std::lock_guard<std::mutex> lock(g_maskCacheMutex);
+            if (g_maskCache.size() >= kMaskCacheCap)
+            {
+                const std::size_t drop = kMaskCacheCap / 4;
+                auto it = g_maskCache.begin();
+                for (std::size_t i = 0; i < drop && it != g_maskCache.end(); ++i)
+                {
+                    it = g_maskCache.erase(it);
+                }
+            }
+            g_maskCache.emplace(key, mask);
+            return mask;
         }
 
         void blendWithMask(cv::Mat roi, const cv::Mat &anonymized, const cv::Mat &alpha)
@@ -153,17 +215,30 @@ namespace redactly
 
             if (softEdges)
             {
-                const int feather = featherSizeFor(roiRect);
-                const cv::Rect outer = expandedRegion(roiRect, width, height, feather);
+                const cv::Rect qRect = quantizeRegionSize(roiRect, kSizeQuantum);
+                const int feather = featherSizeFor(qRect);
+                const int canonX = qRect.x - feather;
+                const int canonY = qRect.y - feather;
+
+                const int outerX = std::max(0, canonX);
+                const int outerY = std::max(0, canonY);
+                const int outerRight = std::min(width, qRect.x + qRect.width + feather);
+                const int outerBottom = std::min(height, qRect.y + qRect.height + feather);
+                if (outerRight <= outerX || outerBottom <= outerY)
+                {
+                    continue;
+                }
+                const cv::Rect outer(outerX, outerY, outerRight - outerX, outerBottom - outerY);
                 cv::Mat roi = image(outer);
 
                 cv::Mat anonymized = roi.clone();
                 applyEffect(anonymized, method, blockSize);
 
-                const cv::Rect core(roiRect.x - outer.x, roiRect.y - outer.y,
-                                    roiRect.width, roiRect.height);
-                const cv::Mat alpha = softCoreMask(roi.size(), core, shape, feather);
-                blendWithMask(roi, anonymized, alpha);
+                const cv::Size canonicalSize(qRect.width + 2 * feather, qRect.height + 2 * feather);
+                const cv::Rect core(feather, feather, qRect.width, qRect.height);
+                const cv::Mat canonical = cachedSoftCoreMask(canonicalSize, core, shape, feather);
+                const cv::Rect slice(outerX - canonX, outerY - canonY, outer.width, outer.height);
+                blendWithMask(roi, anonymized, canonical(slice));
                 continue;
             }
 

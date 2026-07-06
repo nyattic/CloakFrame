@@ -4,12 +4,64 @@
 
 #include <spdlog/spdlog.h>
 
+#include <opencv2/core.hpp>
+
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <thread>
+#include <utility>
+#include <vector>
 
 namespace redactly
 {
     namespace
     {
+        class StageTimer
+        {
+        public:
+            using Clock = std::chrono::steady_clock;
+
+            static Clock::time_point now()
+            {
+                return Clock::now();
+            }
+
+            void add(Clock::time_point since)
+            {
+                total_ += Clock::now() - since;
+            }
+
+            [[nodiscard]] long long ms() const
+            {
+                return std::chrono::duration_cast<std::chrono::milliseconds>(total_).count();
+            }
+
+        private:
+            Clock::duration total_{};
+        };
+
+        class ScopedCvThreads
+        {
+        public:
+            explicit ScopedCvThreads(int threads)
+                : previous_(cv::getNumThreads())
+            {
+                cv::setNumThreads(threads);
+            }
+
+            ~ScopedCvThreads()
+            {
+                cv::setNumThreads(previous_);
+            }
+
+            ScopedCvThreads(const ScopedCvThreads &) = delete;
+            ScopedCvThreads &operator=(const ScopedCvThreads &) = delete;
+
+        private:
+            int previous_;
+        };
+
         QString trVideoProcessor(const char *text)
         {
             return QCoreApplication::translate("redactly::VideoProcessor", text);
@@ -64,16 +116,27 @@ namespace redactly
             scaleX = static_cast<float>(info.displayWidth()) / reader.frameWidth();
             scaleY = static_cast<float>(info.displayHeight()) / reader.frameHeight();
 
+            StageTimer readTimer;
+            StageTimer detectTimer;
             cv::Mat frame;
-            while (reader.readFrame(frame))
+            for (;;)
             {
+                const auto readMark = StageTimer::now();
+                const bool got = reader.readFrame(frame);
+                readTimer.add(readMark);
+                if (!got)
+                {
+                    break;
+                }
                 if (cancelled.load(std::memory_order_acquire))
                 {
                     result.status = VideoProcessStatus::Cancelled;
                     return result;
                 }
+                const auto detectMark = StageTimer::now();
                 cutDetector.push(frame);
                 frameDetections.push_back(detect ? detect(frame) : FaceDetections{});
+                detectTimer.add(detectMark);
                 if (progress)
                 {
                     progress(1, static_cast<qint64>(frameDetections.size()),
@@ -86,6 +149,8 @@ namespace redactly
                 result.error = reader.errorString();
                 return result;
             }
+            spdlog::info("Pass 1 timing: decode {} ms, detect+scene {} ms ({} frames)",
+                         readTimer.ms(), detectTimer.ms(), frameDetections.size());
         }
 
         const auto frameCount = static_cast<qint64>(frameDetections.size());
@@ -123,10 +188,34 @@ namespace redactly
         }
         result.encoderName = writer.encoderName();
 
+        StageTimer readTimer;
+        StageTimer maskTimer;
+        StageTimer writeTimer;
+        const int workerCount =
+                std::max(1, static_cast<int>(std::thread::hardware_concurrency()));
+        const int batchCap = workerCount * 4;
+        const ScopedCvThreads maskThreads(1);
         qint64 frameIndex = 0;
-        cv::Mat frame;
-        while (reader.readFrame(frame))
+        std::vector<cv::Mat> batch;
+        batch.reserve(static_cast<std::size_t>(batchCap));
+        for (;;)
         {
+            batch.clear();
+            const auto readMark = StageTimer::now();
+            for (int slot = 0; slot < batchCap; ++slot)
+            {
+                cv::Mat frame;
+                if (!reader.readFrame(frame))
+                {
+                    break;
+                }
+                batch.push_back(std::move(frame));
+            }
+            readTimer.add(readMark);
+            if (batch.empty())
+            {
+                break;
+            }
             if (cancelled.load(std::memory_order_acquire))
             {
                 writer.abort();
@@ -134,28 +223,75 @@ namespace redactly
                 return result;
             }
 
-            const auto regions =
-                    trackRegionsForFrame(tracks, static_cast<int>(frameIndex));
-            FaceDetections toRedact;
-            toRedact.reserve(regions.size());
-            for (const auto &region: regions)
+            const auto maskMark = StageTimer::now();
+            const qint64 baseIndex = frameIndex;
+            std::atomic<int> nextSlot{0};
+            std::atomic<bool> maskFailed{false};
+            const auto maskWorker = [&]()
             {
-                toRedact.push_back({region, 1.0F});
+                int slot;
+                while ((slot = nextSlot.fetch_add(1, std::memory_order_relaxed)) <
+                       static_cast<int>(batch.size()))
+                {
+                    try
+                    {
+                        const auto regions = trackRegionsForFrame(
+                                tracks, static_cast<int>(baseIndex + slot));
+                        FaceDetections toRedact;
+                        toRedact.reserve(regions.size());
+                        for (const auto &region: regions)
+                        {
+                            toRedact.push_back({region, 1.0F});
+                        }
+                        applyAnonymization(batch[static_cast<std::size_t>(slot)], toRedact,
+                                           options.method, options.mosaicBlockSize,
+                                           options.paddingRatio, options.shape,
+                                           options.softEdges);
+                    }
+                    catch (...)
+                    {
+                        maskFailed.store(true, std::memory_order_relaxed);
+                    }
+                }
+            };
+            std::vector<std::thread> pool;
+            const int helpers =
+                    std::min(workerCount, static_cast<int>(batch.size())) - 1;
+            pool.reserve(static_cast<std::size_t>(std::max(0, helpers)));
+            for (int w = 0; w < helpers; ++w)
+            {
+                pool.emplace_back(maskWorker);
             }
-            applyAnonymization(frame, toRedact, options.method, options.mosaicBlockSize,
-                               options.paddingRatio, options.shape, options.softEdges);
-
-            if (!writer.writeFrame(frame))
+            maskWorker();
+            for (auto &worker: pool)
             {
-                result.error = writer.errorString();
+                worker.join();
+            }
+            maskTimer.add(maskMark);
+            if (maskFailed.load(std::memory_order_relaxed))
+            {
+                result.error = trVideoProcessor("Video redaction failed.");
                 writer.abort();
                 return result;
             }
-            ++frameIndex;
-            if (progress)
+
+            const auto writeMark = StageTimer::now();
+            for (auto &frame: batch)
             {
-                progress(2, frameIndex, frameCount);
+                if (!writer.writeFrame(frame))
+                {
+                    result.error = writer.errorString();
+                    writer.abort();
+                    writeTimer.add(writeMark);
+                    return result;
+                }
+                ++frameIndex;
+                if (progress)
+                {
+                    progress(2, frameIndex, frameCount);
+                }
             }
+            writeTimer.add(writeMark);
         }
         if (!reader.errorString().isEmpty())
         {
@@ -170,11 +306,20 @@ namespace redactly
             return result;
         }
 
-        if (!writer.finish())
+        StageTimer finishTimer;
+        const auto finishMark = StageTimer::now();
+        const bool finished = writer.finish();
+        finishTimer.add(finishMark);
+        if (!finished)
         {
             result.error = writer.errorString();
             return result;
         }
+
+        spdlog::info("Pass 2 timing: decode {} ms, redact {} ms, encode-write {} ms, "
+                     "finalize {} ms ({} frames)",
+                     readTimer.ms(), maskTimer.ms(), writeTimer.ms(), finishTimer.ms(),
+                     frameIndex);
 
         result.status = VideoProcessStatus::Completed;
         return result;
