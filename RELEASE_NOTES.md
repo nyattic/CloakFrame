@@ -1,3 +1,29 @@
+# Redactly 1.7.1
+
+Fixes video redaction failing on macOS with GPU acceleration, and stops a
+redaction mask from sliding into place when a new face appears.
+
+## Fixes
+- Video redaction on macOS no longer stops with a CoreML error partway
+  through: the face and license-plate models that Apple's GPU backend can't
+  run now fall back to the CPU automatically, while the models it can run
+  stay on the GPU
+- A newly appeared face is now covered where it appears, instead of the mask
+  sliding in from where a different face left the frame
+
+## Details
+- Each detector is exercised once as it loads; if the GPU backend rejects it,
+  that detector is rebuilt on the CPU. Photo detection, the fast 640 px face
+  model, and the Windows/Linux GPU paths are unaffected
+- Detection that falls back to the CPU now runs across all cores instead of a
+  single thread, cutting the accurate face model's analysis time on
+  high-resolution video by roughly two-thirds
+- A track that loses its face no longer drifts across the frame to grab an
+  unrelated new one, and a gap that would imply an implausibly fast jump is
+  left uninterpolated rather than drawn as a slide
+
+---
+
 # Redactly 1.7.0
 
 Video redaction is dramatically faster, and mosaics now fully cover close-up
