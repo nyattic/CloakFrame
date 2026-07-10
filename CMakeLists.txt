@@ -258,6 +258,13 @@ add_executable(redactly_inspect_model
 target_link_libraries(redactly_inspect_model PRIVATE onnxruntime::onnxruntime spdlog::spdlog)
 redactly_harden(redactly_inspect_model)
 
+add_executable(redactly_video_detect_stats
+    tools/video_detect_stats.cpp
+)
+
+target_link_libraries(redactly_video_detect_stats PRIVATE redactly_core)
+redactly_harden(redactly_video_detect_stats)
+
 if(BUILD_TESTING)
     add_executable(redactly_tests
         tests/test_core.cpp
