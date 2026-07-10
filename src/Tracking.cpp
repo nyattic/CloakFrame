@@ -456,14 +456,18 @@ namespace redactly
             const float inverse = 1.0F / static_cast<float>(count);
             const cv::Rect2f smoothed{accumulated.x * inverse, accumulated.y * inverse,
                                       accumulated.width * inverse, accumulated.height * inverse};
+            constexpr float kMaxSmoothingAreaGrowth = 1.25F;
+            const float originalArea = original[i].box.area();
             if (original[i].interpolated)
             {
-                track.boxes[i].box = smoothed;
+                track.boxes[i].box =
+                        (originalArea > 0.0F &&
+                         smoothed.area() > originalArea * kMaxSmoothingAreaGrowth)
+                            ? original[i].box
+                            : smoothed;
                 continue;
             }
-            constexpr float kMaxSmoothingAreaGrowth = 1.25F;
             const cv::Rect2f covered = boxUnion(smoothed, original[i].box);
-            const float originalArea = original[i].box.area();
             track.boxes[i].box =
                     (originalArea > 0.0F &&
                      covered.area() > originalArea * kMaxSmoothingAreaGrowth)

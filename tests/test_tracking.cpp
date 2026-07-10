@@ -468,6 +468,19 @@ namespace
         assert(track.boxes.size() == 2);
     }
 
+    void testSmoothingDoesNotInflateInterpolatedBoxes()
+    {
+        redactly::Track track;
+        track.boxes.push_back({0, cv::Rect2f(0.0F, 0.0F, 200.0F, 200.0F), 0.9F, false});
+        track.boxes.push_back({1, cv::Rect2f(75.0F, 75.0F, 50.0F, 50.0F), 0.9F, true});
+        track.boxes.push_back({2, cv::Rect2f(0.0F, 0.0F, 200.0F, 200.0F), 0.9F, false});
+
+        redactly::smoothTrack(track, 2);
+
+        const float maxArea = 50.0F * 50.0F * 1.25F;
+        assert(track.boxes[1].box.area() <= maxArea + 0.001F);
+    }
+
     void testNewTrackThresholdBlocksWeakSeeds()
     {
         redactly::TrackerConfig config;
@@ -528,6 +541,7 @@ int main()
     testGradualGrowthKeepsOneTrack();
     testInterpolationSkipsAcrossSizeJump();
     testNewTrackThresholdBlocksWeakSeeds();
+    testSmoothingDoesNotInflateInterpolatedBoxes();
     std::puts("tracking tests passed");
     return 0;
 }
