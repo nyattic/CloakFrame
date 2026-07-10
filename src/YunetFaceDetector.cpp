@@ -80,6 +80,99 @@ namespace redactly
         }
     }
 
+    float yunetLandmarkScoreFactor(const std::array<cv::Point2f, 5> &landmarks,
+                                   const cv::Rect2f &box)
+    {
+        constexpr float kCollapsedSpanRatio = 0.05F;
+        constexpr float kFullSpanRatio = 0.30F;
+        constexpr float kBoxMarginRatio = 0.30F;
+        constexpr float kMinEyeDistanceRatio = 0.12F;
+        constexpr float kStrayLandmarkPenalty = 0.9F;
+        constexpr float kGeometryPenalty = 0.8F;
+        constexpr float kInvertedGeometryPenalty = 0.6F;
+
+        const float unit = std::max(box.width, box.height);
+        if (!(unit > 0.0F))
+        {
+            return 0.0F;
+        }
+        for (const auto &point: landmarks)
+        {
+            if (!std::isfinite(point.x) || !std::isfinite(point.y))
+            {
+                return 0.0F;
+            }
+        }
+
+        float minX = landmarks[0].x;
+        float maxX = landmarks[0].x;
+        float minY = landmarks[0].y;
+        float maxY = landmarks[0].y;
+        for (const auto &point: landmarks)
+        {
+            minX = std::min(minX, point.x);
+            maxX = std::max(maxX, point.x);
+            minY = std::min(minY, point.y);
+            maxY = std::max(maxY, point.y);
+        }
+        const float spanRatio = std::max((maxX - minX) / box.width,
+                                         (maxY - minY) / box.height);
+        if (spanRatio < kCollapsedSpanRatio)
+        {
+            return 0.0F;
+        }
+
+        float factor = std::min(1.0F, spanRatio / kFullSpanRatio);
+
+        const float margin = unit * kBoxMarginRatio;
+        for (const auto &point: landmarks)
+        {
+            if (point.x < box.x - margin || point.x > box.x + box.width + margin
+                || point.y < box.y - margin || point.y > box.y + box.height + margin)
+            {
+                factor *= kStrayLandmarkPenalty;
+            }
+        }
+
+        const cv::Point2f &rightEye = landmarks[0];
+        const cv::Point2f &leftEye = landmarks[1];
+        const cv::Point2f &nose = landmarks[2];
+        const cv::Point2f &rightMouth = landmarks[3];
+        const cv::Point2f &leftMouth = landmarks[4];
+
+        if (rightEye.x >= leftEye.x)
+        {
+            factor *= kGeometryPenalty;
+        }
+        if (rightMouth.x >= leftMouth.x)
+        {
+            factor *= kGeometryPenalty;
+        }
+
+        const float eyeMidY = (rightEye.y + leftEye.y) * 0.5F;
+        const float mouthMidY = (rightMouth.y + leftMouth.y) * 0.5F;
+        if (mouthMidY <= eyeMidY)
+        {
+            factor *= kInvertedGeometryPenalty;
+        }
+        else
+        {
+            const float noseSlack = (mouthMidY - eyeMidY) * 0.25F;
+            if (nose.y < eyeMidY - noseSlack || nose.y > mouthMidY + noseSlack)
+            {
+                factor *= kGeometryPenalty;
+            }
+        }
+
+        const float eyeDistance = std::hypot(leftEye.x - rightEye.x, leftEye.y - rightEye.y);
+        if (eyeDistance < unit * kMinEyeDistanceRatio)
+        {
+            factor *= kGeometryPenalty;
+        }
+
+        return factor;
+    }
+
     YunetFaceDetector::YunetFaceDetector(const std::string &modelPath, int inputSize,
                                          bool enableAcceleration)
         : inputSize_(inputSize),
@@ -302,7 +395,9 @@ namespace redactly
                                           count, 1);
             const float *bbox = tensorData(outputNamed(outputs, outputNames_, "bbox_" + suffix),
                                            count * 4U, 4);
-            if (cls == nullptr || obj == nullptr || bbox == nullptr)
+            const float *kps = tensorData(outputNamed(outputs, outputNames_, "kps_" + suffix),
+                                          count * 10U, 10);
+            if (cls == nullptr || obj == nullptr || bbox == nullptr || kps == nullptr)
             {
                 throw std::runtime_error("YuNet output tensor shapes do not match the input size.");
             }
@@ -322,6 +417,27 @@ namespace redactly
                     const float centerY = (row + bbox[index * 4U + 1U]) * stride;
                     const float width = std::exp(bbox[index * 4U + 2U]) * stride;
                     const float height = std::exp(bbox[index * 4U + 3U]) * stride;
+
+                    std::array<cv::Point2f, 5> landmarks;
+                    for (std::size_t point = 0; point < landmarks.size(); ++point)
+                    {
+                        landmarks[point] = {
+                            (col + kps[index * 10U + point * 2U]) * stride,
+                            (row + kps[index * 10U + point * 2U + 1U]) * stride};
+                    }
+                    const cv::Rect2f rawBox{centerX - width * 0.5F, centerY - height * 0.5F,
+                                            width, height};
+                    const float landmarkFactor = yunetLandmarkScoreFactor(landmarks, rawBox);
+                    if (landmarkFactor <= 0.0F)
+                    {
+                        continue;
+                    }
+                    const float adjustedScore = score * landmarkFactor;
+                    if (adjustedScore < scoreThreshold)
+                    {
+                        continue;
+                    }
+
                     float x = (centerX - width * 0.5F) / prepared.scale;
                     float y = (centerY - height * 0.5F) / prepared.scale;
                     float w = width / prepared.scale;
@@ -332,7 +448,7 @@ namespace redactly
                                                    static_cast<float>(prepared.originalWidth));
                     const float bottom = std::clamp(y + h, y + 1.0F,
                                                     static_cast<float>(prepared.originalHeight));
-                    detections.push_back({{x, y, right - x, bottom - y}, score});
+                    detections.push_back({{x, y, right - x, bottom - y}, adjustedScore});
                 }
             }
         }

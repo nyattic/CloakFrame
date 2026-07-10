@@ -465,6 +465,60 @@ namespace
         const cv::Mat blank(180, 320, CV_8UC3, cv::Scalar(30, 30, 30));
         assert(patchedSize.detect(blank, 0.5F, 0.4F).empty());
     }
+
+    std::array<cv::Point2f, 5> faceLikeLandmarks(const cv::Rect2f &face)
+    {
+        return {cv::Point2f{face.x + face.width * 0.30F, face.y + face.height * 0.38F},
+                cv::Point2f{face.x + face.width * 0.70F, face.y + face.height * 0.38F},
+                cv::Point2f{face.x + face.width * 0.50F, face.y + face.height * 0.58F},
+                cv::Point2f{face.x + face.width * 0.35F, face.y + face.height * 0.75F},
+                cv::Point2f{face.x + face.width * 0.65F, face.y + face.height * 0.75F}};
+    }
+
+    void testYunetLandmarkFactorKeepsFaceLikeGeometry()
+    {
+        const cv::Rect2f box{50.0F, 40.0F, 100.0F, 120.0F};
+        assert(redactly::yunetLandmarkScoreFactor(faceLikeLandmarks(box), box) == 1.0F);
+    }
+
+    void testYunetLandmarkFactorRejectsCollapsedLandmarks()
+    {
+        const cv::Rect2f box{0.0F, 0.0F, 200.0F, 300.0F};
+        const cv::Point2f center{100.0F, 150.0F};
+        const std::array<cv::Point2f, 5> collapsed = {center, center, center, center, center};
+        assert(redactly::yunetLandmarkScoreFactor(collapsed, box) == 0.0F);
+    }
+
+    void testYunetLandmarkFactorPenalizesBodySizedBox()
+    {
+        const cv::Rect2f body{100.0F, 0.0F, 300.0F, 420.0F};
+        const cv::Rect2f face{190.0F, 20.0F, 80.0F, 90.0F};
+        const float factor = redactly::yunetLandmarkScoreFactor(faceLikeLandmarks(face), body);
+        assert(factor > 0.0F);
+        assert(factor < 0.5F);
+        assert(0.668F * factor < 0.40F);
+    }
+
+    void testYunetLandmarkFactorPenalizesInvertedGeometry()
+    {
+        const cv::Rect2f box{50.0F, 40.0F, 100.0F, 120.0F};
+        auto landmarks = faceLikeLandmarks(box);
+        std::swap(landmarks[0].y, landmarks[3].y);
+        std::swap(landmarks[1].y, landmarks[4].y);
+        const float factor = redactly::yunetLandmarkScoreFactor(landmarks, box);
+        assert(factor > 0.0F);
+        assert(factor < 1.0F);
+    }
+
+    void testYunetLandmarkFactorPenalizesStrayLandmarks()
+    {
+        const cv::Rect2f box{100.0F, 100.0F, 100.0F, 120.0F};
+        auto landmarks = faceLikeLandmarks(box);
+        landmarks[2] = {box.x + box.width * 3.0F, box.y + box.height * 0.58F};
+        const float factor = redactly::yunetLandmarkScoreFactor(landmarks, box);
+        assert(factor > 0.0F);
+        assert(factor < 1.0F);
+    }
 }
 
 int main()
@@ -483,6 +537,11 @@ int main()
     testNonMaxSuppression();
     testOnnxPatchRejectsInvalidBytes();
     testYunetModelRunsAtRequestedSize();
+    testYunetLandmarkFactorKeepsFaceLikeGeometry();
+    testYunetLandmarkFactorRejectsCollapsedLandmarks();
+    testYunetLandmarkFactorPenalizesBodySizedBox();
+    testYunetLandmarkFactorPenalizesInvertedGeometry();
+    testYunetLandmarkFactorPenalizesStrayLandmarks();
     testDestinationPathSafety();
 #ifndef _WIN32
     testDestinationRejectsSymlinkEscape();

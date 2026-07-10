@@ -5,11 +5,15 @@
 
 #include <onnxruntime_cxx_api.h>
 
+#include <array>
 #include <string>
 #include <vector>
 
 namespace redactly
 {
+    [[nodiscard]] float yunetLandmarkScoreFactor(const std::array<cv::Point2f, 5> &landmarks,
+                                                 const cv::Rect2f &box);
+
     class YunetFaceDetector final : public Detector
     {
     public:
