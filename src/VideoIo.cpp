@@ -34,6 +34,9 @@ namespace redactly
         constexpr int kProcessStartTimeoutMs = 15000;
         constexpr int kProcessIoTimeoutMs = 60000;
         constexpr int kProcessFinishTimeoutMs = 300000;
+#if defined(_WIN32)
+        constexpr qint64 kDecodeBufferBytes = 64LL * 1024 * 1024;
+#endif
         constexpr qint64 kMaxEncodeBacklogBytes = 256LL * 1024 * 1024;
 
         QString trVideo(const char *text)
