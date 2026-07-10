@@ -1,3 +1,20 @@
+# Redactly 1.8.1
+
+Video processing is faster on macOS, and batch runs now protect existing
+output files and report incomplete results more clearly.
+
+## Improvements
+- Face detection models now use static input dimensions so CoreML can run the
+  whole graph instead of leaving unsupported work on the CPU
+- Video output uses Apple's VideoToolbox hardware H.264 encoder when available,
+  with automatic fallback to software encoding
+- Redactly checks every planned output before processing and refuses to start
+  if a file would be overwritten or two inputs would produce the same path
+- Runs with failures, skipped files, or outputs containing no redacted regions
+  now finish as **Review required** with a clearer summary
+
+---
+
 # Redactly 1.8.0
 
 Video face detection is more accurate: it now analyzes video at the full
