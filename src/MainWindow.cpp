@@ -76,45 +76,9 @@ namespace redactly
         constexpr int kDefaultBlockSize = 14;
         constexpr double kDefaultPadding = 0.18;
 
-        QString releaseNotesSection(const QString &releaseNotes, const QString &language)
+        QString releaseNotesSection(const QString &releaseNotes)
         {
-            const QString wantedHeading = language == QStringLiteral("ko")
-                                              ? QStringLiteral("## 한국어")
-                                              : QStringLiteral("## English");
-            const QString fallbackHeading = QStringLiteral("## English");
-
-            const auto extractSection = [&releaseNotes](const QString &heading)
-            {
-                const QStringList lines = releaseNotes.split(QLatin1Char('\n'));
-                QStringList section;
-                bool collecting = false;
-                for (const QString &line: lines)
-                {
-                    const QString trimmed = line.trimmed();
-                    if (trimmed == QStringLiteral("## English") ||
-                        trimmed == QStringLiteral("## 한국어"))
-                    {
-                        if (collecting)
-                        {
-                            break;
-                        }
-                        collecting = trimmed == heading;
-                        continue;
-                    }
-                    if (collecting)
-                    {
-                        section.push_back(line);
-                    }
-                }
-                return section.join(QLatin1Char('\n')).trimmed();
-            };
-
-            QString localized = extractSection(wantedHeading);
-            if (localized.isEmpty() && wantedHeading != fallbackHeading)
-            {
-                localized = extractSection(fallbackHeading);
-            }
-            return localized.isEmpty() ? releaseNotes.trimmed() : localized;
+            return releaseNotes.trimmed();
         }
 
         QString defaultOutputDirectory()
@@ -1467,7 +1431,7 @@ namespace redactly
                     message.setTextFormat(Qt::MarkdownText);
                     message.setText(tr("Redactly %1 is available. What's new:")
                                         .arg(latestVersion));
-                    const QString localizedNotes = releaseNotesSection(releaseNotes, language_);
+                    const QString localizedNotes = releaseNotesSection(releaseNotes);
                     message.setInformativeText(
                         localizedNotes.isEmpty()
                             ? tr("No release notes were provided for this update.")
