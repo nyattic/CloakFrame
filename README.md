@@ -7,7 +7,7 @@
 
 Local desktop app that automatically redacts faces and license plates in your photos and videos. Drop in images, videos, or folders, choose what to detect, get anonymized copies — your files are processed entirely on your machine and never uploaded.
 
-The interface is available in English, Korean, and Japanese. The initial language follows the system locale and can be changed at any time in Settings.
+The interface is available in English, Korean, Japanese, and Simplified Chinese. The initial language follows the system locale and can be changed at any time in Settings.
 
 ## Install
 
@@ -69,7 +69,7 @@ Install dependencies with Homebrew:
 brew install cmake qt opencv onnxruntime spdlog exiv2
 ```
 
-The application still builds when Qt Linguist Tools are unavailable, but only the English interface is embedded. Check the CMake configure output for `Qt6LinguistTools`; if it is not found, install a Qt distribution that includes the Linguist Tools and reconfigure the build directory before testing the Korean or Japanese interface.
+The application still builds when Qt Linguist Tools are unavailable, but only the English interface is embedded. Check the CMake configure output for `Qt6LinguistTools`; if it is not found, install a Qt distribution that includes the Linguist Tools and reconfigure the build directory before testing the Korean, Japanese, or Simplified Chinese interface.
 
 ### Windows (PowerShell)
 

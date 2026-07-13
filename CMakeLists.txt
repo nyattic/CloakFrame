@@ -34,6 +34,23 @@ if(NOT REDACTLY_EXIV2_TARGET)
 endif()
 include(CTest)
 
+if(BUILD_TESTING)
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME translation_quality
+            COMMAND "${Python3_EXECUTABLE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_translations.py"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/translations/redactly_ko.ts"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/translations/redactly_ja.ts"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/translations/redactly_zh_CN.ts")
+        add_test(NAME translation_quality_zh_CN
+            COMMAND "${Python3_EXECUTABLE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_translations.py"
+                    --strict-source-equality
+                    "${CMAKE_CURRENT_SOURCE_DIR}/translations/redactly_zh_CN.ts")
+    endif()
+endif()
+
 set(ONNXRUNTIME_ROOT "" CACHE PATH "Path to the ONNX Runtime package root")
 
 function(redactly_onnxruntime_from_root)
@@ -189,6 +206,7 @@ if(Qt6LinguistTools_FOUND)
     qt_add_translations(Redactly
         TS_FILES translations/redactly_ko.ts
                  translations/redactly_ja.ts
+                 translations/redactly_zh_CN.ts
     )
 else()
     message(WARNING "Qt LinguistTools not found; building without embedded translations (English only).")

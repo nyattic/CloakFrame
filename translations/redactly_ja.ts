@@ -720,7 +720,7 @@ Check these results before sharing them.</translation>
         <message numerus="yes">
             <source>Preflight: found %n supported file(s).</source>
             <translation>
-                <numerusform>Preflight: found %n supported file(s).</numerusform>
+                <numerusform>事前確認：対応ファイルが %n 件見つかりました。</numerusform>
             </translation>
         </message>
         <message>
@@ -842,7 +842,7 @@ Check these results before sharing them.</translation>
         <message numerus="yes">
             <source>Redacted %n region(s): %1</source>
             <translation>
-                <numerusform>Redacted %n region(s): %1</numerusform>
+                <numerusform>%n 箇所を匿名化しました：%1</numerusform>
             </translation>
         </message>
         <message>
@@ -874,7 +874,7 @@ Check these results before sharing them.</translation>
         <message numerus="yes">
             <source>Warning: %n image(s) were saved with no regions redacted. Check them before sharing.</source>
             <translation>
-                <numerusform>Warning: %n image(s) were saved with no regions redacted. Check them before sharing.</numerusform>
+                <numerusform>警告：%n 枚の画像が匿名化されずに保存されました。共有前に確認してください。</numerusform>
             </translation>
         </message>
         <message>
@@ -990,9 +990,9 @@ Check these results before sharing them.</translation>
 
 Images already saved are kept.</source>
             <translation>
-                <numerusform>Stop reviewing and cancel the remaining %n image(s)?
+                <numerusform>確認を中止して、残り %n 枚の画像をキャンセルしますか？
 
-Images already saved are kept.</numerusform>
+保存済みの画像は保持されます。</numerusform>
             </translation>
         </message>
         <message>
@@ -1297,4 +1297,3 @@ Continue?</translation>
         </message>
     </context>
 </TS>
-

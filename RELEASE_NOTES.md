@@ -13,6 +13,8 @@ masking, and expands Redactly's language and video-output options.
 - Choose H.264 for broad compatibility or HEVC for smaller video files
 - Use Redactly in Japanese; Japanese systems select it automatically on first
   launch, alongside the existing English and Korean options
+- Use Redactly in Simplified Chinese; Simplified Chinese systems select it
+  automatically on first launch
 
 ### Improvements
 - Video tracks are matched more safely so masks are less likely to jump to an

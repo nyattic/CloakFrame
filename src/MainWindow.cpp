@@ -1349,6 +1349,20 @@ namespace redactly
             case QLocale::Japanese:
                 language = QStringLiteral("ja");
                 break;
+            case QLocale::Chinese:
+            {
+                const QLocale locale = QLocale::system();
+                if (locale.script() == QLocale::SimplifiedHanScript ||
+                    locale.territory() == QLocale::China ||
+                    locale.territory() == QLocale::Singapore)
+                {
+                    language = QStringLiteral("zh_CN");
+                } else
+                {
+                    language = QStringLiteral("en");
+                }
+                break;
+            }
             default:
                 language = QStringLiteral("en");
                 break;
