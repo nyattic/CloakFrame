@@ -1377,7 +1377,18 @@ namespace redactly
         QString language = savedLanguage;
         if (language.isEmpty())
         {
-            language = (QLocale::system().language() == QLocale::Korean) ? QStringLiteral("ko") : QStringLiteral("en");
+            switch (QLocale::system().language())
+            {
+            case QLocale::Korean:
+                language = QStringLiteral("ko");
+                break;
+            case QLocale::Japanese:
+                language = QStringLiteral("ja");
+                break;
+            default:
+                language = QStringLiteral("en");
+                break;
+            }
         }
         applyLanguage(language);
 

@@ -188,6 +188,7 @@ endif()
 if(Qt6LinguistTools_FOUND)
     qt_add_translations(Redactly
         TS_FILES translations/redactly_ko.ts
+                 translations/redactly_ja.ts
     )
 else()
     message(WARNING "Qt LinguistTools not found; building without embedded translations (English only).")
