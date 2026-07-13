@@ -7,6 +7,8 @@
 
 Local desktop app that automatically redacts faces and license plates in your photos and videos. Drop in images, videos, or folders, choose what to detect, get anonymized copies — your files are processed entirely on your machine and never uploaded.
 
+The interface is available in English, Korean, and Japanese. The initial language follows the system locale and can be changed at any time in Settings.
+
 ## Install
 
 Download from [Releases](https://github.com/nyattic/Redactly/releases/latest):
@@ -67,6 +69,8 @@ Install dependencies with Homebrew:
 brew install cmake qt opencv onnxruntime spdlog exiv2
 ```
 
+The application still builds when Qt Linguist Tools are unavailable, but only the English interface is embedded. Check the CMake configure output for `Qt6LinguistTools`; if it is not found, install a Qt distribution that includes the Linguist Tools and reconfigure the build directory before testing the Korean or Japanese interface.
+
 ### Windows (PowerShell)
 
 ```powershell
@@ -115,7 +119,7 @@ Packaging scripts: [`scripts/package_macos.sh`](scripts/package_macos.sh), [`scr
 
 ## Privacy
 
-Your images and videos never leave your device — they are read from disk, processed locally (video encoding runs through a local FFmpeg process), and written to the output folder you pick. Redactly makes only two kinds of network request, and neither sends any image or personal data: a one-time download of a detection model the first time you use each built-in model — the face models from Hugging Face, or the license plate model from the open-image-models project on GitHub — and a check at launch against the GitHub Releases API to see whether a newer version exists. The update check can be turned off under **Settings → Check for updates on startup**, and supplying your own model with **Browse…** avoids the model download entirely.
+Your images and videos never leave your device — they are read from disk, processed locally (video encoding runs through a local FFmpeg process), and written to the output folder you pick. Redactly makes only two kinds of network request, and neither sends any image or personal data: a one-time download of a detection model the first time you use each built-in model — the face models from Hugging Face, or the license plate model from the open-image-models project on GitHub — and a check at launch against the GitHub Releases API to see whether a newer version exists. The update check can be turned off under **Settings → Check for updates on startup**. Supplying a custom SCRFD model with **Browse…** avoids downloading a built-in face model; license plate detection still requires its separate model.
 
 ## License
 
