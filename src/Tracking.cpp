@@ -4,12 +4,56 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include <utility>
 
 namespace redactly
 {
     namespace
     {
+        constexpr std::size_t kMaxDetectionsPerFrame = 256;
+        constexpr std::size_t kMaxActiveTracks = 4096;
+        constexpr std::size_t kMaxTrackCount = 4096;
+        constexpr std::size_t kMaxTrackedBoxesPerPass = 8'000'000;
+        constexpr std::size_t kMaxBidirectionalTrackedBoxes = 16'000'000;
+        constexpr std::size_t kMaxFinalTrackedBoxes = 8'000'000;
+        constexpr std::size_t kMaxMatchComparisons = 1U * 1024U * 1024U;
+        constexpr std::size_t kMaxTrackMergeComparisons = 4U * 1024U * 1024U;
+        constexpr std::size_t kCancellationCheckInterval = 16'384;
+
+        void requireTrackingContinue(const TrackingContinueGuard &continueGuard)
+        {
+            if (continueGuard && !continueGuard())
+            {
+                throw TrackingCancelled{};
+            }
+        }
+
+        void periodicallyRequireTrackingContinue(const TrackingContinueGuard &continueGuard,
+                                                  std::size_t &operations)
+        {
+            ++operations;
+            if ((operations & (kCancellationCheckInterval - 1)) == 0)
+            {
+                requireTrackingContinue(continueGuard);
+            }
+        }
+
+        std::size_t trackedBoxCount(const std::vector<Track> &tracks,
+                                    const std::size_t maximum)
+        {
+            std::size_t count = 0;
+            for (const auto &track: tracks)
+            {
+                if (count > maximum || track.boxes.size() > maximum - count)
+                {
+                    throw std::length_error("Tracking data exceeds the safety limit.");
+                }
+                count += track.boxes.size();
+            }
+            return count;
+        }
+
         cv::Point2f boxCenter(const cv::Rect2f &box)
         {
             return {box.x + box.width * 0.5F, box.y + box.height * 0.5F};
@@ -84,13 +128,21 @@ namespace redactly
                                             const std::vector<size_t> &trackIndices,
                                             const FaceDetections &detections,
                                             const std::vector<size_t> &detectionIndices,
-                                            float iouThreshold)
+                                            float iouThreshold,
+                                            const TrackingContinueGuard &continueGuard)
         {
+            if (!detectionIndices.empty() &&
+                trackIndices.size() > kMaxMatchComparisons / detectionIndices.size())
+            {
+                throw std::length_error("Tracking data exceeds the safety limit.");
+            }
             std::vector<Match> candidates;
+            std::size_t comparisons = 0;
             for (const size_t trackIndex: trackIndices)
             {
                 for (const size_t detectionIndex: detectionIndices)
                 {
+                    periodicallyRequireTrackingContinue(continueGuard, comparisons);
                     const float iou = intersectionOverUnion(predictions[trackIndex],
                                                             detections[detectionIndex].box);
                     if (iou >= iouThreshold
@@ -111,8 +163,10 @@ namespace redactly
             std::vector<Match> matches;
             std::vector<bool> trackUsed(predictions.size(), false);
             std::vector<bool> detectionUsed(detections.size(), false);
+            std::size_t selectionOperations = 0;
             for (const auto &candidate: candidates)
             {
+                periodicallyRequireTrackingContinue(continueGuard, selectionOperations);
                 if (trackUsed[candidate.trackIndex] || detectionUsed[candidate.detectionIndex])
                 {
                     continue;
@@ -168,6 +222,10 @@ namespace redactly
 
     void ByteTracker::extendTrack(ActiveTrack &active, int frame, const FaceDetection &detection)
     {
+        if (boxCount_ >= kMaxTrackedBoxesPerPass)
+        {
+            throw std::length_error("Tracking data exceeds the safety limit.");
+        }
         const auto &last = active.track.boxes.back();
         const float dt = static_cast<float>(frame - active.lastFrame);
         if (dt > 0.0F)
@@ -177,6 +235,7 @@ namespace redactly
                               + observed * config_.velocityBlend;
         }
         active.track.boxes.push_back({frame, detection.box, detection.score, false});
+        ++boxCount_;
         active.lastFrame = frame;
         if (detection.score >= config_.highScoreThreshold)
         {
@@ -184,8 +243,14 @@ namespace redactly
         }
     }
 
-    void ByteTracker::update(int frame, const FaceDetections &detections)
+    void ByteTracker::update(int frame, const FaceDetections &detections,
+                             const TrackingContinueGuard &continueGuard)
     {
+        requireTrackingContinue(continueGuard);
+        if (detections.size() > kMaxDetectionsPerFrame || active_.size() > kMaxActiveTracks)
+        {
+            throw std::length_error("Tracking data exceeds the safety limit.");
+        }
         if (cuts_.isCut(frame))
         {
             for (auto &active: active_)
@@ -245,7 +310,7 @@ namespace redactly
 
         const auto highMatches = greedyIouMatches(predictions, lastBoxes, gaps, unmatchedTracks,
                                                   detections, highDetections,
-                                                  config_.iouThreshold);
+                                                  config_.iouThreshold, continueGuard);
         for (const auto &match: highMatches)
         {
             extendTrack(active_[match.trackIndex], frame, detections[match.detectionIndex]);
@@ -255,7 +320,7 @@ namespace redactly
 
         const auto lowMatches = greedyIouMatches(predictions, lastBoxes, gaps, unmatchedTracks,
                                                  detections, lowDetections,
-                                                 config_.iouThreshold);
+                                                 config_.iouThreshold, continueGuard);
         for (const auto &match: lowMatches)
         {
             extendTrack(active_[match.trackIndex], frame, detections[match.detectionIndex]);
@@ -264,6 +329,12 @@ namespace redactly
 
         for (const size_t detectionIndex: highDetections)
         {
+            if (active_.size() >= kMaxActiveTracks ||
+                active_.size() + finished_.size() >= kMaxTrackCount ||
+                boxCount_ >= kMaxTrackedBoxesPerPass)
+            {
+                throw std::length_error("Tracking data exceeds the safety limit.");
+            }
             ActiveTrack fresh;
             fresh.track.id = nextId_++;
             fresh.track.boxes.push_back({frame, detections[detectionIndex].box,
@@ -271,6 +342,7 @@ namespace redactly
             fresh.lastFrame = frame;
             fresh.lastHighScoreFrame = frame;
             active_.push_back(std::move(fresh));
+            ++boxCount_;
         }
     }
 
@@ -294,30 +366,54 @@ namespace redactly
 
     std::vector<Track> buildTracks(const std::vector<FaceDetections> &frameDetections,
                                    const TrackerConfig &config,
-                                   const SceneCuts &cuts)
+                                   const SceneCuts &cuts,
+                                   const TrackingContinueGuard &continueGuard)
     {
         ByteTracker tracker(config, cuts);
         for (size_t frame = 0; frame < frameDetections.size(); ++frame)
         {
-            tracker.update(static_cast<int>(frame), frameDetections[frame]);
+            tracker.update(static_cast<int>(frame), frameDetections[frame], continueGuard);
         }
+        requireTrackingContinue(continueGuard);
         return tracker.finish();
     }
 
     std::vector<Track> buildBidirectionalTracks(const std::vector<FaceDetections> &frameDetections,
                                                 const TrackerConfig &config,
                                                 float mergeIouThreshold,
-                                                const SceneCuts &cuts)
+                                                const SceneCuts &cuts,
+                                                const TrackingContinueGuard &continueGuard)
     {
-        auto forward = buildTracks(frameDetections, config, cuts);
+        auto forward = buildTracks(frameDetections, config, cuts, continueGuard);
 
         const int frameCount = static_cast<int>(frameDetections.size());
-        std::vector<FaceDetections> reversed(frameDetections.rbegin(), frameDetections.rend());
-        auto backward = buildTracks(reversed, config, cuts.reversed(frameCount));
+        ByteTracker backwardTracker(config, cuts.reversed(frameCount));
+        for (int frame = 0; frame < frameCount; ++frame)
+        {
+            backwardTracker.update(frame,
+                                   frameDetections[static_cast<std::size_t>(frameCount - frame - 1)],
+                                   continueGuard);
+        }
+        requireTrackingContinue(continueGuard);
+        auto backward = backwardTracker.finish();
+        if (!backward.empty() &&
+            forward.size() > kMaxTrackMergeComparisons / backward.size())
+        {
+            throw std::length_error("Tracking data exceeds the safety limit.");
+        }
+        std::size_t totalBoxes = trackedBoxCount(forward, kMaxFinalTrackedBoxes);
+        const auto backwardBoxes = trackedBoxCount(backward, kMaxTrackedBoxesPerPass);
+        if (totalBoxes > kMaxBidirectionalTrackedBoxes ||
+            backwardBoxes > kMaxBidirectionalTrackedBoxes - totalBoxes)
+        {
+            throw std::length_error("Tracking data exceeds the safety limit.");
+        }
+        std::size_t reframeOperations = 0;
         for (auto &track: backward)
         {
             for (auto &box: track.boxes)
             {
+                periodicallyRequireTrackingContinue(continueGuard, reframeOperations);
                 box.frame = frameCount - 1 - box.frame;
             }
             std::ranges::reverse(track.boxes);
@@ -331,14 +427,17 @@ namespace redactly
 
         for (auto &candidate: backward)
         {
+            requireTrackingContinue(continueGuard);
             Track *bestMatch = nullptr;
             float bestScore = 0.0F;
+            std::size_t mergeOperations = 0;
             for (auto &existing: forward)
             {
                 int sharedFrames = 0;
                 float iouSum = 0.0F;
                 for (const auto &box: candidate.boxes)
                 {
+                    periodicallyRequireTrackingContinue(continueGuard, mergeOperations);
                     if (const auto *other = existing.boxAtFrame(box.frame))
                     {
                         ++sharedFrames;
@@ -359,6 +458,13 @@ namespace redactly
 
             if (bestMatch == nullptr)
             {
+                if (forward.size() >= kMaxTrackCount ||
+                    totalBoxes > kMaxFinalTrackedBoxes ||
+                    candidate.boxes.size() > kMaxFinalTrackedBoxes - totalBoxes)
+                {
+                    throw std::length_error("Tracking data exceeds the safety limit.");
+                }
+                totalBoxes += candidate.boxes.size();
                 candidate.id = nextId++;
                 forward.push_back(std::move(candidate));
                 continue;
@@ -367,11 +473,18 @@ namespace redactly
             std::vector<TrackedBox> missing;
             for (const auto &box: candidate.boxes)
             {
+                periodicallyRequireTrackingContinue(continueGuard, mergeOperations);
                 if (bestMatch->boxAtFrame(box.frame) == nullptr)
                 {
                     missing.push_back(box);
                 }
             }
+            if (totalBoxes > kMaxFinalTrackedBoxes ||
+                missing.size() > kMaxFinalTrackedBoxes - totalBoxes)
+            {
+                throw std::length_error("Tracking data exceeds the safety limit.");
+            }
+            totalBoxes += missing.size();
             bestMatch->boxes.insert(bestMatch->boxes.end(), missing.begin(), missing.end());
             std::ranges::sort(bestMatch->boxes, {}, &TrackedBox::frame);
         }
@@ -379,7 +492,8 @@ namespace redactly
         return forward;
     }
 
-    void interpolateGaps(Track &track, int maxGap, const SceneCuts &cuts)
+    void interpolateGaps(Track &track, int maxGap, const SceneCuts &cuts,
+                         const TrackingContinueGuard &continueGuard)
     {
         if (track.boxes.size() < 2 || maxGap < 1)
         {
@@ -388,11 +502,21 @@ namespace redactly
 
         std::vector<TrackedBox> filled;
         filled.reserve(track.boxes.size());
+        const auto append = [&](const TrackedBox &box)
+        {
+            if (filled.size() >= kMaxFinalTrackedBoxes)
+            {
+                throw std::length_error("Tracking data exceeds the safety limit.");
+            }
+            filled.push_back(box);
+        };
+        std::size_t operations = 0;
         for (size_t i = 0; i + 1 < track.boxes.size(); ++i)
         {
+            periodicallyRequireTrackingContinue(continueGuard, operations);
             const auto &current = track.boxes[i];
             const auto &next = track.boxes[i + 1];
-            filled.push_back(current);
+            append(current);
 
             const int gap = next.frame - current.frame - 1;
             if (gap < 1 || gap > maxGap || cuts.spansCut(current.frame, next.frame)
@@ -404,17 +528,18 @@ namespace redactly
             for (int step = 1; step <= gap; ++step)
             {
                 const float t = static_cast<float>(step) / static_cast<float>(gap + 1);
-                filled.push_back({current.frame + step,
-                                  lerpBox(current.box, next.box, t),
-                                  std::min(current.score, next.score),
-                                  true});
+                append({current.frame + step,
+                        lerpBox(current.box, next.box, t),
+                        std::min(current.score, next.score),
+                        true});
             }
         }
-        filled.push_back(track.boxes.back());
+        append(track.boxes.back());
         track.boxes = std::move(filled);
     }
 
-    void smoothTrack(Track &track, int radius)
+    void smoothTrack(Track &track, int radius,
+                     const TrackingContinueGuard &continueGuard)
     {
         if (radius < 1 || track.boxes.size() < 3)
         {
@@ -422,8 +547,10 @@ namespace redactly
         }
 
         const auto original = track.boxes;
+        std::size_t operations = 0;
         for (size_t i = 0; i < track.boxes.size(); ++i)
         {
+            periodicallyRequireTrackingContinue(continueGuard, operations);
             const size_t begin = i >= static_cast<size_t>(radius) ? i - static_cast<size_t>(radius) : 0;
             const size_t end = std::min(track.boxes.size() - 1, i + static_cast<size_t>(radius));
 
@@ -470,7 +597,8 @@ namespace redactly
         }
     }
 
-    void extendTrackEnds(Track &track, int frames, int frameCount, const SceneCuts &cuts)
+    void extendTrackEnds(Track &track, int frames, int frameCount, const SceneCuts &cuts,
+                         const TrackingContinueGuard &continueGuard)
     {
         if (track.boxes.empty() || frames < 1 || frameCount < 1)
         {
@@ -481,9 +609,14 @@ namespace redactly
         const auto &first = track.boxes.front();
         for (int frame = std::max(0, first.frame - frames); frame < first.frame; ++frame)
         {
+            requireTrackingContinue(continueGuard);
             if (cuts.spansCut(frame, first.frame))
             {
                 continue;
+            }
+            if (track.boxes.size() + prefix.size() >= kMaxFinalTrackedBoxes)
+            {
+                throw std::length_error("Tracking data exceeds the safety limit.");
             }
             prefix.push_back({frame, first.box, first.score, true});
         }
@@ -493,9 +626,14 @@ namespace redactly
         const int lastAllowed = frameCount - 1;
         for (int frame = last.frame + 1; frame <= std::min(lastAllowed, last.frame + frames); ++frame)
         {
+            requireTrackingContinue(continueGuard);
             if (cuts.spansCut(last.frame, frame))
             {
                 break;
+            }
+            if (track.boxes.size() + prefix.size() + suffix.size() >= kMaxFinalTrackedBoxes)
+            {
+                throw std::length_error("Tracking data exceeds the safety limit.");
             }
             suffix.push_back({frame, last.box, last.score, true});
         }
@@ -505,14 +643,17 @@ namespace redactly
     }
 
     void postProcessTracks(std::vector<Track> &tracks, const TrackPostProcessConfig &config,
-                           int frameCount, const SceneCuts &cuts)
+                           int frameCount, const SceneCuts &cuts,
+                           const TrackingContinueGuard &continueGuard)
     {
+        std::size_t filteringOperations = 0;
         std::erase_if(tracks, [&](const Track &track)
         {
             int strong = 0;
             int real = 0;
             for (const auto &tracked: track.boxes)
             {
+                periodicallyRequireTrackingContinue(continueGuard, filteringOperations);
                 if (tracked.interpolated)
                 {
                     continue;
@@ -533,11 +674,29 @@ namespace redactly
                                >= config.shortTrackStrongRatio * static_cast<float>(real);
             return !cleanShortBurst;
         });
+        std::size_t totalBoxes = trackedBoxCount(tracks, kMaxFinalTrackedBoxes);
         for (auto &track: tracks)
         {
-            interpolateGaps(track, config.maxInterpolationGap, cuts);
-            smoothTrack(track, config.smoothingRadius);
-            extendTrackEnds(track, config.extensionFrames, frameCount, cuts);
+            requireTrackingContinue(continueGuard);
+            const auto previous = track.boxes.size();
+            interpolateGaps(track, config.maxInterpolationGap, cuts, continueGuard);
+            const auto withoutCurrent = totalBoxes - previous;
+            if (withoutCurrent > kMaxFinalTrackedBoxes ||
+                track.boxes.size() > kMaxFinalTrackedBoxes - withoutCurrent)
+            {
+                throw std::length_error("Tracking data exceeds the safety limit.");
+            }
+            totalBoxes = withoutCurrent + track.boxes.size();
+            smoothTrack(track, config.smoothingRadius, continueGuard);
+            const auto beforeExtension = track.boxes.size();
+            extendTrackEnds(track, config.extensionFrames, frameCount, cuts, continueGuard);
+            const auto withoutExtended = totalBoxes - beforeExtension;
+            if (withoutExtended > kMaxFinalTrackedBoxes ||
+                track.boxes.size() > kMaxFinalTrackedBoxes - withoutExtended)
+            {
+                throw std::length_error("Tracking data exceeds the safety limit.");
+            }
+            totalBoxes = withoutExtended + track.boxes.size();
         }
     }
 

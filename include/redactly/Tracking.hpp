@@ -5,10 +5,23 @@
 
 #include <opencv2/core.hpp>
 
+#include <exception>
+#include <functional>
 #include <vector>
 
 namespace redactly
 {
+    using TrackingContinueGuard = std::function<bool()>;
+
+    class TrackingCancelled final : public std::exception
+    {
+    public:
+        [[nodiscard]] const char *what() const noexcept override
+        {
+            return "Tracking cancelled.";
+        }
+    };
+
     struct TrackedBox
     {
         int frame = 0;
@@ -44,7 +57,8 @@ namespace redactly
     public:
         explicit ByteTracker(TrackerConfig config = {}, SceneCuts cuts = {});
 
-        void update(int frame, const FaceDetections &detections);
+        void update(int frame, const FaceDetections &detections,
+                    const TrackingContinueGuard &continueGuard = {});
 
         [[nodiscard]] std::vector<Track> finish();
 
@@ -65,6 +79,7 @@ namespace redactly
         SceneCuts cuts_;
         std::vector<ActiveTrack> active_;
         std::vector<Track> finished_;
+        std::size_t boxCount_ = 0;
         int nextId_ = 1;
     };
 
@@ -75,28 +90,34 @@ namespace redactly
         int extensionFrames = 3;
         float strongScoreThreshold = 0.5F;
         int minStrongDetections = 3;
-        int shortTrackMinStrong = 2;
+        int shortTrackMinStrong = 1;
         float shortTrackStrongRatio = 0.5F;
     };
 
     [[nodiscard]] std::vector<Track> buildTracks(const std::vector<FaceDetections> &frameDetections,
                                                  const TrackerConfig &config = {},
-                                                 const SceneCuts &cuts = {});
+                                                 const SceneCuts &cuts = {},
+                                                 const TrackingContinueGuard &continueGuard = {});
 
     [[nodiscard]] std::vector<Track> buildBidirectionalTracks(
         const std::vector<FaceDetections> &frameDetections,
         const TrackerConfig &config = {},
         float mergeIouThreshold = 0.5F,
-        const SceneCuts &cuts = {});
+        const SceneCuts &cuts = {},
+        const TrackingContinueGuard &continueGuard = {});
 
-    void interpolateGaps(Track &track, int maxGap, const SceneCuts &cuts = {});
+    void interpolateGaps(Track &track, int maxGap, const SceneCuts &cuts = {},
+                         const TrackingContinueGuard &continueGuard = {});
 
-    void smoothTrack(Track &track, int radius);
+    void smoothTrack(Track &track, int radius,
+                     const TrackingContinueGuard &continueGuard = {});
 
-    void extendTrackEnds(Track &track, int frames, int frameCount, const SceneCuts &cuts = {});
+    void extendTrackEnds(Track &track, int frames, int frameCount, const SceneCuts &cuts = {},
+                         const TrackingContinueGuard &continueGuard = {});
 
     void postProcessTracks(std::vector<Track> &tracks, const TrackPostProcessConfig &config,
-                           int frameCount, const SceneCuts &cuts = {});
+                           int frameCount, const SceneCuts &cuts = {},
+                           const TrackingContinueGuard &continueGuard = {});
 
     [[nodiscard]] std::vector<cv::Rect2f> trackRegionsForFrame(const std::vector<Track> &tracks, int frame);
 }

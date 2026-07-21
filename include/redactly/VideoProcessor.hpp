@@ -26,6 +26,8 @@ namespace redactly
         VideoCodec codec = VideoCodec::H264;
         int analysisLongEdge = 960;
         bool hardwareEncoder = true;
+        QString outputRootPath;
+        QString outputRelativePath;
         TrackerConfig tracker;
         TrackPostProcessConfig postProcess;
     };
@@ -48,9 +50,23 @@ namespace redactly
 
     using VideoProgressFn = std::function<void(int pass, qint64 frame, qint64 totalEstimate)>;
     using VideoDetectFn = std::function<FaceDetections(const cv::Mat &frame)>;
-    using VideoTrackReviewFn = std::function<bool(std::vector<Track> &tracks, qint64 frameCount)>;
+    using VideoTrackReviewFn = std::function<bool(std::vector<Track> &tracks,
+                                                   qint64 frameCount,
+                                                   const QString &sourcePath,
+                                                   const VideoInfo &info)>;
+
+    struct VideoMaskingPlan
+    {
+        qint64 frameBytes = 0;
+        int workerCount = 1;
+        int batchFrames = 1;
+    };
 
     [[nodiscard]] float videoStrongScoreThreshold(float scoreThreshold);
+
+    [[nodiscard]] VideoMaskingPlan videoMaskingPlan(int width, int height,
+                                                    unsigned int hardwareThreads,
+                                                    qint64 memoryBudget = 0);
 
     VideoProcessResult processVideo(const FfmpegTools &tools,
                                     const QString &sourcePath,

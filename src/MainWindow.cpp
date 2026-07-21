@@ -1,5 +1,6 @@
 #include "redactly/MainWindow.hpp"
 
+#include "redactly/ImageIo.hpp"
 #include "redactly/ImageScanner.hpp"
 #include "redactly/ModelCatalog.hpp"
 #include "redactly/ModelDownloader.hpp"
@@ -19,6 +20,8 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QContextMenuEvent>
+#include <QCryptographicHash>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QEvent>
 #include <QFileDialog>
@@ -35,6 +38,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QCloseEvent>
 #include <QProgressBar>
 #include <QPushButton>
@@ -75,6 +79,7 @@ namespace redactly
         constexpr double kDefaultNmsThreshold = 0.4;
         constexpr int kDefaultBlockSize = 14;
         constexpr double kDefaultPadding = 0.18;
+        constexpr int kModelCatalogIndexRole = Qt::UserRole + 1;
 
         QString releaseNotesSection(const QString &releaseNotes)
         {
@@ -305,8 +310,8 @@ namespace redactly
                              settingsButton_->setAccessibleName(tr("Settings"));
                          });
         connect(settingsButton_, &QToolButton::clicked, this, &MainWindow::openSettings);
-        auto *settingsShortcut = new QShortcut(QKeySequence::Preferences, this);
-        connect(settingsShortcut, &QShortcut::activated, this, &MainWindow::openSettings);
+        settingsShortcut_ = new QShortcut(QKeySequence::Preferences, this);
+        connect(settingsShortcut_, &QShortcut::activated, this, &MainWindow::openSettings);
 
         auto *versionLabel = new QLabel(QString("v%1").arg(QCoreApplication::applicationVersion()), header);
         versionLabel->setObjectName("subtitleLabel");
@@ -370,8 +375,10 @@ namespace redactly
             connect(detectCombo_, &QComboBox::currentIndexChanged, this, [this]
             {
                 const bool facesNeeded = detectCombo_->currentData().toString() != "plates";
-                modelCombo_->setEnabled(facesNeeded);
-                modelPathEdit_->setEnabled(facesNeeded);
+                modelCombo_->setEnabled(!processing_ && facesNeeded);
+                modelPathEdit_->setEnabled(!processing_ && facesNeeded);
+                modelBrowseButton_->setEnabled(!processing_ && facesNeeded);
+                downloadButton_->setEnabled(!processing_ && facesNeeded);
             });
 
             auto *pathRow = new QHBoxLayout();
@@ -384,16 +391,16 @@ namespace redactly
             addRetranslation([this]{ downloadButton_->setText(tr("Download")); });
             downloadButton_->setCursor(Qt::PointingHandCursor);
             downloadButton_->setVisible(false);
-            auto *modelButton = new QPushButton(card);
-            addRetranslation([modelButton]{ modelButton->setText(tr("Browse…")); });
-            modelButton->setCursor(Qt::PointingHandCursor);
+            modelBrowseButton_ = new QPushButton(card);
+            addRetranslation([this]{ modelBrowseButton_->setText(tr("Browse…")); });
+            modelBrowseButton_->setCursor(Qt::PointingHandCursor);
             pathRow->addWidget(modelPathEdit_, 1);
             pathRow->addWidget(downloadButton_);
-            pathRow->addWidget(modelButton);
+            pathRow->addWidget(modelBrowseButton_);
             cardLayout->addLayout(pathRow);
 
             connect(downloadButton_, &QPushButton::clicked, this, &MainWindow::downloadSelectedModel);
-            connect(modelButton, &QPushButton::clicked, this, &MainWindow::chooseModel);
+            connect(modelBrowseButton_, &QPushButton::clicked, this, &MainWindow::chooseModel);
             connect(modelCombo_, &QComboBox::currentIndexChanged,
                     this, &MainWindow::updateModelPathFromSelection);
 
@@ -431,15 +438,15 @@ namespace redactly
 
             auto *buttonRow = new QHBoxLayout();
             buttonRow->setSpacing(8);
-            auto *addFiles = new QPushButton(card);
-            addRetranslation([addFiles]{ addFiles->setText(tr("Add Files")); });
-            auto *addFolder = new QPushButton(card);
-            addRetranslation([addFolder]{ addFolder->setText(tr("Add Folder")); });
-            auto *clearInputs = new QPushButton(card);
-            addRetranslation([clearInputs]{ clearInputs->setText(tr("Clear")); });
-            addFiles->setCursor(Qt::PointingHandCursor);
-            addFolder->setCursor(Qt::PointingHandCursor);
-            clearInputs->setCursor(Qt::PointingHandCursor);
+            addFilesButton_ = new QPushButton(card);
+            addRetranslation([this]{ addFilesButton_->setText(tr("Add Files")); });
+            addFolderButton_ = new QPushButton(card);
+            addRetranslation([this]{ addFolderButton_->setText(tr("Add Folder")); });
+            clearInputsButton_ = new QPushButton(card);
+            addRetranslation([this]{ clearInputsButton_->setText(tr("Clear")); });
+            addFilesButton_->setCursor(Qt::PointingHandCursor);
+            addFolderButton_->setCursor(Qt::PointingHandCursor);
+            clearInputsButton_->setCursor(Qt::PointingHandCursor);
             recursiveCheck_ = new QCheckBox(card);
             addRetranslation([this]{ recursiveCheck_->setText(tr("Include subfolders")); });
             recursiveCheck_->setChecked(true);
@@ -454,13 +461,13 @@ namespace redactly
                                      "  • Videos: scrub the track timeline and exclude false tracks"));
                              });
 
-            connect(addFiles, &QPushButton::clicked, this, &MainWindow::chooseFiles);
-            connect(addFolder, &QPushButton::clicked, this, &MainWindow::chooseFolder);
-            connect(clearInputs, &QPushButton::clicked, inputList_, &QListWidget::clear);
+            connect(addFilesButton_, &QPushButton::clicked, this, &MainWindow::chooseFiles);
+            connect(addFolderButton_, &QPushButton::clicked, this, &MainWindow::chooseFolder);
+            connect(clearInputsButton_, &QPushButton::clicked, inputList_, &QListWidget::clear);
 
-            buttonRow->addWidget(addFiles);
-            buttonRow->addWidget(addFolder);
-            buttonRow->addWidget(clearInputs);
+            buttonRow->addWidget(addFilesButton_);
+            buttonRow->addWidget(addFolderButton_);
+            buttonRow->addWidget(clearInputsButton_);
             buttonRow->addStretch(1);
             buttonRow->addWidget(reviewCheck_);
             buttonRow->addWidget(recursiveCheck_);
@@ -487,25 +494,36 @@ namespace redactly
             auto *outputRow = new QHBoxLayout();
             outputRow->setSpacing(8);
             outputDirEdit_ = new QLineEdit(defaultOutputDirectory(), card);
-            auto *outputButton = new QPushButton(card);
-            addRetranslation([outputButton]{ outputButton->setText(tr("Choose…")); });
-            outputButton->setCursor(Qt::PointingHandCursor);
+            outputBrowseButton_ = new QPushButton(card);
+            addRetranslation([this]{ outputBrowseButton_->setText(tr("Choose…")); });
+            outputBrowseButton_->setCursor(Qt::PointingHandCursor);
             outputRow->addWidget(outputDirEdit_, 1);
-            outputRow->addWidget(outputButton);
+            outputRow->addWidget(outputBrowseButton_);
             cardLayout->addLayout(outputRow);
-            connect(outputButton, &QPushButton::clicked, this, &MainWindow::chooseOutputDirectory);
+            connect(outputBrowseButton_, &QPushButton::clicked,
+                    this, &MainWindow::chooseOutputDirectory);
 
             preserveMetaCheck_ = new QCheckBox(card);
             addRetranslation([this]
-                             { preserveMetaCheck_->setText(tr("Preserve original metadata (EXIF, location, color profile)")); });
+                             { preserveMetaCheck_->setText(tr("Preserve selected EXIF metadata")); });
             preserveMetaCheck_->setChecked(false);
             addRetranslation([this]
                              {
-                                 preserveMetaCheck_->setToolTip(tr(
-                                     "Off (default): output carries no metadata — GPS, camera, and timestamps are removed.\n"
-                                     "On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preserves "
-                                     "format and bit depth at maximum quality. Best for archiving high-resolution photos."));
+                                 if (metadataSupportAvailable())
+                                 {
+                                     preserveMetaCheck_->setToolTip(tr(
+                                         "Off (default): output carries no metadata — GPS, camera, and timestamps are removed.\n"
+                                         "On: copies selected EXIF fields such as camera, timestamps, and location. Embedded "
+                                         "previews, IPTC, XMP, comments, and color profiles are removed. Format and bit depth "
+                                         "are preserved at maximum quality."));
+                                 }
+                                 else
+                                 {
+                                     preserveMetaCheck_->setToolTip(tr(
+                                         "Metadata preservation is unavailable in this build. Output metadata will be removed."));
+                                 }
                              });
+            preserveMetaCheck_->setEnabled(metadataSupportAvailable());
             cardLayout->addWidget(preserveMetaCheck_);
 
             root->addWidget(card);
@@ -530,13 +548,13 @@ namespace redactly
             advancedToggle_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
             advancedToggle_->setCursor(Qt::PointingHandCursor);
 
-            auto *resetButton = new QPushButton(card);
-            addRetranslation([resetButton]{ resetButton->setText(tr("Reset to defaults")); });
-            resetButton->setCursor(Qt::PointingHandCursor);
+            resetAdvancedButton_ = new QPushButton(card);
+            addRetranslation([this]{ resetAdvancedButton_->setText(tr("Reset to defaults")); });
+            resetAdvancedButton_->setCursor(Qt::PointingHandCursor);
 
             headerRow->addWidget(advancedToggle_);
             headerRow->addStretch(1);
-            headerRow->addWidget(resetButton);
+            headerRow->addWidget(resetAdvancedButton_);
             cardLayout->addLayout(headerRow);
 
             advancedBody_ = new QWidget(card);
@@ -693,7 +711,8 @@ namespace redactly
             cardLayout->addWidget(advancedBody_);
 
             connect(advancedToggle_, &QToolButton::toggled, this, &MainWindow::toggleAdvanced);
-            connect(resetButton, &QPushButton::clicked, this, &MainWindow::resetAdvancedDefaults);
+            connect(resetAdvancedButton_, &QPushButton::clicked,
+                    this, &MainWindow::resetAdvancedDefaults);
             connect(methodCombo_, &QComboBox::currentIndexChanged, this,
                     [this]
                     {
@@ -813,16 +832,22 @@ namespace redactly
 
     MainWindow::~MainWindow()
     {
-        QThread *thread = workerThread_;
-        if (thread != nullptr)
+        shuttingDown_ = true;
+        QPointer<QThread> thread(workerThread_);
+        QPointer<ProcessorWorker> worker(worker_);
+        workerThread_ = nullptr;
+        worker_ = nullptr;
+        activeRunState_.reset();
+
+        if (worker)
         {
-            shuttingDown_ = true;
-            if (worker_ != nullptr)
-            {
-                worker_->cancel();
-            }
+            QObject::disconnect(worker, nullptr, this, nullptr);
+            worker->cancel();
+        }
+        if (thread)
+        {
             thread->quit();
-            while (!thread->wait(50))
+            while (thread && !thread->wait(50))
             {
                 QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
             }
@@ -872,7 +897,7 @@ namespace redactly
 
     void MainWindow::dragEnterEvent(QDragEnterEvent *event)
     {
-        if (hasAcceptableLocalUrls(event->mimeData()))
+        if (!processing_ && hasAcceptableLocalUrls(event->mimeData()))
         {
             setDropHighlight(true);
             event->acceptProposedAction();
@@ -891,7 +916,7 @@ namespace redactly
     void MainWindow::dropEvent(QDropEvent *event)
     {
         setDropHighlight(false);
-        if (!hasAcceptableLocalUrls(event->mimeData()))
+        if (processing_ || !hasAcceptableLocalUrls(event->mimeData()))
         {
             event->ignore();
             return;
@@ -922,6 +947,10 @@ namespace redactly
 
     void MainWindow::chooseModel()
     {
+        if (processing_)
+        {
+            return;
+        }
         const auto path = QFileDialog::getOpenFileName(this, tr("Select SCRFD ONNX Model"), QDir::currentPath(),
                                                        tr("ONNX Models (*.onnx)"));
         if (!path.isEmpty())
@@ -932,6 +961,7 @@ namespace redactly
             }
             const QFileInfo info(path);
             modelCombo_->addItem(tr("Custom — %1").arg(info.fileName()), info.absoluteFilePath());
+            modelCombo_->setItemData(modelCombo_->count() - 1, -1, kModelCatalogIndexRole);
             modelCombo_->setCurrentIndex(modelCombo_->count() - 1);
             modelPathEdit_->setText(path);
         }
@@ -939,6 +969,10 @@ namespace redactly
 
     void MainWindow::chooseFiles()
     {
+        if (processing_)
+        {
+            return;
+        }
         const auto files = QFileDialog::getOpenFileNames(this,
                                                          tr("Select Images or Videos"),
                                                          QStandardPaths::writableLocation(
@@ -952,6 +986,10 @@ namespace redactly
 
     void MainWindow::chooseFolder()
     {
+        if (processing_)
+        {
+            return;
+        }
         const auto folder = QFileDialog::getExistingDirectory(this, tr("Select Folder"),
                                                               QStandardPaths::writableLocation(
                                                                   QStandardPaths::PicturesLocation));
@@ -963,6 +1001,10 @@ namespace redactly
 
     void MainWindow::chooseOutputDirectory()
     {
+        if (processing_)
+        {
+            return;
+        }
         const auto folder = QFileDialog::getExistingDirectory(this, tr("Select Output Folder"), outputDirEdit_->text());
         if (!folder.isEmpty())
         {
@@ -970,15 +1012,71 @@ namespace redactly
         }
     }
 
+    MainWindow::DetectorCacheKey MainWindow::makeDetectorCacheKey(
+        const QString &modelPath, bool gpuAcceleration)
+    {
+        if (modelPath.isEmpty())
+        {
+            return {};
+        }
+
+        const QFileInfo info(modelPath);
+        QString canonicalPath = info.canonicalFilePath();
+        if (canonicalPath.isEmpty())
+        {
+            canonicalPath = QDir::cleanPath(info.absoluteFilePath());
+        }
+
+        DetectorCacheKey key;
+        key.canonicalModelPath = canonicalPath;
+        key.gpuAcceleration = gpuAcceleration;
+        if (info.exists() && info.isFile() && info.size() > 0 &&
+            info.size() <= kMaxCustomModelBytes)
+        {
+            key.modelSize = info.size();
+            key.modelLastModifiedMs = info.lastModified().toMSecsSinceEpoch();
+            QFile file(canonicalPath);
+            if (file.open(QIODevice::ReadOnly))
+            {
+                QCryptographicHash hash(QCryptographicHash::Sha256);
+                qint64 hashedBytes = 0;
+                while (!file.atEnd())
+                {
+                    const QByteArray chunk = file.read(1024 * 1024);
+                    if (chunk.isEmpty())
+                    {
+                        break;
+                    }
+                    if (hashedBytes > kMaxCustomModelBytes - chunk.size())
+                    {
+                        return key;
+                    }
+                    hashedBytes += chunk.size();
+                    hash.addData(chunk);
+                }
+                if (file.error() == QFileDevice::NoError && hashedBytes == key.modelSize)
+                {
+                    key.modelSha256 = hash.result();
+                }
+            }
+        }
+        return key;
+    }
+
     void MainWindow::startProcessing()
     {
+        if (processing_ || worker_ != nullptr || workerThread_ != nullptr)
+        {
+            return;
+        }
         const QString detectTarget = detectCombo_ ? detectCombo_->currentData().toString()
                                                    : QStringLiteral("faces");
         const bool detectFaces = detectTarget != "plates";
         const bool detectPlates = detectTarget != "faces";
 
-        const auto modelPath = selectedModelPath();
-        const bool isCustom = !modelPath.isEmpty() && findBuiltinModel(modelPath) == nullptr;
+        auto modelPath = selectedModelPath();
+        const BuiltinModel *selectedBuiltin = selectedBuiltinModel();
+        const bool isCustom = !modelPath.isEmpty() && selectedBuiltin == nullptr;
 
         if (detectFaces)
         {
@@ -990,7 +1088,7 @@ namespace redactly
 
             if (!QFileInfo::exists(modelPath))
             {
-                const BuiltinModel *builtin = isCustom ? nullptr : findBuiltinModel(modelPath);
+                const BuiltinModel *builtin = isCustom ? nullptr : selectedBuiltin;
                 if (builtin == nullptr)
                 {
                     appendLog(tr("Choose a valid SCRFD ONNX model first."));
@@ -1070,20 +1168,6 @@ namespace redactly
             }
         }
 
-        setProcessing(true);
-        openOutputButton_->setVisible(false);
-        runTimer_.start();
-        progressBar_->setValue(0);
-        lastRunSummary_ = {};
-        statusLabel_->setText(tr("Starting…"));
-
-        auto detectorForRun = (cachedDetectorModelPath_ == modelPath) ? cachedDetector_ : nullptr;
-        auto videoDetectorForRun = (cachedDetectorModelPath_ == modelPath) ? cachedVideoDetector_ : nullptr;
-        auto plateForRun = (!plateModelPath.isEmpty() && cachedPlateModelPath_ == plateModelPath)
-                               ? cachedPlateDetector_
-                               : nullptr;
-
-        workerThread_ = new QThread(this);
         ProcessingRequest request;
         request.modelPath = modelPath;
         request.inputs = inputPaths();
@@ -1098,13 +1182,113 @@ namespace redactly
         request.method = static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt());
         request.shape = static_cast<MaskShape>(shapeCombo_->currentData().toInt());
         request.softEdges = softEdgeCheck_->isChecked();
-        request.preserveMetadata = preserveMetaCheck_->isChecked();
+        request.preserveMetadata = metadataSupportAvailable() && preserveMetaCheck_->isChecked();
         request.reviewEnabled = reviewCheck_->isChecked();
         request.detectFaces = detectFaces;
         request.detectPlates = detectPlates;
         request.gpuAcceleration = gpuAcceleration_;
         request.videoCrf = crfForQuality(static_cast<VideoQuality>(videoQuality_));
         request.videoCodec = static_cast<VideoCodec>(videoCodec_);
+
+        ActiveRunState runState;
+        runState.faceKey = detectFaces
+                               ? makeDetectorCacheKey(modelPath, request.gpuAcceleration)
+                               : DetectorCacheKey{};
+        runState.plateKey = detectPlates
+                                ? makeDetectorCacheKey(plateModelPath, request.gpuAcceleration)
+                                : DetectorCacheKey{};
+        const auto verifyOrRecoverBuiltin = [&](const BuiltinModel &model,
+                                                QString &path,
+                                                DetectorCacheKey &key,
+                                                const bool plate)
+        {
+            if (key.isValid() && modelDigestMatches(model, key.modelSha256))
+            {
+                return true;
+            }
+
+            appendLog(tr("Built-in model integrity check failed: %1").arg(model.fileName));
+            const QString recoveryPath = modelCacheDir() + "/" + model.fileName;
+            appendLog(tr("Downloading %1…").arg(model.fileName));
+            const bool recovered = plate
+                                       ? ensurePlateModelAvailable(this, recoveryPath)
+                                       : ensureBuiltinModelAvailable(this, model, recoveryPath);
+            if (!recovered)
+            {
+                appendLog(tr("Model download was cancelled or failed."));
+                return false;
+            }
+
+            path = recoveryPath;
+            key = makeDetectorCacheKey(path, request.gpuAcceleration);
+            if (!key.isValid() || !modelDigestMatches(model, key.modelSha256))
+            {
+                appendLog(tr("Built-in model integrity check failed: %1").arg(model.fileName));
+                return false;
+            }
+            appendLog(tr("Model ready: %1").arg(model.fileName));
+            return true;
+        };
+
+        if (detectFaces && selectedBuiltin != nullptr &&
+            !verifyOrRecoverBuiltin(*selectedBuiltin, modelPath, runState.faceKey, false))
+        {
+            return;
+        }
+        if (detectPlates &&
+            !verifyOrRecoverBuiltin(plateModel(), plateModelPath, runState.plateKey, true))
+        {
+            return;
+        }
+        if ((detectFaces && !runState.faceKey.isValid()) ||
+            (detectPlates && !runState.plateKey.isValid()))
+        {
+            reportValidationIssue(tr("Choose a valid SCRFD ONNX model first."), modelCombo_);
+            return;
+        }
+        if (detectFaces)
+        {
+            request.modelPath = runState.faceKey.canonicalModelPath;
+            request.modelSha256 = runState.faceKey.modelSha256;
+            if (selectedBuiltin != nullptr)
+            {
+                modelCombo_->setItemData(modelCombo_->currentIndex(), request.modelPath);
+                updateModelPathFromSelection();
+            }
+        }
+        if (detectPlates)
+        {
+            request.plateModelPath = runState.plateKey.canonicalModelPath;
+            request.plateModelSha256 = runState.plateKey.modelSha256;
+        }
+        runState.method = request.method;
+        runState.shape = request.shape;
+        runState.blockSize = request.mosaicBlockSize;
+        runState.padding = request.paddingRatio;
+        runState.softEdges = request.softEdges;
+        runState.preserveMetadata = request.preserveMetadata;
+        runState.detectFaces = request.detectFaces;
+        runState.detectPlates = request.detectPlates;
+
+        auto detectorForRun = detectFaces && cachedDetectorKey_ == runState.faceKey
+                                  ? cachedDetector_
+                                  : nullptr;
+        auto videoDetectorForRun = detectFaces && cachedVideoDetectorKey_ == runState.faceKey
+                                       ? cachedVideoDetector_
+                                       : nullptr;
+        auto plateForRun = detectPlates && cachedPlateDetectorKey_ == runState.plateKey
+                               ? cachedPlateDetector_
+                               : nullptr;
+
+        activeRunState_ = runState;
+        setProcessing(true);
+        openOutputButton_->setVisible(false);
+        runTimer_.start();
+        progressBar_->setValue(0);
+        lastRunSummary_ = {};
+        statusLabel_->setText(tr("Starting…"));
+
+        workerThread_ = new QThread(this);
 
         DetectorCache cache;
         cache.face = std::move(detectorForRun);
@@ -1151,6 +1335,59 @@ namespace redactly
 
     void MainWindow::onWorkerFinished(RunOutcome outcome)
     {
+        if (shuttingDown_)
+        {
+            return;
+        }
+
+        const auto completedRun = activeRunState_;
+        const bool cacheRunResult = outcome == RunOutcome::Completed ||
+                                    (outcome == RunOutcome::CompletedWithWarnings &&
+                                     lastRunSummary_.failed == 0);
+
+        if (worker_ != nullptr)
+        {
+            auto detector = worker_->takeDetector();
+            if (detector && completedRun.has_value() && completedRun->detectFaces &&
+                completedRun->faceKey.isValid() && cacheRunResult)
+            {
+                auto key = completedRun->faceKey;
+                key.gpuAcceleration = detector->accelerator() != OrtAccelerator::None;
+                cachedDetector_ = std::move(detector);
+                cachedDetectorKey_ = std::move(key);
+            }
+
+            auto videoDetector = worker_->takeVideoDetector();
+            if (videoDetector && completedRun.has_value() && completedRun->detectFaces &&
+                completedRun->faceKey.isValid() && cacheRunResult)
+            {
+                auto key = completedRun->faceKey;
+                key.gpuAcceleration = videoDetector->accelerator() != OrtAccelerator::None;
+                cachedVideoDetector_ = std::move(videoDetector);
+                cachedVideoDetectorKey_ = std::move(key);
+            }
+
+            auto plate = worker_->takePlateDetector();
+            if (plate && completedRun.has_value() && completedRun->detectPlates &&
+                completedRun->plateKey.isValid() && cacheRunResult)
+            {
+                auto key = completedRun->plateKey;
+                key.gpuAcceleration = plate->accelerator() != OrtAccelerator::None;
+                cachedPlateDetector_ = std::move(plate);
+                cachedPlateDetectorKey_ = std::move(key);
+            }
+        }
+
+        QThread *completedThread = workerThread_;
+        if (completedThread != nullptr)
+        {
+            completedThread->quit();
+            completedThread->wait();
+        }
+
+        worker_ = nullptr;
+        workerThread_ = nullptr;
+        activeRunState_.reset();
         setProcessing(false);
         const qint64 seconds = runTimer_.isValid() ? runTimer_.elapsed() / 1000 : 0;
         const QString elapsed = seconds >= 60
@@ -1199,36 +1436,6 @@ namespace redactly
                 break;
         }
 
-        if (worker_ != nullptr)
-        {
-            auto detector = worker_->takeDetector();
-            if (detector)
-            {
-                cachedDetector_ = std::move(detector);
-                cachedDetectorModelPath_ = selectedModelPath();
-            }
-
-            auto videoDetector = worker_->takeVideoDetector();
-            if (videoDetector)
-            {
-                cachedVideoDetector_ = std::move(videoDetector);
-            }
-
-            auto plate = worker_->takePlateDetector();
-            if (plate)
-            {
-                cachedPlateDetector_ = std::move(plate);
-                cachedPlateModelPath_ = firstExistingModelPath(plateModel().fileName);
-            }
-        }
-
-        if (workerThread_ != nullptr)
-        {
-            workerThread_->quit();
-        }
-
-        worker_ = nullptr;
-        workerThread_ = nullptr;
     }
 
     void MainWindow::toggleAdvanced(bool expanded) const
@@ -1245,6 +1452,10 @@ namespace redactly
 
     void MainWindow::resetAdvancedDefaults() const
     {
+        if (processing_)
+        {
+            return;
+        }
         scoreThresholdSpin_->setValue(kDefaultScoreThreshold);
         nmsThresholdSpin_->setValue(kDefaultNmsThreshold);
         blockSizeSpin_->setValue(kDefaultBlockSize);
@@ -1283,6 +1494,7 @@ namespace redactly
         {
             const QFileInfo info(savedCustomModel);
             modelCombo_->addItem(tr("Custom — %1").arg(info.fileName()), info.absoluteFilePath());
+            modelCombo_->setItemData(modelCombo_->count() - 1, -1, kModelCatalogIndexRole);
             modelCombo_->setCurrentIndex(modelCombo_->count() - 1);
         }
 
@@ -1294,7 +1506,8 @@ namespace redactly
 
         recursiveCheck_->setChecked(settings.value("recursive", true).toBool());
         reviewCheck_->setChecked(settings.value("review", false).toBool());
-        preserveMetaCheck_->setChecked(settings.value("preserveMetadata", false).toBool());
+        preserveMetaCheck_->setChecked(
+            metadataSupportAvailable() && settings.value("preserveMetadata", false).toBool());
 
         scoreThresholdSpin_->setValue(settings.value("scoreThreshold", kDefaultScoreThreshold).toDouble());
         nmsThresholdSpin_->setValue(settings.value("nmsThreshold", kDefaultNmsThreshold).toDouble());
@@ -1385,7 +1598,7 @@ namespace redactly
         settings.setValue("modelIndex", modelCombo_ ? modelCombo_->currentIndex() : 0);
 
         const auto currentModel = selectedModelPath();
-        if (!currentModel.isEmpty() && findBuiltinModel(currentModel) == nullptr)
+        if (!currentModel.isEmpty() && selectedBuiltinModel() == nullptr)
         {
             settings.setValue("customModelPath", currentModel);
         } else
@@ -1467,6 +1680,10 @@ namespace redactly
 
     void MainWindow::openSettings()
     {
+        if (processing_)
+        {
+            return;
+        }
         SettingsDialog dialog(themeMode_, language_, checkForUpdatesOnStartup_, fileLogging_,
                               gpuAcceleration_, videoQuality_, videoCodec_, this);
 
@@ -1512,9 +1729,10 @@ namespace redactly
                 gpuAcceleration_ = enabled;
                 cachedDetector_.reset();
                 cachedVideoDetector_.reset();
-                cachedDetectorModelPath_.clear();
+                cachedDetectorKey_ = {};
+                cachedVideoDetectorKey_ = {};
                 cachedPlateDetector_.reset();
-                cachedPlateModelPath_.clear();
+                cachedPlateDetectorKey_ = {};
                 saveSettings();
             }
         });
@@ -1545,17 +1763,18 @@ namespace redactly
         const auto method = static_cast<AnonymizationMethod>(
             methodCombo_->currentData().toInt());
         const bool sticker = method == AnonymizationMethod::Sticker;
+        const bool editable = !processing_;
         if (shapeCombo_ != nullptr)
         {
-            shapeCombo_->setEnabled(!sticker);
+            shapeCombo_->setEnabled(editable && !sticker);
         }
         if (softEdgeCheck_ != nullptr)
         {
-            softEdgeCheck_->setEnabled(!sticker);
+            softEdgeCheck_->setEnabled(editable && !sticker);
         }
         if (blockSizeSpin_ != nullptr)
         {
-            blockSizeSpin_->setEnabled(method == AnonymizationMethod::Mosaic);
+            blockSizeSpin_->setEnabled(editable && method == AnonymizationMethod::Mosaic);
         }
     }
 
@@ -1580,7 +1799,7 @@ namespace redactly
 
     void MainWindow::addInputPath(const QString &path) const
     {
-        if (path.isEmpty())
+        if (processing_ || path.isEmpty())
         {
             return;
         }
@@ -1632,8 +1851,15 @@ namespace redactly
         inputList_->addItem(item);
     }
 
-    void MainWindow::setProcessing(bool processing) const
+    void MainWindow::setProcessing(bool processing)
     {
+        processing_ = processing;
+        setAcceptDrops(!processing);
+        if (processing)
+        {
+            setDropHighlight(false);
+        }
+
         if (statusLabel_->property("state").isValid())
         {
             statusLabel_->setProperty("state", QVariant());
@@ -1644,6 +1870,7 @@ namespace redactly
         startButton_->setEnabled(!processing);
         stopButton_->setEnabled(processing);
         settingsButton_->setEnabled(!processing);
+        settingsShortcut_->setEnabled(!processing);
         detectCombo_->setEnabled(!processing);
         modelCombo_->setEnabled(!processing);
         methodCombo_->setEnabled(!processing);
@@ -1651,15 +1878,22 @@ namespace redactly
         softEdgeCheck_->setEnabled(!processing);
         modelPathEdit_->setEnabled(!processing);
         downloadButton_->setEnabled(!processing);
+        modelBrowseButton_->setEnabled(!processing);
         outputDirEdit_->setEnabled(!processing);
+        outputBrowseButton_->setEnabled(!processing);
         inputList_->setEnabled(!processing);
+        addFilesButton_->setEnabled(!processing);
+        addFolderButton_->setEnabled(!processing);
+        clearInputsButton_->setEnabled(!processing);
         recursiveCheck_->setEnabled(!processing);
         reviewCheck_->setEnabled(!processing);
-        preserveMetaCheck_->setEnabled(!processing);
+        preserveMetaCheck_->setEnabled(!processing && metadataSupportAvailable());
         scoreThresholdSpin_->setEnabled(!processing);
         nmsThresholdSpin_->setEnabled(!processing);
         blockSizeSpin_->setEnabled(!processing);
         paddingSpin_->setEnabled(!processing);
+        advancedToggle_->setEnabled(!processing);
+        resetAdvancedButton_->setEnabled(!processing);
 
         if (!processing)
         {
@@ -1667,6 +1901,8 @@ namespace redactly
             const bool facesNeeded = detectCombo_->currentData().toString() != "plates";
             modelCombo_->setEnabled(facesNeeded);
             modelPathEdit_->setEnabled(facesNeeded);
+            modelBrowseButton_->setEnabled(facesNeeded);
+            downloadButton_->setEnabled(facesNeeded);
         }
     }
 
@@ -1689,11 +1925,14 @@ namespace redactly
 
     void MainWindow::populateBundledModels()
     {
-        for (const auto &model: builtinModels())
+        for (std::size_t index = 0; index < builtinModels().size(); ++index)
         {
+            const auto &model = builtinModels()[index];
             const auto existing = firstExistingModelPath(model.fileName);
             const auto path = existing.isEmpty() ? modelCacheDir() + "/" + model.fileName : existing;
             modelCombo_->addItem(QString(), path);
+            modelCombo_->setItemData(modelCombo_->count() - 1,
+                                     static_cast<int>(index), kModelCatalogIndexRole);
         }
 
         addRetranslation([this]
@@ -1711,8 +1950,12 @@ namespace redactly
 
     void MainWindow::downloadSelectedModel()
     {
+        if (processing_)
+        {
+            return;
+        }
         const auto modelPath = selectedModelPath();
-        const BuiltinModel *builtin = findBuiltinModel(modelPath);
+        const BuiltinModel *builtin = selectedBuiltinModel();
         if (builtin == nullptr)
         {
             return;
@@ -1739,7 +1982,7 @@ namespace redactly
     {
         const auto path = selectedModelPath();
         const bool exists = !path.isEmpty() && QFileInfo::exists(path);
-        const bool missingBuiltin = !exists && findBuiltinModel(path) != nullptr;
+        const bool missingBuiltin = !exists && selectedBuiltinModel() != nullptr;
 
         if (path.isEmpty() || exists)
         {
@@ -1768,6 +2011,21 @@ namespace redactly
         }
 
         return modelCombo_->currentData().toString();
+    }
+
+    const BuiltinModel *MainWindow::selectedBuiltinModel() const
+    {
+        if (modelCombo_ == nullptr || modelCombo_->currentIndex() < 0)
+        {
+            return nullptr;
+        }
+        bool validIndex = false;
+        const int index = modelCombo_->currentData(kModelCatalogIndexRole).toInt(&validIndex);
+        if (!validIndex || index < 0 || index >= static_cast<int>(builtinModels().size()))
+        {
+            return nullptr;
+        }
+        return &builtinModels()[static_cast<std::size_t>(index)];
     }
 
     void MainWindow::addRetranslation(std::function<void()> apply)
@@ -1856,15 +2114,28 @@ namespace redactly
             return cancelAll;
         }
         ReviewPreviewSpec spec;
-        spec.method = static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt());
-        spec.shape = static_cast<MaskShape>(shapeCombo_->currentData().toInt());
-        spec.softEdges = softEdgeCheck_ != nullptr && softEdgeCheck_->isChecked();
-        spec.blockSize = blockSizeSpin_->value();
-        spec.padding = static_cast<float>(paddingSpin_->value());
+        bool preserveMetadata = false;
+        if (activeRunState_.has_value())
+        {
+            spec.method = activeRunState_->method;
+            spec.shape = activeRunState_->shape;
+            spec.softEdges = activeRunState_->softEdges;
+            spec.blockSize = activeRunState_->blockSize;
+            spec.padding = activeRunState_->padding;
+            preserveMetadata = activeRunState_->preserveMetadata;
+        }
+        else
+        {
+            spec.method = static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt());
+            spec.shape = static_cast<MaskShape>(shapeCombo_->currentData().toInt());
+            spec.softEdges = softEdgeCheck_ != nullptr && softEdgeCheck_->isChecked();
+            spec.blockSize = blockSizeSpin_->value();
+            spec.padding = static_cast<float>(paddingSpin_->value());
+            preserveMetadata = preserveMetaCheck_ != nullptr && preserveMetaCheck_->isChecked();
+        }
         spec.previewScale = previewScale;
         ReviewDialog dialog(image, sourceName, detected, currentIndex, total,
-                            preserveMetaCheck_ != nullptr && preserveMetaCheck_->isChecked(),
-                            spec, this);
+                            preserveMetadata, spec, this);
         dialog.exec();
         return dialog.result();
     }

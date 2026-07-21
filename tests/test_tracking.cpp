@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <stdexcept>
 #include <vector>
 
 namespace
@@ -136,6 +137,26 @@ namespace
         assert(tracks.size() == 1);
         redactly::postProcessTracks(tracks, {}, 2);
         assert(tracks.size() == 1);
+    }
+
+    void testHighConfidenceSingletonIsKept()
+    {
+        std::vector<redactly::FaceDetections> sequence(6);
+        sequence[5].push_back(det(50.0F, 100.0F));
+
+        auto tracks = redactly::buildBidirectionalTracks(
+            sequence, {}, 0.5F, redactly::SceneCuts({5}));
+        assert(tracks.size() == 1);
+        redactly::postProcessTracks(tracks, {}, 6, redactly::SceneCuts({5}));
+        assert(tracks.size() == 1);
+        assert(tracks[0].boxAtFrame(5) != nullptr);
+
+        auto strictTracks = redactly::buildBidirectionalTracks(
+            sequence, {}, 0.5F, redactly::SceneCuts({5}));
+        redactly::TrackPostProcessConfig strict;
+        strict.shortTrackMinStrong = 2;
+        redactly::postProcessTracks(strictTracks, strict, 6, redactly::SceneCuts({5}));
+        assert(strictTracks.empty());
     }
 
     void testMovingCoastingSurvivesLongerThanStatic()
@@ -495,6 +516,80 @@ namespace
         const float maxArea = 50.0F * 50.0F * 1.25F;
         assert(track.boxes[1].box.area() <= maxArea + 0.001F);
     }
+
+    void testTrackingSafetyLimitsRejectExcessiveData()
+    {
+        std::vector<redactly::FaceDetections> crowded(1);
+        for (int index = 0; index < 257; ++index)
+        {
+            crowded[0].push_back(det(static_cast<float>(index), 100.0F));
+        }
+        bool crowdedRejected = false;
+        try
+        {
+            (void) redactly::buildTracks(crowded);
+        }
+        catch (const std::length_error &)
+        {
+            crowdedRejected = true;
+        }
+        assert(crowdedRejected);
+
+        constexpr int frameCount = 4100;
+        std::vector<redactly::FaceDetections> singletons(frameCount);
+        std::vector<int> cuts;
+        cuts.reserve(frameCount);
+        for (int frame = 0; frame < frameCount; ++frame)
+        {
+            singletons[frame].push_back(det(50.0F, 100.0F));
+            cuts.push_back(frame);
+        }
+        bool trackCountRejected = false;
+        try
+        {
+            (void) redactly::buildTracks(singletons, {}, redactly::SceneCuts(cuts));
+        }
+        catch (const std::length_error &)
+        {
+            trackCountRejected = true;
+        }
+        assert(trackCountRejected);
+    }
+
+    void testTrackingCancellationGuard()
+    {
+        const auto sequence = movingObjectSequence(120, 50.0F, 2.0F);
+        int checks = 0;
+        bool buildCancelled = false;
+        try
+        {
+            (void) redactly::buildBidirectionalTracks(
+                sequence, {}, 0.5F, {}, [&checks]
+                {
+                    return ++checks < 5;
+                });
+        }
+        catch (const redactly::TrackingCancelled &)
+        {
+            buildCancelled = true;
+        }
+        assert(buildCancelled);
+
+        auto tracks = redactly::buildBidirectionalTracks(sequence);
+        bool postProcessCancelled = false;
+        try
+        {
+            redactly::postProcessTracks(tracks, {}, 120, {}, []
+            {
+                return false;
+            });
+        }
+        catch (const redactly::TrackingCancelled &)
+        {
+            postProcessCancelled = true;
+        }
+        assert(postProcessCancelled);
+    }
 }
 
 int main()
@@ -506,6 +601,7 @@ int main()
     testLowConfidenceCoastingExpires();
     testTracksWithFewStrongDetectionsAreDropped();
     testShortStrongBurstIsKept();
+    testHighConfidenceSingletonIsKept();
     testMovingCoastingSurvivesLongerThanStatic();
     testCrossingObjectsKeepTwoTracks();
     testBidirectionalMergeProducesSingleTrack();
@@ -527,6 +623,8 @@ int main()
     testGradualGrowthKeepsOneTrack();
     testInterpolationSkipsAcrossSizeJump();
     testSmoothingDoesNotInflateInterpolatedBoxes();
+    testTrackingSafetyLimitsRejectExcessiveData();
+    testTrackingCancellationGuard();
     std::puts("tracking tests passed");
     return 0;
 }

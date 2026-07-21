@@ -28,16 +28,17 @@ env:
 jobs:
   macos:
     name: Build macOS DMG
-    runs-on: macos-26
+    runs-on: macos-15
     env:
       CMAKE_PREFIX_PATH: /opt/homebrew
       PKG_CONFIG_PATH: /opt/homebrew/lib/pkgconfig
       HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Install dependencies
-        run: brew install cmake qt opencv onnxruntime spdlog exiv2
+        run: brew install cmake qt opencv onnxruntime spdlog exiv2 ffmpeg
 
       - name: Import signing certificate
         uses: apple-actions/import-codesign-certs@fe74d46e82474f87e1ba79832ad28a4013d0e33a # v6

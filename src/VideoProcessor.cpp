@@ -1,6 +1,12 @@
 #include "redactly/VideoProcessor.hpp"
 
+#include "redactly/ImageIo.hpp"
+#include "redactly/MemoryBudget.hpp"
+#include "redactly/PathUtil.hpp"
+
 #include <QCoreApplication>
+#include <QFile>
+#include <QTemporaryDir>
 
 #include <spdlog/spdlog.h>
 
@@ -9,14 +15,131 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <mutex>
+#include <optional>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <sys/stat.h>
+#endif
 
 namespace redactly
 {
     namespace
     {
+        constexpr std::uint64_t kVideoMaskingMinimumBudget = 512ULL * 1024ULL * 1024ULL;
+        constexpr std::uint64_t kVideoMaskingMaximumBudget = 1ULL * 1024ULL * 1024ULL * 1024ULL;
+        constexpr qint64 kVideoMaskingFixedHeadroom = 48LL * 1024 * 1024;
+        constexpr std::uint64_t kVideoDetectionMinimumBudget = 128ULL * 1024ULL * 1024ULL;
+        constexpr std::uint64_t kVideoDetectionMaximumBudget = 512ULL * 1024ULL * 1024ULL;
+        constexpr qint64 kMaxDetectionReserveFrames = 100'000;
+        constexpr std::size_t kMaxVideoDetectionsPerFrame = 256;
+        constexpr std::size_t kMaxVideoTrackedRegions = 8'000'000;
+        constexpr int kMaxMaskWorkers = 8;
+        constexpr int kMaxMaskBatchFrames = 16;
+
+        qint64 videoMaskingMemoryBudget()
+        {
+            return static_cast<qint64>(adaptiveMemoryBudget(
+                kVideoMaskingMinimumBudget, kVideoMaskingMaximumBudget, 16));
+        }
+
+        std::uint64_t videoDetectionMemoryBudget()
+        {
+            return adaptiveMemoryBudget(kVideoDetectionMinimumBudget,
+                                        kVideoDetectionMaximumBudget, 32);
+        }
+
+        struct VideoSourceSnapshot
+        {
+            std::uint64_t device = 0;
+            std::uint64_t file = 0;
+            std::uint64_t size = 0;
+            std::int64_t modifiedSeconds = 0;
+            std::int64_t modifiedNanoseconds = 0;
+            std::int64_t changedSeconds = 0;
+            std::int64_t changedNanoseconds = 0;
+
+            bool operator==(const VideoSourceSnapshot &) const = default;
+        };
+
+        std::optional<VideoSourceSnapshot> captureVideoSourceSnapshot(const QString &path)
+        {
+#if defined(_WIN32)
+            const std::wstring nativePath = path.toStdWString();
+            const HANDLE handle = CreateFileW(nativePath.c_str(), FILE_READ_ATTRIBUTES,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE |
+                                                      FILE_SHARE_DELETE,
+                                              nullptr, OPEN_EXISTING,
+                                              FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (handle == INVALID_HANDLE_VALUE)
+            {
+                return std::nullopt;
+            }
+
+            BY_HANDLE_FILE_INFORMATION info{};
+            FILE_BASIC_INFO basic{};
+            const bool valid = GetFileInformationByHandle(handle, &info) != 0
+                               && GetFileInformationByHandleEx(
+                                      handle, FileBasicInfo, &basic, sizeof(basic)) != 0
+                               && (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+            CloseHandle(handle);
+            if (!valid)
+            {
+                return std::nullopt;
+            }
+
+            VideoSourceSnapshot snapshot;
+            snapshot.device = info.dwVolumeSerialNumber;
+            snapshot.file = (static_cast<std::uint64_t>(info.nFileIndexHigh) << 32U)
+                            | info.nFileIndexLow;
+            snapshot.size = (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32U)
+                            | info.nFileSizeLow;
+            snapshot.modifiedSeconds = static_cast<std::int64_t>(
+                    (static_cast<std::uint64_t>(info.ftLastWriteTime.dwHighDateTime) << 32U)
+                    | info.ftLastWriteTime.dwLowDateTime);
+            snapshot.changedSeconds = basic.ChangeTime.QuadPart;
+            return snapshot;
+#else
+            const QByteArray nativePath = QFile::encodeName(path);
+            struct stat info{};
+            if (::stat(nativePath.constData(), &info) != 0 || !S_ISREG(info.st_mode)
+                || info.st_size < 0)
+            {
+                return std::nullopt;
+            }
+
+            VideoSourceSnapshot snapshot;
+            snapshot.device = static_cast<std::uint64_t>(info.st_dev);
+            snapshot.file = static_cast<std::uint64_t>(info.st_ino);
+            snapshot.size = static_cast<std::uint64_t>(info.st_size);
+#if defined(__APPLE__)
+            snapshot.modifiedSeconds = info.st_mtimespec.tv_sec;
+            snapshot.modifiedNanoseconds = info.st_mtimespec.tv_nsec;
+            snapshot.changedSeconds = info.st_ctimespec.tv_sec;
+            snapshot.changedNanoseconds = info.st_ctimespec.tv_nsec;
+#else
+            snapshot.modifiedSeconds = info.st_mtim.tv_sec;
+            snapshot.modifiedNanoseconds = info.st_mtim.tv_nsec;
+            snapshot.changedSeconds = info.st_ctim.tv_sec;
+            snapshot.changedNanoseconds = info.st_ctim.tv_nsec;
+#endif
+            return snapshot;
+#endif
+        }
+
         class StageTimer
         {
         public:
@@ -62,6 +185,92 @@ namespace redactly
             int previous_;
         };
 
+        class MaskWorkerPool
+        {
+        public:
+            explicit MaskWorkerPool(int workerCount)
+            {
+                const int helpers = std::max(0, workerCount - 1);
+                workers_.reserve(static_cast<std::size_t>(helpers));
+                for (int index = 0; index < helpers; ++index)
+                {
+                    workers_.emplace_back([this]
+                    {
+                        workerLoop();
+                    });
+                }
+            }
+
+            ~MaskWorkerPool()
+            {
+                {
+                    const std::scoped_lock lock(mutex_);
+                    stopping_ = true;
+                }
+                workAvailable_.notify_all();
+                workers_.clear();
+            }
+
+            MaskWorkerPool(const MaskWorkerPool &) = delete;
+            MaskWorkerPool &operator=(const MaskWorkerPool &) = delete;
+
+            void run(std::function<void()> task)
+            {
+                {
+                    const std::scoped_lock lock(mutex_);
+                    task_ = task;
+                    pending_ = workers_.size();
+                    ++generation_;
+                }
+                workAvailable_.notify_all();
+                task();
+
+                std::unique_lock lock(mutex_);
+                workComplete_.wait(lock, [this]
+                {
+                    return pending_ == 0;
+                });
+                task_ = {};
+            }
+
+        private:
+            void workerLoop()
+            {
+                std::uint64_t observedGeneration = 0;
+                for (;;)
+                {
+                    std::unique_lock lock(mutex_);
+                    workAvailable_.wait(lock, [this, &observedGeneration]
+                    {
+                        return stopping_ || generation_ != observedGeneration;
+                    });
+                    if (stopping_)
+                    {
+                        return;
+                    }
+                    observedGeneration = generation_;
+                    const auto *task = &task_;
+                    lock.unlock();
+                    (*task)();
+                    lock.lock();
+                    --pending_;
+                    if (pending_ == 0)
+                    {
+                        workComplete_.notify_one();
+                    }
+                }
+            }
+
+            std::mutex mutex_;
+            std::condition_variable workAvailable_;
+            std::condition_variable workComplete_;
+            std::vector<std::jthread> workers_;
+            std::function<void()> task_;
+            std::size_t pending_ = 0;
+            std::uint64_t generation_ = 0;
+            bool stopping_ = false;
+        };
+
         QString trVideoProcessor(const char *text)
         {
             return QCoreApplication::translate("redactly::VideoProcessor", text);
@@ -93,6 +302,36 @@ namespace redactly
         return std::max(0.35F, scoreThreshold - 0.1F);
     }
 
+    VideoMaskingPlan videoMaskingPlan(const int width, const int height,
+                                      const unsigned int hardwareThreads,
+                                      const qint64 memoryBudget)
+    {
+        VideoMaskingPlan plan;
+        if (width <= 0 || height <= 0)
+        {
+            return plan;
+        }
+
+        const qint64 pixels = static_cast<qint64>(width) * height;
+        plan.frameBytes = pixels > std::numeric_limits<qint64>::max() / 8
+                            ? std::numeric_limits<qint64>::max()
+                            : pixels * 8;
+
+        const unsigned int availableThreads = hardwareThreads == 0 ? 1 : hardwareThreads;
+        const int requestedWorkers = static_cast<int>(
+            std::min<unsigned int>(availableThreads, kMaxMaskWorkers));
+        const qint64 budget = memoryBudget > 0 ? memoryBudget
+                                              : videoMaskingMemoryBudget();
+        const qint64 framesWithinBudget = std::clamp<qint64>(
+            (budget - kVideoMaskingFixedHeadroom) /
+                std::max<qint64>(1, plan.frameBytes),
+            1, kMaxMaskBatchFrames);
+        plan.batchFrames = std::min(
+            requestedWorkers * 2, static_cast<int>(framesWithinBudget));
+        plan.workerCount = std::min(requestedWorkers, plan.batchFrames);
+        return plan;
+    }
+
     VideoProcessResult processVideo(const FfmpegTools &tools,
                                     const QString &sourcePath,
                                     const QString &destinationPath,
@@ -104,11 +343,102 @@ namespace redactly
                                     const VideoTrackReviewFn &review)
     {
         VideoProcessResult result;
+        (void) info;
+
+        const auto sourceSnapshot = captureVideoSourceSnapshot(sourcePath);
+        if (!sourceSnapshot)
+        {
+            result.error = trVideoProcessor("Could not inspect the source video.");
+            return result;
+        }
+        const auto originalIsUnchanged = [&]()
+        {
+            const auto current = captureVideoSourceSnapshot(sourcePath);
+            return current && *current == *sourceSnapshot;
+        };
+        const auto rejectChangedSource = [&]()
+        {
+            result.error = trVideoProcessor(
+                "The source video changed during processing. Start the operation again.");
+            spdlog::warn("Video source changed while processing: {}",
+                         sourcePath.toStdString());
+        };
+
+        QTemporaryDir sourceStaging;
+        if (!sourceStaging.isValid())
+        {
+            result.error = trVideoProcessor(
+                "Could not create a private snapshot of the source video.");
+            return result;
+        }
+        std::error_code snapshotError;
+        const auto snapshotRoot = std::filesystem::canonical(
+            pathFromQString(sourceStaging.path()), snapshotError);
+        std::filesystem::path snapshotRelative = "source";
+        snapshotRelative += pathFromQString(sourcePath).extension();
+        const auto canCopySource = [&]()
+        {
+            return !cancelled.load(std::memory_order_acquire) && originalIsUnchanged();
+        };
+        if (snapshotError || !copyFileNoReplaceAtRoot(
+                pathFromQString(sourcePath), snapshotRoot, snapshotRelative, canCopySource))
+        {
+            if (cancelled.load(std::memory_order_acquire))
+            {
+                result.status = VideoProcessStatus::Cancelled;
+            }
+            else if (!originalIsUnchanged())
+            {
+                rejectChangedSource();
+            }
+            else
+            {
+                result.error = trVideoProcessor(
+                    "Could not create a private snapshot of the source video.");
+            }
+            return result;
+        }
+
+        const QString processingSource = pathToQString(snapshotRoot / snapshotRelative);
+        const auto processingSnapshot = captureVideoSourceSnapshot(processingSource);
+        if (!processingSnapshot)
+        {
+            result.error = trVideoProcessor(
+                "Could not create a private snapshot of the source video.");
+            return result;
+        }
+        const auto sourceIsUnchanged = [&]()
+        {
+            const auto current = captureVideoSourceSnapshot(processingSource);
+            return current && *current == *processingSnapshot;
+        };
+        const auto canContinue = [&]()
+        {
+            return !cancelled.load(std::memory_order_acquire) && sourceIsUnchanged();
+        };
+
+        QString probeError;
+        const auto inspectedInfo = probeVideo(tools, processingSource, &probeError);
+        if (!inspectedInfo)
+        {
+            result.error = probeError;
+            return result;
+        }
+        const VideoInfo &activeInfo = *inspectedInfo;
+        const QString unsupported = videoUnsupportedReason(activeInfo);
+        if (!unsupported.isEmpty())
+        {
+            result.error = unsupported;
+            return result;
+        }
 
         std::vector<FaceDetections> frameDetections;
-        if (info.estimatedFrameCount > 0)
+        std::uint64_t detectionMemory = 0;
+        const std::uint64_t detectionBudget = videoDetectionMemoryBudget();
+        if (activeInfo.estimatedFrameCount > 0)
         {
-            frameDetections.reserve(static_cast<std::size_t>(info.estimatedFrameCount));
+            frameDetections.reserve(static_cast<std::size_t>(
+                std::min(activeInfo.estimatedFrameCount, kMaxDetectionReserveFrames)));
         }
 
         float scaleX = 1.0F;
@@ -116,13 +446,13 @@ namespace redactly
         SceneCutDetector cutDetector;
         {
             VideoFrameReader reader;
-            if (!reader.open(tools, sourcePath, info, options.analysisLongEdge))
+            if (!reader.open(tools, processingSource, activeInfo, options.analysisLongEdge))
             {
                 result.error = reader.errorString();
                 return result;
             }
-            scaleX = static_cast<float>(info.displayWidth()) / reader.frameWidth();
-            scaleY = static_cast<float>(info.displayHeight()) / reader.frameHeight();
+            scaleX = static_cast<float>(activeInfo.displayWidth()) / reader.frameWidth();
+            scaleY = static_cast<float>(activeInfo.displayHeight()) / reader.frameHeight();
 
             StageTimer readTimer;
             StageTimer detectTimer;
@@ -130,7 +460,7 @@ namespace redactly
             for (;;)
             {
                 const auto readMark = StageTimer::now();
-                const bool got = reader.readFrame(frame);
+                const bool got = reader.readFrame(frame, canContinue);
                 readTimer.add(readMark);
                 if (!got)
                 {
@@ -143,12 +473,47 @@ namespace redactly
                 }
                 const auto detectMark = StageTimer::now();
                 cutDetector.push(frame);
-                frameDetections.push_back(detect ? detect(frame) : FaceDetections{});
+                if (static_cast<qint64>(frameDetections.size()) >= kMaxVideoFrameCount)
+                {
+                    result.error = trVideoProcessor(
+                        "The video frame count exceeds the safety limit.");
+                    return result;
+                }
+                FaceDetections detections = detect ? detect(frame) : FaceDetections{};
+                std::erase_if(detections, [](const FaceDetection &detection)
+                {
+                    return !isValidFaceDetection(detection);
+                });
+                if (detections.size() > kMaxVideoDetectionsPerFrame)
+                {
+                    result.error = trVideoProcessor(
+                        "Video detection data exceeds the safety limit.");
+                    return result;
+                }
+                const auto capacity = static_cast<std::uint64_t>(detections.capacity());
+                const auto maximum = std::numeric_limits<std::uint64_t>::max();
+                const auto elementBytes = sizeof(FaceDetection);
+                if (capacity > (maximum - sizeof(FaceDetections)) / elementBytes)
+                {
+                    result.error = trVideoProcessor(
+                        "Video detection data exceeds the safety limit.");
+                    return result;
+                }
+                const auto additional = sizeof(FaceDetections) + capacity * elementBytes;
+                if (additional > detectionBudget ||
+                    detectionMemory > detectionBudget - additional)
+                {
+                    result.error = trVideoProcessor(
+                        "Video detection data exceeds the safety limit.");
+                    return result;
+                }
+                detectionMemory += additional;
+                frameDetections.push_back(std::move(detections));
                 detectTimer.add(detectMark);
                 if (progress)
                 {
                     progress(1, static_cast<qint64>(frameDetections.size()),
-                             std::max<qint64>(info.estimatedFrameCount,
+                             std::max<qint64>(activeInfo.estimatedFrameCount,
                                               static_cast<qint64>(frameDetections.size())));
                 }
             }
@@ -159,6 +524,17 @@ namespace redactly
             }
             spdlog::info("Pass 1 timing: decode {} ms, detect+scene {} ms ({} frames)",
                          readTimer.ms(), detectTimer.ms(), frameDetections.size());
+        }
+
+        if (cancelled.load(std::memory_order_acquire))
+        {
+            result.status = VideoProcessStatus::Cancelled;
+            return result;
+        }
+        if (!sourceIsUnchanged())
+        {
+            rejectChangedSource();
+            return result;
         }
 
         const auto frameCount = static_cast<qint64>(frameDetections.size());
@@ -174,15 +550,37 @@ namespace redactly
 
         TrackerConfig trackerConfig = options.tracker;
         trackerConfig.highScoreThreshold = videoStrongScoreThreshold(options.scoreThreshold);
-        auto tracks = buildBidirectionalTracks(frameDetections, trackerConfig, 0.5F, sceneCuts);
-        TrackPostProcessConfig postProcess = options.postProcess;
-        postProcess.strongScoreThreshold = trackerConfig.highScoreThreshold;
-        postProcessTracks(tracks, postProcess, static_cast<int>(frameCount), sceneCuts);
+        std::vector<Track> tracks;
+        const TrackingContinueGuard trackingContinue = [&]
+        {
+            return !cancelled.load(std::memory_order_acquire);
+        };
+        try
+        {
+            tracks = buildBidirectionalTracks(frameDetections, trackerConfig, 0.5F,
+                                               sceneCuts, trackingContinue);
+            TrackPostProcessConfig postProcess = options.postProcess;
+            postProcess.strongScoreThreshold = trackerConfig.highScoreThreshold;
+            postProcessTracks(tracks, postProcess, static_cast<int>(frameCount), sceneCuts,
+                              trackingContinue);
+        }
+        catch (const TrackingCancelled &)
+        {
+            result.status = VideoProcessStatus::Cancelled;
+            return result;
+        }
+        catch (const std::exception &)
+        {
+            result.error = trVideoProcessor("Video tracking data exceeds the safety limit.");
+            return result;
+        }
         scaleTracksToNative(tracks, scaleX, scaleY);
-        frameDetections.clear();
-        frameDetections.shrink_to_fit();
+        for (auto &detections: frameDetections)
+        {
+            detections.clear();
+        }
 
-        if (review && !review(tracks, frameCount))
+        if (review && !review(tracks, frameCount, processingSource, activeInfo))
         {
             result.status = VideoProcessStatus::Cancelled;
             return result;
@@ -192,19 +590,76 @@ namespace redactly
             result.status = VideoProcessStatus::Cancelled;
             return result;
         }
+        if (!sourceIsUnchanged())
+        {
+            rejectChangedSource();
+            return result;
+        }
         result.trackCount = static_cast<int>(tracks.size());
 
+        std::size_t indexedRegions = 0;
+        try
+        {
+            for (auto &track: tracks)
+            {
+                for (const auto &tracked: track.boxes)
+                {
+                    if ((indexedRegions & 0x3FFFU) == 0U &&
+                        cancelled.load(std::memory_order_acquire))
+                    {
+                        result.status = VideoProcessStatus::Cancelled;
+                        return result;
+                    }
+                    if (tracked.frame < 0 || tracked.frame >= frameCount ||
+                        indexedRegions >= kMaxVideoTrackedRegions ||
+                        !isValidFaceDetection({tracked.box, 1.0F}))
+                    {
+                        throw std::length_error("Invalid video tracking data.");
+                    }
+                    frameDetections[static_cast<std::size_t>(tracked.frame)].push_back(
+                        {tracked.box, 1.0F});
+                    ++indexedRegions;
+                }
+                std::vector<TrackedBox>().swap(track.boxes);
+            }
+        }
+        catch (const std::exception &)
+        {
+            result.error = trVideoProcessor("Video tracking data exceeds the safety limit.");
+            return result;
+        }
+        tracks.clear();
+        tracks.shrink_to_fit();
+        const bool hasTrackedRegions = indexedRegions > 0;
+        if (!hasTrackedRegions)
+        {
+            frameDetections.clear();
+            frameDetections.shrink_to_fit();
+        }
+
         VideoFrameReader reader;
-        if (!reader.open(tools, sourcePath, info))
+        if (!reader.open(tools, processingSource, activeInfo))
         {
             result.error = reader.errorString();
             return result;
         }
+        if (!sourceIsUnchanged())
+        {
+            rejectChangedSource();
+            return result;
+        }
         VideoFrameWriter writer;
-        if (!writer.open(tools, destinationPath, sourcePath, info, options.crf,
-                         options.hardwareEncoder, options.codec))
+        if (!writer.open(tools, destinationPath, processingSource, activeInfo, options.crf,
+                         options.hardwareEncoder, options.codec,
+                         options.outputRootPath, options.outputRelativePath))
         {
             result.error = writer.errorString();
+            return result;
+        }
+        if (!sourceIsUnchanged())
+        {
+            rejectChangedSource();
+            writer.abort();
             return result;
         }
         result.encoderName = writer.encoderName();
@@ -212,10 +667,15 @@ namespace redactly
         StageTimer readTimer;
         StageTimer maskTimer;
         StageTimer writeTimer;
-        const int workerCount =
-                std::max(1, static_cast<int>(std::thread::hardware_concurrency()));
-        const int batchCap = workerCount * 4;
+        const VideoMaskingPlan maskingPlan = videoMaskingPlan(
+            reader.frameWidth(), reader.frameHeight(), std::thread::hardware_concurrency());
+        const int workerCount = maskingPlan.workerCount;
+        const int batchCap = maskingPlan.batchFrames;
+        spdlog::info("Video masking plan: {} worker(s), {} frame batch, {} MiB raw-frame cap",
+                     workerCount, batchCap,
+                     (maskingPlan.frameBytes * batchCap) / (1024 * 1024));
         const ScopedCvThreads maskThreads(1);
+        MaskWorkerPool maskPool(hasTrackedRegions ? workerCount : 1);
         qint64 frameIndex = 0;
         std::vector<cv::Mat> batch;
         batch.reserve(static_cast<std::size_t>(batchCap));
@@ -225,8 +685,12 @@ namespace redactly
             const auto readMark = StageTimer::now();
             for (int slot = 0; slot < batchCap; ++slot)
             {
+                if (cancelled.load(std::memory_order_acquire))
+                {
+                    break;
+                }
                 cv::Mat frame;
-                if (!reader.readFrame(frame))
+                if (!reader.readFrame(frame, canContinue))
                 {
                     break;
                 }
@@ -243,27 +707,34 @@ namespace redactly
                 result.status = VideoProcessStatus::Cancelled;
                 return result;
             }
+            if (frameIndex + static_cast<qint64>(batch.size()) > frameCount)
+            {
+                result.error = trVideoProcessor(
+                    "The source video changed during processing (frame count differs between passes).");
+                writer.abort();
+                return result;
+            }
 
             const auto maskMark = StageTimer::now();
             const qint64 baseIndex = frameIndex;
             std::atomic<int> nextSlot{0};
             std::atomic<bool> maskFailed{false};
+            std::atomic<bool> maskCancelled{false};
             const auto maskWorker = [&]()
             {
                 int slot;
                 while ((slot = nextSlot.fetch_add(1, std::memory_order_relaxed)) <
                        static_cast<int>(batch.size()))
                 {
+                    if (cancelled.load(std::memory_order_acquire))
+                    {
+                        maskCancelled.store(true, std::memory_order_relaxed);
+                        return;
+                    }
                     try
                     {
-                        const auto regions = trackRegionsForFrame(
-                                tracks, static_cast<int>(baseIndex + slot));
-                        FaceDetections toRedact;
-                        toRedact.reserve(regions.size());
-                        for (const auto &region: regions)
-                        {
-                            toRedact.push_back({region, 1.0F});
-                        }
+                        const auto &toRedact = frameDetections[
+                            static_cast<std::size_t>(baseIndex + slot)];
                         applyAnonymization(batch[static_cast<std::size_t>(slot)], toRedact,
                                            options.method, options.mosaicBlockSize,
                                            options.paddingRatio, options.shape,
@@ -275,18 +746,9 @@ namespace redactly
                     }
                 }
             };
-            std::vector<std::thread> pool;
-            const int helpers =
-                    std::min(workerCount, static_cast<int>(batch.size())) - 1;
-            pool.reserve(static_cast<std::size_t>(std::max(0, helpers)));
-            for (int w = 0; w < helpers; ++w)
+            if (hasTrackedRegions)
             {
-                pool.emplace_back(maskWorker);
-            }
-            maskWorker();
-            for (auto &worker: pool)
-            {
-                worker.join();
+                maskPool.run(maskWorker);
             }
             maskTimer.add(maskMark);
             if (maskFailed.load(std::memory_order_relaxed))
@@ -295,15 +757,39 @@ namespace redactly
                 writer.abort();
                 return result;
             }
+            if (maskCancelled.load(std::memory_order_relaxed)
+                || cancelled.load(std::memory_order_acquire))
+            {
+                writer.abort();
+                result.status = VideoProcessStatus::Cancelled;
+                return result;
+            }
 
             const auto writeMark = StageTimer::now();
             for (auto &frame: batch)
             {
-                if (!writer.writeFrame(frame))
+                if (cancelled.load(std::memory_order_acquire))
                 {
-                    result.error = writer.errorString();
+                    writer.abort();
+                    result.status = VideoProcessStatus::Cancelled;
+                    return result;
+                }
+                if (!writer.writeFrame(frame, canContinue))
+                {
                     writer.abort();
                     writeTimer.add(writeMark);
+                    if (cancelled.load(std::memory_order_acquire))
+                    {
+                        result.status = VideoProcessStatus::Cancelled;
+                    }
+                    else if (!sourceIsUnchanged())
+                    {
+                        rejectChangedSource();
+                    }
+                    else
+                    {
+                        result.error = writer.errorString();
+                    }
                     return result;
                 }
                 ++frameIndex;
@@ -313,6 +799,18 @@ namespace redactly
                 }
             }
             writeTimer.add(writeMark);
+        }
+        if (cancelled.load(std::memory_order_acquire))
+        {
+            writer.abort();
+            result.status = VideoProcessStatus::Cancelled;
+            return result;
+        }
+        if (!sourceIsUnchanged())
+        {
+            rejectChangedSource();
+            writer.abort();
+            return result;
         }
         if (!reader.errorString().isEmpty())
         {
@@ -326,13 +824,41 @@ namespace redactly
             writer.abort();
             return result;
         }
+        if (frameIndex != frameCount)
+        {
+            result.error = trVideoProcessor(
+                "The source video changed during processing (frame count differs between passes).");
+            writer.abort();
+            return result;
+        }
+        if (!sourceIsUnchanged())
+        {
+            rejectChangedSource();
+            writer.abort();
+            return result;
+        }
+        if (cancelled.load(std::memory_order_acquire))
+        {
+            writer.abort();
+            result.status = VideoProcessStatus::Cancelled;
+            return result;
+        }
 
         StageTimer finishTimer;
         const auto finishMark = StageTimer::now();
-        const bool finished = writer.finish();
+        const auto canPublish = [&]()
+        {
+            return !cancelled.load(std::memory_order_acquire) && sourceIsUnchanged();
+        };
+        const bool finished = writer.finish(canPublish);
         finishTimer.add(finishMark);
         if (!finished)
         {
+            if (cancelled.load(std::memory_order_acquire))
+            {
+                result.status = VideoProcessStatus::Cancelled;
+                return result;
+            }
             result.error = writer.errorString();
             return result;
         }

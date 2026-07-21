@@ -55,8 +55,11 @@ namespace redactly
                                      item.sourcePath, it->second, destination});
             }
 
-            std::error_code existsError;
-            if (std::filesystem::exists(destination, existsError) && !existsError)
+            std::error_code statusError;
+            const auto destinationStatus = std::filesystem::symlink_status(destination,
+                                                                            statusError);
+            if (!statusError && (std::filesystem::exists(destinationStatus) ||
+                                 std::filesystem::is_symlink(destinationStatus)))
             {
                 conflicts.push_back({OutputConflict::Kind::ExistingDestination,
                                      item.sourcePath, {}, destination});

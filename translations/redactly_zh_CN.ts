@@ -241,14 +241,18 @@ Continue?</source>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="686"/>
-        <source>Preserve original metadata (EXIF, location, color profile)</source>
-        <translation>保留原始元数据（EXIF、位置、色彩配置文件）</translation>
+        <source>Preserve selected EXIF metadata</source>
+        <translation>保留选定的 EXIF 元数据</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="690"/>
         <source>Off (default): output carries no metadata — GPS, camera, and timestamps are removed.
-On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preserves format and bit depth at maximum quality. Best for archiving high-resolution photos.</source>
-        <translation>关（默认）：输出不含任何元数据，GPS、相机和时间戳将被移除。\n开：从原文件复制 EXIF/IPTC/XMP 和 ICC 色彩配置文件，并以最高质量保留格式和位深度。适合存档高分辨率照片。</translation>
+On: copies selected EXIF fields such as camera, timestamps, and location. Embedded previews, IPTC, XMP, comments, and color profiles are removed. Format and bit depth are preserved at maximum quality.</source>
+        <translation>关（默认）：输出不含任何元数据，GPS、相机和时间戳将被移除。\n开：仅复制相机、时间戳和位置等选定的 EXIF 字段。嵌入式预览、IPTC、XMP、注释和色彩配置文件将被移除，并以最高质量保留格式和位深度。</translation>
+    </message>
+    <message>
+        <source>Metadata preservation is unavailable in this build. Output metadata will be removed.</source>
+        <translation>此构建不支持保留元数据。输出元数据将被移除。</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="699"/>
@@ -739,9 +743,21 @@ Check these results before sharing them.</source>
         <translation>已跳过（%1）：%2</translation>
     </message>
     <message>
+        <source>Skipped (animated or multi-page images are not supported): %1</source>
+        <translation>已跳过（不支持动画或多页图像）：%1</translation>
+    </message>
+    <message>
         <location filename="../src/ProcessorWorker.cpp" line="427"/>
         <source>Skipped unreadable image: %1</source>
         <translation>已跳过无法读取的图像：%1</translation>
+    </message>
+    <message>
+        <source>Source file changed during processing: %1</source>
+        <translation>源文件在处理过程中发生了更改：%1</translation>
+    </message>
+    <message>
+        <source>Failed to create a private source snapshot: %1</source>
+        <translation>无法创建源文件的私有快照：%1</translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="443"/>
@@ -1161,6 +1177,10 @@ Continue?</source>
         <translation>无法启动 FFmpeg 进行编码。</translation>
     </message>
     <message>
+        <source>Could not create a temporary directory for encoding.</source>
+        <translation>无法创建用于编码的临时目录。</translation>
+    </message>
+    <message>
         <source>Encoding failed: %1</source>
         <translation>编码失败：%1</translation>
     </message>
@@ -1179,6 +1199,26 @@ Continue?</source>
     <message>
         <source>The output file already exists.</source>
         <translation>输出文件已存在。</translation>
+    </message>
+    <message>
+        <source>the video resolution exceeds the safety limit</source>
+        <translation>视频分辨率超过安全限制</translation>
+    </message>
+    <message>
+        <source>the video frame rate exceeds the safety limit</source>
+        <translation>视频帧率超过安全限制</translation>
+    </message>
+    <message>
+        <source>the video duration exceeds the safety limit</source>
+        <translation>视频时长超过安全限制</translation>
+    </message>
+    <message>
+        <source>the video frame count exceeds the safety limit</source>
+        <translation>视频帧数超过安全限制</translation>
+    </message>
+    <message>
+        <source>The source video changed during processing.</source>
+        <translation>源视频在处理过程中发生了更改。</translation>
     </message>
 </context>
 <context>
@@ -1236,6 +1276,34 @@ Continue?</source>
     <message>
         <source>No frames could be decoded.</source>
         <translation>无法解码任何帧。</translation>
+    </message>
+    <message>
+        <source>Could not inspect the source video.</source>
+        <translation>无法检查源视频。</translation>
+    </message>
+    <message>
+        <source>Could not create a private snapshot of the source video.</source>
+        <translation>无法创建源视频的私有快照。</translation>
+    </message>
+    <message>
+        <source>The source video changed during processing. Start the operation again.</source>
+        <translation>源视频在处理过程中发生了更改。请重新开始操作。</translation>
+    </message>
+    <message>
+        <source>The video frame count exceeds the safety limit.</source>
+        <translation>视频帧数超过安全限制。</translation>
+    </message>
+    <message>
+        <source>Video detection data exceeds the safety limit.</source>
+        <translation>视频检测数据超过安全限制。</translation>
+    </message>
+    <message>
+        <source>Video tracking data exceeds the safety limit.</source>
+        <translation>视频跟踪数据超过安全限制。</translation>
+    </message>
+    <message>
+        <source>The source video changed during processing (frame count differs between passes).</source>
+        <translation>源视频在处理过程中发生了更改（两次处理的帧数不同）。</translation>
     </message>
 </context>
 </TS>

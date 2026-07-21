@@ -7,6 +7,8 @@
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/core.hpp>
 
+#include <QByteArray>
+
 #include <string>
 #include <vector>
 
@@ -15,7 +17,9 @@ namespace redactly
     class PlateDetector final : public Detector
     {
     public:
-        explicit PlateDetector(const std::string &modelPath, bool enableAcceleration = false);
+        explicit PlateDetector(const std::string &modelPath,
+                               bool enableAcceleration = false,
+                               const QByteArray &expectedSha256 = {});
 
         FaceDetections detect(const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
 

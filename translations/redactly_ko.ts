@@ -258,15 +258,19 @@ Continue?</source>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="686"/>
-        <source>Preserve original metadata (EXIF, location, color profile)</source>
-        <translation>원본 메타데이터 유지 (EXIF·위치·색 프로파일)</translation>
+        <source>Preserve selected EXIF metadata</source>
+        <translation>선별된 EXIF 메타데이터 유지</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="690"/>
         <source>Off (default): output carries no metadata — GPS, camera, and timestamps are removed.
-On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preserves format and bit depth at maximum quality. Best for archiving high-resolution photos.</source>
+On: copies selected EXIF fields such as camera, timestamps, and location. Embedded previews, IPTC, XMP, comments, and color profiles are removed. Format and bit depth are preserved at maximum quality.</source>
         <translation>꺼짐(기본값): 출력에 메타데이터가 남지 않습니다 — GPS·카메라·촬영 시각 제거.
-켜짐: 원본의 EXIF/IPTC/XMP와 ICC 색 프로파일을 복사하고, 포맷과 비트 심도를 최대 품질로 보존합니다. 고해상도 사진 보관에 적합합니다.</translation>
+켜짐: 카메라·촬영 시각·위치 등 선별된 EXIF 필드만 복사합니다. 내장 미리보기, IPTC, XMP, 주석, 색 프로파일은 제거하며 포맷과 비트 심도는 최대 품질로 보존합니다.</translation>
+    </message>
+    <message>
+        <source>Metadata preservation is unavailable in this build. Output metadata will be removed.</source>
+        <translation>이 빌드에서는 메타데이터 보존을 사용할 수 없습니다. 출력 메타데이터는 제거됩니다.</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="699"/>
@@ -781,9 +785,21 @@ Check these results before sharing them.</source>
         <translation>건너뜀(%1): %2</translation>
     </message>
     <message>
+        <source>Skipped (animated or multi-page images are not supported): %1</source>
+        <translation>건너뜀(애니메이션 또는 다중 페이지 이미지는 지원되지 않음): %1</translation>
+    </message>
+    <message>
         <location filename="../src/ProcessorWorker.cpp" line="427"/>
         <source>Skipped unreadable image: %1</source>
         <translation>읽을 수 없는 이미지를 건너뜀: %1</translation>
+    </message>
+    <message>
+        <source>Source file changed during processing: %1</source>
+        <translation>처리 중 원본 파일이 변경되었습니다: %1</translation>
+    </message>
+    <message>
+        <source>Failed to create a private source snapshot: %1</source>
+        <translation>원본의 비공개 사본을 만들지 못했습니다: %1</translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="443"/>
@@ -1209,6 +1225,10 @@ Continue?</source>
         <translation>인코딩을 위한 FFmpeg를 시작하지 못했습니다.</translation>
     </message>
     <message>
+        <source>Could not create a temporary directory for encoding.</source>
+        <translation>인코딩용 임시 디렉터리를 만들지 못했습니다.</translation>
+    </message>
+    <message>
         <source>Encoding failed: %1</source>
         <translation>인코딩 실패: %1</translation>
     </message>
@@ -1227,6 +1247,26 @@ Continue?</source>
     <message>
         <source>The output file already exists.</source>
         <translation>출력 파일이 이미 존재합니다.</translation>
+    </message>
+    <message>
+        <source>the video resolution exceeds the safety limit</source>
+        <translation>동영상 해상도가 안전 한도를 초과합니다</translation>
+    </message>
+    <message>
+        <source>the video frame rate exceeds the safety limit</source>
+        <translation>동영상 프레임 속도가 안전 한도를 초과합니다</translation>
+    </message>
+    <message>
+        <source>the video duration exceeds the safety limit</source>
+        <translation>동영상 길이가 안전 한도를 초과합니다</translation>
+    </message>
+    <message>
+        <source>the video frame count exceeds the safety limit</source>
+        <translation>동영상 프레임 수가 안전 한도를 초과합니다</translation>
+    </message>
+    <message>
+        <source>The source video changed during processing.</source>
+        <translation>처리 중 원본 동영상이 변경되었습니다.</translation>
     </message>
 </context>
 <context>
@@ -1284,6 +1324,34 @@ Continue?</source>
     <message>
         <source>No frames could be decoded.</source>
         <translation>디코딩할 수 있는 프레임이 없습니다.</translation>
+    </message>
+    <message>
+        <source>Could not inspect the source video.</source>
+        <translation>원본 동영상을 검사하지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>Could not create a private snapshot of the source video.</source>
+        <translation>원본 동영상의 비공개 사본을 만들지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>The source video changed during processing. Start the operation again.</source>
+        <translation>처리 중 원본 동영상이 변경되었습니다. 작업을 다시 시작하세요.</translation>
+    </message>
+    <message>
+        <source>The video frame count exceeds the safety limit.</source>
+        <translation>동영상 프레임 수가 안전 한도를 초과합니다.</translation>
+    </message>
+    <message>
+        <source>Video detection data exceeds the safety limit.</source>
+        <translation>동영상 검출 데이터가 안전 한도를 초과합니다.</translation>
+    </message>
+    <message>
+        <source>Video tracking data exceeds the safety limit.</source>
+        <translation>동영상 추적 데이터가 안전 한도를 초과합니다.</translation>
+    </message>
+    <message>
+        <source>The source video changed during processing (frame count differs between passes).</source>
+        <translation>처리 중 원본 동영상이 변경되었습니다(처리 단계 간 프레임 수가 다름).</translation>
     </message>
 </context>
 </TS>

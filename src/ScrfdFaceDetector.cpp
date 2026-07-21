@@ -4,8 +4,12 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include <QCryptographicHash>
+#include <QByteArrayView>
+
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -25,7 +29,8 @@ namespace redactly
         constexpr int kMaxInputSize = 2048;
         constexpr std::uintmax_t kMaxModelFileBytes = 512ULL << 20;
 
-        std::vector<std::uint8_t> readModelFile(const std::filesystem::path &path)
+        std::vector<std::uint8_t> readModelFile(const std::filesystem::path &path,
+                                                const QByteArray &expectedSha256)
         {
             std::error_code sizeError;
             const auto size = std::filesystem::file_size(path, sizeError);
@@ -40,6 +45,16 @@ namespace redactly
             {
                 throw std::runtime_error("Could not read the model file.");
             }
+            if (!expectedSha256.isEmpty())
+            {
+                QCryptographicHash hash(QCryptographicHash::Sha256);
+                hash.addData(QByteArrayView(reinterpret_cast<const char *>(bytes.data()),
+                                            static_cast<qsizetype>(bytes.size())));
+                if (hash.result() != expectedSha256)
+                {
+                    throw std::runtime_error("The model file changed before it was loaded.");
+                }
+            }
             return bytes;
         }
 
@@ -53,7 +68,9 @@ namespace redactly
         }
     }
 
-    ScrfdFaceDetector::ScrfdFaceDetector(const std::string &modelPath, int inputSize, bool enableAcceleration)
+    ScrfdFaceDetector::ScrfdFaceDetector(const std::string &modelPath, int inputSize,
+                                         bool enableAcceleration,
+                                         const QByteArray &expectedSha256)
         : inputSize_(inputSize),
           env_(ORT_LOGGING_LEVEL_WARNING, "Redactly"),
           sessionOptions_(),
@@ -67,7 +84,7 @@ namespace redactly
                 : 1);
         const std::u8string modelU8(modelPath.begin(), modelPath.end());
         const std::filesystem::path modelFsPath(modelU8);
-        const auto modelBytes = readModelFile(modelFsPath);
+        const auto modelBytes = readModelFile(modelFsPath, expectedSha256);
         if (accelerator_ == OrtAccelerator::None)
         {
             session_ = Ort::Session(env_, modelBytes.data(), modelBytes.size(), sessionOptions_);
@@ -445,7 +462,7 @@ namespace redactly
             for (int i = 0; i < anchorsToRead; ++i)
             {
                 const float score = scores[i];
-                if (score < scoreThreshold)
+                if (!std::isfinite(score) || score < scoreThreshold)
                 {
                     continue;
                 }
@@ -456,11 +473,23 @@ namespace redactly
                     boxes[i * 4 + 2] * static_cast<float>(stride),
                     boxes[i * 4 + 3] * static_cast<float>(stride),
                 };
+                if (!std::ranges::all_of(distances, [](const float value)
+                {
+                    return std::isfinite(value);
+                }))
+                {
+                    continue;
+                }
                 const auto modelBox = distanceToBox(anchors[i], distances.data());
                 float x = modelBox.x / prepared.scale;
                 float y = modelBox.y / prepared.scale;
                 float width = modelBox.width / prepared.scale;
                 float height = modelBox.height / prepared.scale;
+                if (!std::isfinite(x) || !std::isfinite(y) ||
+                    !std::isfinite(width) || !std::isfinite(height))
+                {
+                    continue;
+                }
 
                 x = std::clamp(x, 0.0F, static_cast<float>(prepared.originalWidth - 1));
                 y = std::clamp(y, 0.0F, static_cast<float>(prepared.originalHeight - 1));

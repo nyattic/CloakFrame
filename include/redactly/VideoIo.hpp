@@ -5,15 +5,23 @@
 #include <opencv2/core.hpp>
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 
 class QLocalServer;
 class QLocalSocket;
 class QProcess;
+class QTemporaryDir;
 
 namespace redactly
 {
+    inline constexpr int kMaxVideoDimension = 16'384;
+    inline constexpr qint64 kMaxVideoPixelCount = 36'000'000;
+    inline constexpr double kMaxVideoFrameRate = 240.0;
+    inline constexpr double kMaxVideoDurationSeconds = 24.0 * 60.0 * 60.0;
+    inline constexpr qint64 kMaxVideoFrameCount = 2'000'000;
+
     struct FfmpegTools
     {
         QString ffmpegPath;
@@ -79,7 +87,8 @@ namespace redactly
 
         bool open(const FfmpegTools &tools, const QString &path, const VideoInfo &info,
                   int decodeLongEdge = 0);
-        bool readFrame(cv::Mat &frame);
+        bool readFrame(cv::Mat &frame,
+                       const std::function<bool()> &continueGuard = {});
         void close();
 
         [[nodiscard]] int frameWidth() const;
@@ -113,9 +122,12 @@ namespace redactly
                   const VideoInfo &info,
                   int crf,
                   bool hardwareEncoder = true,
-                  VideoCodec codec = VideoCodec::H264);
-        bool writeFrame(const cv::Mat &frame);
-        bool finish();
+                  VideoCodec codec = VideoCodec::H264,
+                  const QString &outputRoot = {},
+                  const QString &relativeDestination = {});
+        bool writeFrame(const cv::Mat &frame,
+                        const std::function<bool()> &continueGuard = {});
+        bool finish(const std::function<bool()> &publishGuard = {});
         void abort();
 
         [[nodiscard]] QString errorString() const;
@@ -123,8 +135,11 @@ namespace redactly
 
     private:
         std::unique_ptr<QProcess> process_;
+        std::unique_ptr<QTemporaryDir> stagingDirectory_;
         QString tempPath_;
         QString destinationPath_;
+        QString outputRootPath_;
+        QString relativeDestinationPath_;
         int frameWidth_ = 0;
         int frameHeight_ = 0;
         QString error_;

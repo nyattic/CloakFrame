@@ -12,8 +12,9 @@ MACOS_DIR="$DIST_APP/Contents/MacOS"
 EXECUTABLE="$MACOS_DIR/Redactly"
 ENTITLEMENTS="$ROOT_DIR/scripts/entitlements.plist"
 BUNDLE_ID="${BUNDLE_ID:-com.redactly.app}"
+REDACTLY_MACOS_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-15.0}"
 
-for tool in cmake codesign macdeployqt install_name_tool otool hdiutil ditto brew; do
+for tool in cmake ctest codesign macdeployqt install_name_tool otool vtool hdiutil ditto brew; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "❌ Required tool not found: $tool"
         exit 1
@@ -40,6 +41,7 @@ fi
 
 cmake -S "$ROOT_DIR" -B "$BUILD_DIR" \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET="$REDACTLY_MACOS_DEPLOYMENT_TARGET" \
   -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$HOMEBREW_PREFIX"
 cmake --build "$BUILD_DIR" --config Release
 
@@ -165,6 +167,57 @@ bundle_ffmpeg_tool() {
 
 bundle_ffmpeg_tool ffmpeg "$FFMPEG_ZIP_SHA256"
 bundle_ffmpeg_tool ffprobe "$FFPROBE_ZIP_SHA256"
+
+echo "🧪 Running release tests…"
+PATH="$FFMPEG_DIR:$PATH" ctest --test-dir "$BUILD_DIR" --output-on-failure
+
+version_is_not_newer_than() {
+    local actual="$1" allowed="$2"
+    awk -v actual="$actual" -v allowed="$allowed" '
+        BEGIN {
+            split(actual, a, "."); split(allowed, b, ".")
+            for (i = 1; i <= 3; ++i) {
+                av = a[i] + 0; bv = b[i] + 0
+                if (av < bv) exit 0
+                if (av > bv) exit 1
+            }
+            exit 0
+        }'
+}
+
+echo "🔎 Verifying macOS $REDACTLY_MACOS_DEPLOYMENT_TARGET compatibility…"
+PLIST_MINIMUM="$(plutil -extract LSMinimumSystemVersion raw \
+    "$DIST_APP/Contents/Info.plist" 2>/dev/null || true)"
+if [[ "$PLIST_MINIMUM" != "$REDACTLY_MACOS_DEPLOYMENT_TARGET" ]]; then
+    echo "❌ LSMinimumSystemVersion is '$PLIST_MINIMUM'; expected '$REDACTLY_MACOS_DEPLOYMENT_TARGET'."
+    exit 1
+fi
+
+COMPATIBILITY_FAILED=0
+while IFS= read -r -d '' candidate; do
+    if ! file "$candidate" | grep -q 'Mach-O'; then
+        continue
+    fi
+
+    MINIMUM_VERSIONS="$(vtool -show-build "$candidate" 2>/dev/null \
+        | awk '$1 == "minos" { print $2 }')"
+    if [[ -z "$MINIMUM_VERSIONS" ]]; then
+        echo "❌ Could not determine the minimum macOS version: $candidate"
+        COMPATIBILITY_FAILED=1
+        continue
+    fi
+
+    while IFS= read -r minimum; do
+        if ! version_is_not_newer_than "$minimum" "$REDACTLY_MACOS_DEPLOYMENT_TARGET"; then
+            echo "❌ $candidate requires macOS $minimum (maximum allowed: $REDACTLY_MACOS_DEPLOYMENT_TARGET)."
+            COMPATIBILITY_FAILED=1
+        fi
+    done <<< "$MINIMUM_VERSIONS"
+done < <(find "$DIST_APP" -type f -print0)
+
+if [[ "$COMPATIBILITY_FAILED" != "0" ]]; then
+    exit 1
+fi
 
 if find "$DIST_APP" -name '*.onnx' -print -quit | grep -q .; then
     echo "❌ ONNX model files found in the app bundle; models must not be bundled."

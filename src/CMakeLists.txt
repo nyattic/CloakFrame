@@ -15,6 +15,8 @@ endif()
 add_library(redactly_core STATIC
     ImageIo.cpp
     ImageScanner.cpp
+    MemoryBudget.cpp
+    ModelCatalog.cpp
     Mosaic.cpp
     OnnxGraphPatch.cpp
     OrtAcceleration.cpp
@@ -31,6 +33,8 @@ add_library(redactly_core STATIC
     ${PROJECT_SOURCE_DIR}/include/redactly/FaceDetection.hpp
     ${PROJECT_SOURCE_DIR}/include/redactly/ImageIo.hpp
     ${PROJECT_SOURCE_DIR}/include/redactly/ImageScanner.hpp
+    ${PROJECT_SOURCE_DIR}/include/redactly/MemoryBudget.hpp
+    ${PROJECT_SOURCE_DIR}/include/redactly/ModelCatalog.hpp
     ${PROJECT_SOURCE_DIR}/include/redactly/Mosaic.hpp
     ${PROJECT_SOURCE_DIR}/include/redactly/OnnxGraphPatch.hpp
     ${PROJECT_SOURCE_DIR}/include/redactly/OrderedParallel.hpp
@@ -59,6 +63,10 @@ target_link_libraries(redactly_core PUBLIC
     spdlog::spdlog
 )
 
+if(WIN32)
+    target_link_libraries(redactly_core PUBLIC advapi32)
+endif()
+
 if(REDACTLY_EXIV2_TARGET)
     target_link_libraries(redactly_core PUBLIC ${REDACTLY_EXIV2_TARGET})
     target_compile_definitions(redactly_core PUBLIC REDACTLY_HAVE_EXIV2)
@@ -70,7 +78,6 @@ endif()
 qt_add_executable(Redactly ${REDACTLY_APP_OPTIONS}
     main.cpp
     MainWindow.cpp
-    ModelCatalog.cpp
     ModelDownloader.cpp
     ReviewDialog.cpp
     SettingsDialog.cpp
@@ -78,7 +85,6 @@ qt_add_executable(Redactly ${REDACTLY_APP_OPTIONS}
     UpdateChecker.cpp
     VideoReviewDialog.cpp
     ${PROJECT_SOURCE_DIR}/include/redactly/MainWindow.hpp
-    ${PROJECT_SOURCE_DIR}/include/redactly/ModelCatalog.hpp
     ${PROJECT_SOURCE_DIR}/include/redactly/ModelDownloader.hpp
     ${PROJECT_SOURCE_DIR}/include/redactly/ReviewDialog.hpp
     ${PROJECT_SOURCE_DIR}/include/redactly/SettingsDialog.hpp

@@ -8,7 +8,7 @@ APPDIR="$BUILD_DIR/AppDir"
 ARCH="${ARCH:-$(uname -m)}"
 export ARCH
 
-for tool in cmake curl unzip; do
+for tool in cmake ctest curl unzip; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "❌ Required tool not found: $tool"
         exit 1
@@ -106,6 +106,10 @@ if [[ "$ARCH" == "x86_64" ]]; then
 else
     echo "⚠️  No pinned FFmpeg build for $ARCH; the AppImage will rely on a system FFmpeg."
 fi
+
+echo "🧪 Running release tests…"
+PATH="$APPDIR/usr/bin/ffmpeg:$PATH" \
+    ctest --test-dir "$BUILD_DIR" --output-on-failure
 
 export PATH="$TOOLS_DIR:$PATH"
 if [[ -n "${QMAKE:-}" ]]; then

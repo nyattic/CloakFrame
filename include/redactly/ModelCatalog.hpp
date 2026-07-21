@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QString>
 
 #include <array>
@@ -19,7 +20,7 @@ namespace redactly
 
     const std::array<BuiltinModel, 2> &builtinModels();
     const BuiltinModel &plateModel();
-    const BuiltinModel *findBuiltinModel(const QString &path);
+    bool modelDigestMatches(const BuiltinModel &model, const QByteArray &digest);
 
     QString modelCacheDir();
     QString firstExistingModelPath(const QString &fileName);

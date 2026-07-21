@@ -7,12 +7,14 @@
 #include "redactly/Theme.hpp"
 
 #include <QElapsedTimer>
+#include <QByteArray>
 #include <QMainWindow>
 #include <QTranslator>
 #include <QVector>
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 class QCheckBox;
@@ -24,6 +26,7 @@ class QListWidget;
 class QPlainTextEdit;
 class QProgressBar;
 class QPushButton;
+class QShortcut;
 class QSpinBox;
 class QThread;
 class QToolButton;
@@ -31,6 +34,7 @@ class QWidget;
 
 namespace redactly
 {
+    struct BuiltinModel;
     class ProcessorWorker;
     class ScrfdFaceDetector;
     class PlateDetector;
@@ -97,7 +101,9 @@ namespace redactly
 
         [[nodiscard]] QString selectedModelPath() const;
 
-        void setProcessing(bool processing) const;
+        [[nodiscard]] const BuiltinModel *selectedBuiltinModel() const;
+
+        void setProcessing(bool processing);
 
         void setDropHighlight(bool active) const;
 
@@ -125,16 +131,62 @@ namespace redactly
 
         void addRetranslation(std::function<void()> apply);
 
+        struct DetectorCacheKey
+        {
+            QString canonicalModelPath;
+            qint64 modelSize = -1;
+            qint64 modelLastModifiedMs = -1;
+            QByteArray modelSha256;
+            bool gpuAcceleration = false;
+
+            [[nodiscard]] bool isValid() const
+            {
+                return !canonicalModelPath.isEmpty() && !modelSha256.isEmpty();
+            }
+
+            [[nodiscard]] bool operator==(const DetectorCacheKey &other) const
+            {
+                return canonicalModelPath == other.canonicalModelPath &&
+                       modelSize == other.modelSize &&
+                       modelLastModifiedMs == other.modelLastModifiedMs &&
+                       modelSha256 == other.modelSha256 &&
+                       gpuAcceleration == other.gpuAcceleration;
+            }
+        };
+
+        struct ActiveRunState
+        {
+            DetectorCacheKey faceKey;
+            DetectorCacheKey plateKey;
+            AnonymizationMethod method = AnonymizationMethod::Mosaic;
+            MaskShape shape = MaskShape::Rectangle;
+            int blockSize = 14;
+            float padding = 0.18F;
+            bool softEdges = false;
+            bool preserveMetadata = false;
+            bool detectFaces = false;
+            bool detectPlates = false;
+        };
+
+        [[nodiscard]] static DetectorCacheKey makeDetectorCacheKey(
+            const QString &modelPath, bool gpuAcceleration);
+
         QComboBox *modelCombo_ = nullptr;
         QComboBox *detectCombo_ = nullptr;
         QComboBox *methodCombo_ = nullptr;
         QComboBox *shapeCombo_ = nullptr;
         QCheckBox *softEdgeCheck_ = nullptr;
         QToolButton *settingsButton_ = nullptr;
+        QShortcut *settingsShortcut_ = nullptr;
         QLineEdit *modelPathEdit_ = nullptr;
         QPushButton *downloadButton_ = nullptr;
+        QPushButton *modelBrowseButton_ = nullptr;
         QLineEdit *outputDirEdit_ = nullptr;
+        QPushButton *outputBrowseButton_ = nullptr;
         QListWidget *inputList_ = nullptr;
+        QPushButton *addFilesButton_ = nullptr;
+        QPushButton *addFolderButton_ = nullptr;
+        QPushButton *clearInputsButton_ = nullptr;
         QCheckBox *recursiveCheck_ = nullptr;
         QCheckBox *reviewCheck_ = nullptr;
         QCheckBox *preserveMetaCheck_ = nullptr;
@@ -151,6 +203,7 @@ namespace redactly
         QLabel *statusLabel_ = nullptr;
         QLabel *samplePreview_ = nullptr;
         QToolButton *advancedToggle_ = nullptr;
+        QPushButton *resetAdvancedButton_ = nullptr;
         QWidget *advancedBody_ = nullptr;
 
         QThread *workerThread_ = nullptr;
@@ -159,9 +212,11 @@ namespace redactly
 
         std::shared_ptr<ScrfdFaceDetector> cachedDetector_;
         std::shared_ptr<ScrfdFaceDetector> cachedVideoDetector_;
-        QString cachedDetectorModelPath_;
+        DetectorCacheKey cachedDetectorKey_;
+        DetectorCacheKey cachedVideoDetectorKey_;
         std::shared_ptr<PlateDetector> cachedPlateDetector_;
-        QString cachedPlateModelPath_;
+        DetectorCacheKey cachedPlateDetectorKey_;
+        std::optional<ActiveRunState> activeRunState_;
 
         QTranslator translator_;
         QTranslator qtTranslator_;
@@ -172,6 +227,7 @@ namespace redactly
         bool gpuAcceleration_ = true;
         int videoQuality_ = 0;
         int videoCodec_ = 0;
+        bool processing_ = false;
         bool shuttingDown_ = false;
         RunSummary lastRunSummary_;
         std::vector<std::function<void()>> retranslators_;

@@ -5,11 +5,14 @@
 #include "redactly/VideoIo.hpp"
 
 #include <QObject>
+#include <QByteArray>
 #include <QPointer>
 #include <QString>
 #include <QStringList>
 
 #include <atomic>
+#include <condition_variable>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -22,9 +25,11 @@ namespace redactly
     struct ProcessingRequest
     {
         QString modelPath;
+        QByteArray modelSha256;
         QStringList inputs;
         QString outputDirectory;
         QString plateModelPath;
+        QByteArray plateModelSha256;
         QObject *reviewReceiver = nullptr;
         bool recursive = true;
         float scoreThreshold = 0.5F;
@@ -109,11 +114,13 @@ namespace redactly
                                 bool allowReview);
 
         ItemOutcome processVideoItem(const ScanResult &item,
+                                     const std::filesystem::path &safeRoot,
                                      const std::filesystem::path &destination,
                                      int index,
                                      int total);
 
         QString modelPath_;
+        QByteArray modelSha256_;
         QStringList inputs_;
         QString outputDirectory_;
         bool recursive_;
@@ -130,10 +137,14 @@ namespace redactly
         bool detectFaces_;
         bool detectPlates_;
         QString plateModelPath_;
+        QByteArray plateModelSha256_;
         bool gpuAcceleration_;
         int videoCrf_;
         VideoCodec videoCodec_;
         std::atomic<bool> cancelled_{false};
+        std::mutex imageMemoryMutex_;
+        std::condition_variable imageMemoryCv_;
+        std::uint64_t imageMemoryAvailable_ = 0;
         std::mutex detectMutex_;
         std::shared_ptr<ScrfdFaceDetector> detector_;
         std::shared_ptr<PlateDetector> plateDetector_;

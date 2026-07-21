@@ -8,6 +8,8 @@
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/core.hpp>
 
+#include <QByteArray>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -18,7 +20,8 @@ namespace redactly
     {
     public:
         explicit ScrfdFaceDetector(const std::string &modelPath, int inputSize = 640,
-                                   bool enableAcceleration = false);
+                                   bool enableAcceleration = false,
+                                   const QByteArray &expectedSha256 = {});
 
         FaceDetections detect(const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
 

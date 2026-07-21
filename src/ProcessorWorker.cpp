@@ -2,6 +2,7 @@
 
 #include "redactly/ImageIo.hpp"
 #include "redactly/ImageScanner.hpp"
+#include "redactly/MemoryBudget.hpp"
 #include "redactly/OrderedParallel.hpp"
 #include "redactly/OutputPlan.hpp"
 #include "redactly/PathSafety.hpp"
@@ -21,15 +22,16 @@
 #include <QMetaObject>
 #include <QRectF>
 #include <QSize>
+#include <QTemporaryDir>
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <limits>
-#include <random>
 #include <system_error>
 #include <thread>
 
@@ -37,17 +39,89 @@ namespace redactly
 {
     namespace
     {
-        constexpr std::uintmax_t kMaxInputFileBytes = 1ULL << 30;
-        constexpr long long kMaxPixelCount = 200LL * 1000LL * 1000LL;
+        constexpr std::uintmax_t kMaxInputFileBytes = 128ULL * 1024ULL * 1024ULL;
+        constexpr long long kMaxPixelCount = 24LL * 1000LL * 1000LL;
+        constexpr long long kMaxJpegPixelCount = 64LL * 1000LL * 1000LL;
+        constexpr std::uint64_t kImageMinimumMemoryBudget = 512ULL * 1024ULL * 1024ULL;
+        constexpr std::uint64_t kImageMaximumMemoryBudget = 4ULL * 1024ULL * 1024ULL * 1024ULL;
+        constexpr std::uint64_t kEstimatedImageBytesPerPixel = 16;
         constexpr int kVideoDetectionInputSize = 960;
 
         constexpr int kReviewMaxLongEdge = 1600;
+
+        std::uint64_t imageMemoryBudget()
+        {
+            return adaptiveMemoryBudget(kImageMinimumMemoryBudget,
+                                        kImageMaximumMemoryBudget, 8);
+        }
 
         struct ImageDimensionCheck
         {
             bool ok = false;
             QString reason;
             QSize size;
+            long long pixelLimit = kMaxPixelCount;
+        };
+
+        long long imagePixelLimit(const QByteArray &format)
+        {
+            const QByteArray normalized = format.toLower();
+            return normalized == "jpeg" || normalized == "jpg"
+                       ? kMaxJpegPixelCount
+                       : kMaxPixelCount;
+        }
+
+        class ImageMemoryReservation
+        {
+        public:
+            ImageMemoryReservation(std::mutex &mutex,
+                                   std::condition_variable &condition,
+                                   std::uint64_t &available,
+                                   const std::uint64_t requested,
+                                   const std::atomic<bool> &cancelled)
+                : mutex_(mutex), condition_(condition), available_(available),
+                  amount_(requested)
+            {
+                std::unique_lock lock(mutex_);
+                condition_.wait(lock, [&]
+                {
+                    return cancelled.load(std::memory_order_acquire) ||
+                           available_ >= amount_;
+                });
+                if (!cancelled.load(std::memory_order_acquire))
+                {
+                    available_ -= amount_;
+                    reserved_ = true;
+                }
+            }
+
+            ~ImageMemoryReservation()
+            {
+                if (!reserved_)
+                {
+                    return;
+                }
+                {
+                    const std::lock_guard lock(mutex_);
+                    available_ += amount_;
+                }
+                condition_.notify_all();
+            }
+
+            ImageMemoryReservation(const ImageMemoryReservation &) = delete;
+            ImageMemoryReservation &operator=(const ImageMemoryReservation &) = delete;
+
+            [[nodiscard]] bool acquired() const
+            {
+                return reserved_;
+            }
+
+        private:
+            std::mutex &mutex_;
+            std::condition_variable &condition_;
+            std::uint64_t &available_;
+            std::uint64_t amount_ = 0;
+            bool reserved_ = false;
         };
 
         ImageDimensionCheck inspectImageDimensions(const std::filesystem::path &source)
@@ -56,24 +130,65 @@ namespace redactly
             reader.setAutoTransform(false);
 
             const QSize size = reader.size();
+            const long long pixelLimit = imagePixelLimit(reader.format());
             if (!size.isValid() || size.width() <= 0 || size.height() <= 0)
             {
-                return {true, {}, {}};
+                return {
+                    false,
+                    QCoreApplication::translate(
+                        "redactly::ProcessorWorker",
+                        "cannot inspect image dimensions"),
+                    {}
+                };
             }
 
             const long long pixelCount =
                     static_cast<long long>(size.width()) * static_cast<long long>(size.height());
-            if (pixelCount > kMaxPixelCount)
+            if (pixelCount > pixelLimit)
             {
                 return {
                     false,
                     QCoreApplication::translate("redactly::ProcessorWorker", "image too large, %1 x %2")
                         .arg(size.width()).arg(size.height()),
-                    size
+                    size,
+                    pixelLimit
                 };
             }
 
-            return {true, {}, size};
+            return {true, {}, size, pixelLimit};
+        }
+
+        unsigned imageParallelism(const std::vector<ScanResult> &items,
+                                  const std::vector<std::size_t> &indexes)
+        {
+            std::uint64_t largestEstimate = 1;
+            for (const auto index: indexes)
+            {
+                const auto dimensions = inspectImageDimensions(items[index].sourcePath);
+                if (!dimensions.size.isValid())
+                {
+                    return 1;
+                }
+                const auto pixels = static_cast<std::uint64_t>(dimensions.size.width()) *
+                                    static_cast<std::uint64_t>(dimensions.size.height());
+                std::error_code sizeError;
+                const auto fileSize = std::filesystem::file_size(items[index].sourcePath,
+                                                                  sizeError);
+                const auto encodedBytes = sizeError ? 0 : static_cast<std::uint64_t>(fileSize);
+                const auto maximum = std::numeric_limits<std::uint64_t>::max();
+                const auto estimate = pixels > (maximum - encodedBytes) /
+                                               kEstimatedImageBytesPerPixel
+                                          ? maximum
+                                          : pixels * kEstimatedImageBytesPerPixel + encodedBytes;
+                largestEstimate = std::max(
+                    largestEstimate,
+                    estimate);
+            }
+
+            const auto memoryLimit = static_cast<unsigned>(std::clamp<std::uint64_t>(
+                imageMemoryBudget() / largestEstimate, 1, 8));
+            const unsigned hardware = std::max(1U, std::thread::hardware_concurrency());
+            return std::min(memoryLimit, hardware);
         }
 
         QImage matToQImage(const cv::Mat &bgr)
@@ -115,49 +230,6 @@ namespace redactly
             return scaled;
         }
 
-        std::filesystem::path uniqueTempPath(const std::filesystem::path &destination)
-        {
-            static thread_local std::mt19937_64 rng{std::random_device{}()};
-            std::uniform_int_distribution<std::uint64_t> dist;
-            const auto suffix = dist(rng);
-            auto tempName = destination.stem();
-            tempName += ".redactly-" + std::to_string(suffix);
-            tempName += destination.extension();
-            const auto parent = destination.parent_path();
-            return parent.empty() ? tempName : parent / tempName;
-        }
-
-        bool atomicImwrite(const std::filesystem::path &destination, const cv::Mat &image,
-                           const std::vector<int> &params = {})
-        {
-            std::error_code existsError;
-            if (std::filesystem::exists(destination, existsError) || existsError)
-            {
-                return false;
-            }
-            const auto temp = uniqueTempPath(destination);
-            if (!imwriteUnicode(temp, image, params))
-            {
-                std::error_code ec;
-                std::filesystem::remove(temp, ec);
-                return false;
-            }
-            std::error_code ec;
-            std::filesystem::rename(temp, destination, ec);
-            if (ec)
-            {
-                std::filesystem::copy_file(temp, destination,
-                                           std::filesystem::copy_options::none, ec);
-                std::error_code removeEc;
-                std::filesystem::remove(temp, removeEc);
-                if (ec)
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
         FaceDetections toDetections(const QVector<QRectF> &boxes)
         {
             FaceDetections result;
@@ -195,11 +267,13 @@ namespace redactly
         int skipped = 0;
         int failed = 0;
         int unredacted = 0;
+        int warnings = 0;
         bool cancelled = false;
     };
 
     ProcessorWorker::ProcessorWorker(ProcessingRequest request, DetectorCache cache)
         : modelPath_(std::move(request.modelPath)),
+          modelSha256_(std::move(request.modelSha256)),
           inputs_(std::move(request.inputs)),
           outputDirectory_(std::move(request.outputDirectory)),
           recursive_(request.recursive),
@@ -216,9 +290,11 @@ namespace redactly
           detectFaces_(request.detectFaces),
           detectPlates_(request.detectPlates),
           plateModelPath_(std::move(request.plateModelPath)),
+          plateModelSha256_(std::move(request.plateModelSha256)),
           gpuAcceleration_(request.gpuAcceleration),
           videoCrf_(request.videoCrf),
           videoCodec_(request.videoCodec),
+          imageMemoryAvailable_(imageMemoryBudget()),
           detector_(std::move(cache.face)),
           plateDetector_(std::move(cache.plate)),
           videoDetector_(std::move(cache.videoFace))
@@ -256,19 +332,20 @@ namespace redactly
                     try
                     {
                         detector_ = std::make_shared<ScrfdFaceDetector>(modelPath_.toStdString(),
-                                                                        640, gpuAcceleration_);
-                        if (detector_->accelerator() != OrtAccelerator::None)
-                        {
-                            const cv::Mat warmupFrame(640, 640, CV_8UC3, cv::Scalar(0, 0, 0));
-                            detector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
-                        }
+                                                                        640, gpuAcceleration_,
+                                                                        modelSha256_);
+                        const cv::Mat warmupFrame(640, 640, CV_8UC3, cv::Scalar(0, 0, 0));
+                        detector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
                     }
                     catch (const Ort::Exception &)
                     {
                         emit logMessage(tr("GPU acceleration can't run the face model; "
                                            "using the CPU instead."));
                         detector_ = std::make_shared<ScrfdFaceDetector>(modelPath_.toStdString(),
-                                                                        640, false);
+                                                                        640, false,
+                                                                        modelSha256_);
+                        const cv::Mat warmupFrame(640, 640, CV_8UC3, cv::Scalar(0, 0, 0));
+                        detector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
                     }
                 } else
                 {
@@ -286,19 +363,20 @@ namespace redactly
                     try
                     {
                         plateDetector_ = std::make_shared<PlateDetector>(
-                            pathToUtf8(pathFromQString(plateModelPath_)), gpuAcceleration_);
-                        if (plateDetector_->accelerator() != OrtAccelerator::None)
-                        {
-                            const cv::Mat warmupFrame(512, 512, CV_8UC3, cv::Scalar(0, 0, 0));
-                            plateDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
-                        }
+                            pathToUtf8(pathFromQString(plateModelPath_)), gpuAcceleration_,
+                            plateModelSha256_);
+                        const cv::Mat warmupFrame(512, 512, CV_8UC3, cv::Scalar(0, 0, 0));
+                        plateDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
                     }
                     catch (const Ort::Exception &)
                     {
                         emit logMessage(tr("GPU acceleration can't run the license plate model; "
                                            "using the CPU instead."));
                         plateDetector_ = std::make_shared<PlateDetector>(
-                            pathToUtf8(pathFromQString(plateModelPath_)), false);
+                            pathToUtf8(pathFromQString(plateModelPath_)), false,
+                            plateModelSha256_);
+                        const cv::Mat warmupFrame(512, 512, CV_8UC3, cv::Scalar(0, 0, 0));
+                        plateDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
                     }
                 } else
                 {
@@ -376,6 +454,7 @@ namespace redactly
             int skippedCount = 0;
             int failedCount = 0;
             int unredactedCount = 0;
+            int warningCount = 0;
 
             const auto applyOutcome = [&](ItemOutcome &&outcome)
             {
@@ -388,6 +467,7 @@ namespace redactly
                 skippedCount += outcome.skipped;
                 failedCount += outcome.failed;
                 unredactedCount += outcome.unredacted;
+                warningCount += outcome.warnings;
                 if (!outcome.cancelled)
                 {
                     emit progressChanged(++completed, total);
@@ -423,8 +503,7 @@ namespace redactly
                             .push_back(i);
                 }
 
-                const unsigned threadCount =
-                        std::min(4U, std::max(1U, std::thread::hardware_concurrency()));
+                const unsigned threadCount = imageParallelism(images, imageIndexes);
                 processOrdered<ItemOutcome>(
                     imageIndexes.size(), threadCount, threadCount, cancelled_,
                     [&](std::size_t k)
@@ -482,7 +561,8 @@ namespace redactly
                 return;
             }
 
-            if (failedCount > 0 || skippedCount > 0 || unredactedCount > 0)
+            if (failedCount > 0 || skippedCount > 0 || unredactedCount > 0 ||
+                copiedCount > 0 || warningCount > 0)
             {
                 emit logMessage(tr("Completed with warnings. Review the summary before sharing."));
                 emit finished(RunOutcome::CompletedWithWarnings);
@@ -538,26 +618,34 @@ namespace redactly
                 return outcome;
             }
 
-            std::error_code parentMkdirError;
-            std::filesystem::create_directories(destination.parent_path(), parentMkdirError);
-            if (parentMkdirError)
+            if (isSupportedVideo(source))
+            {
+                return processVideoItem(item, safeRoot, destination, index, total);
+            }
+
+            const auto sourceIdentity = captureFileIdentity(source);
+            if (!sourceIdentity)
             {
                 outcome.logs.push_back(
-                    tr("Skipped (cannot create parent dir): %1 — %2")
-                    .arg(pathToQString(source.filename()),
-                         QString::fromStdString(parentMkdirError.message())));
+                    tr("Skipped unreadable image: %1").arg(pathToQString(source)));
                 outcome.skipped = 1;
                 return outcome;
             }
-
-            if (isSupportedVideo(source))
+            const auto originalIsUnchanged = [source, expected = *sourceIdentity]
             {
-                return processVideoItem(item, destination, index, total);
-            }
+                const auto current = captureFileIdentity(source);
+                return current && *current == expected;
+            };
+            const auto recordChangedSource = [&]
+            {
+                outcome.logs.push_back(
+                    tr("Source file changed during processing: %1")
+                        .arg(pathToQString(source.filename())));
+                outcome.failed = 1;
+            };
 
-            std::error_code sizeError;
-            const auto fileSize = std::filesystem::file_size(source, sizeError);
-            if (!sizeError && fileSize > kMaxInputFileBytes)
+            const auto fileSize = sourceIdentity->size;
+            if (fileSize > kMaxInputFileBytes)
             {
                 outcome.logs.push_back(
                     tr("Skipped (file too large, %1 MB): %2")
@@ -568,26 +656,139 @@ namespace redactly
             }
 
             const QString fileName = pathToQString(source.filename());
+            QTemporaryDir sourceStaging;
+            if (!sourceStaging.isValid())
+            {
+                outcome.logs.push_back(tr("Failed to create a private source snapshot: %1")
+                                           .arg(fileName));
+                outcome.failed = 1;
+                return outcome;
+            }
+            std::error_code snapshotError;
+            const auto snapshotRoot = std::filesystem::canonical(
+                pathFromQString(sourceStaging.path()), snapshotError);
+            std::filesystem::path snapshotRelative = "source";
+            snapshotRelative += source.extension();
+            const auto canCopySource = [&]
+            {
+                return !cancelled_.load(std::memory_order_acquire) &&
+                       originalIsUnchanged();
+            };
+            if (snapshotError || !copyFileNoReplaceAtRoot(
+                    source, snapshotRoot, snapshotRelative, canCopySource))
+            {
+                if (cancelled_.load(std::memory_order_acquire))
+                {
+                    outcome.cancelled = true;
+                }
+                else if (!originalIsUnchanged())
+                {
+                    recordChangedSource();
+                }
+                else
+                {
+                    outcome.logs.push_back(tr("Failed to create a private source snapshot: %1")
+                                               .arg(fileName));
+                    outcome.failed = 1;
+                }
+                return outcome;
+            }
+            const auto processingSource = snapshotRoot / snapshotRelative;
+            const auto processingIdentity = captureFileIdentity(processingSource);
+            if (!processingIdentity)
+            {
+                outcome.logs.push_back(tr("Failed to create a private source snapshot: %1")
+                                           .arg(fileName));
+                outcome.failed = 1;
+                return outcome;
+            }
+            const auto sourceIsUnchanged = [processingSource,
+                                            expected = *processingIdentity]
+            {
+                const auto current = captureFileIdentity(processingSource);
+                return current && *current == expected;
+            };
+            const auto canPublish = [&]
+            {
+                return !cancelled_.load(std::memory_order_acquire) &&
+                       sourceIsUnchanged();
+            };
             emit stageChanged(index, total, tr("Loading"), fileName);
 
-            const auto dimensions = inspectImageDimensions(source);
+            const auto frameCount = imageFrameCount(processingSource);
+            if (frameCount > 1)
+            {
+                outcome.logs.push_back(
+                    tr("Skipped (animated or multi-page images are not supported): %1")
+                        .arg(fileName));
+                outcome.skipped = 1;
+                return outcome;
+            }
+            if (!sourceIsUnchanged())
+            {
+                recordChangedSource();
+                return outcome;
+            }
+
+            const auto dimensions = inspectImageDimensions(processingSource);
             if (!dimensions.ok)
             {
                 outcome.logs.push_back(tr("Skipped (%1): %2").arg(dimensions.reason, fileName));
                 outcome.skipped = 1;
                 return outcome;
             }
+            if (!sourceIsUnchanged())
+            {
+                recordChangedSource();
+                return outcome;
+            }
 
-            cv::Mat image = imreadUnicode(source, cv::IMREAD_UNCHANGED);
+            const auto pixels = static_cast<std::uint64_t>(dimensions.size.width()) *
+                                static_cast<std::uint64_t>(dimensions.size.height());
+            const auto maximum = std::numeric_limits<std::uint64_t>::max();
+            const auto estimatedMemory = pixels >
+                                         (maximum - fileSize) /
+                                         kEstimatedImageBytesPerPixel
+                                             ? imageMemoryBudget()
+                                             : std::min<std::uint64_t>(
+                                                   imageMemoryBudget(),
+                                                   pixels * kEstimatedImageBytesPerPixel +
+                                                   fileSize);
+            ImageMemoryReservation memoryReservation(
+                imageMemoryMutex_, imageMemoryCv_, imageMemoryAvailable_,
+                std::max<std::uint64_t>(1, estimatedMemory), cancelled_);
+            if (!memoryReservation.acquired())
+            {
+                outcome.cancelled = true;
+                return outcome;
+            }
+
+            cv::Mat image = imreadUnicode(processingSource, cv::IMREAD_UNCHANGED);
             if (image.empty())
             {
+                if (!sourceIsUnchanged())
+                {
+                    recordChangedSource();
+                    return outcome;
+                }
                 outcome.logs.push_back(
                     tr("Skipped unreadable image: %1").arg(pathToQString(source)));
                 outcome.skipped = 1;
                 return outcome;
             }
 
-            applyOrientation(image, readExifOrientation(source));
+            if (!sourceIsUnchanged())
+            {
+                recordChangedSource();
+                return outcome;
+            }
+            const int orientation = readExifOrientation(processingSource);
+            if (!sourceIsUnchanged())
+            {
+                recordChangedSource();
+                return outcome;
+            }
+            applyOrientation(image, orientation);
 
             if (cancelled_.load(std::memory_order_acquire))
             {
@@ -597,7 +798,7 @@ namespace redactly
 
             const long long pixelCount =
                     static_cast<long long>(image.cols) * static_cast<long long>(image.rows);
-            if (pixelCount > kMaxPixelCount)
+            if (pixelCount > dimensions.pixelLimit)
             {
                 outcome.logs.push_back(
                     tr("Skipped (image too large, %1 × %2): %3")
@@ -607,17 +808,17 @@ namespace redactly
                 return outcome;
             }
 
-            const cv::Mat detectMat = toDetectionBgr(image);
+            cv::Mat detectMat = toDetectionBgr(image);
 
             emit stageChanged(index, total, tr("Detecting"), fileName);
             FaceDetections detected;
             {
                 std::lock_guard lock(detectMutex_);
-                if (detector_)
+                if (detectFaces_ && detector_)
                 {
                     detected = detector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
                 }
-                if (plateDetector_)
+                if (detectPlates_ && plateDetector_)
                 {
                     const auto plates = plateDetector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
                     detected.insert(detected.end(), plates.begin(), plates.end());
@@ -683,11 +884,17 @@ namespace redactly
                 outcome.cancelled = true;
                 return outcome;
             }
+            detectMat.release();
 
             if (doNotSaveThisImage)
             {
                 outcome.logs.push_back(tr("Skipped without saving: %1").arg(fileName));
                 outcome.skipped = 1;
+                return outcome;
+            }
+            if (!sourceIsUnchanged())
+            {
+                recordChangedSource();
                 return outcome;
             }
 
@@ -699,22 +906,33 @@ namespace redactly
                 bool copied = false;
                 if (preserveMetadata_)
                 {
-                    std::error_code copyError;
-                    std::filesystem::copy_file(source, destination,
-                                               std::filesystem::copy_options::none,
-                                               copyError);
-                    copied = !copyError;
+                    copied = copyFileNoReplaceAtRoot(
+                        processingSource, safeRoot, outputRelativePath(item), canPublish);
                 }
                 else
                 {
-                    copied = atomicImwrite(destination, image, encodeParams);
+                    copied = imwriteUnicodeNoReplaceAtRoot(
+                                 safeRoot, outputRelativePath(item), image,
+                                 encodeParams, {}, canPublish) !=
+                             ImageWriteResult::Failed;
                 }
 
                 if (!copied)
                 {
-                    outcome.logs.push_back(tr("Failed to copy: %1").arg(
-                        pathToQString(destination)));
-                    outcome.failed = 1;
+                    if (cancelled_.load(std::memory_order_acquire))
+                    {
+                        outcome.cancelled = true;
+                    }
+                    else if (!sourceIsUnchanged())
+                    {
+                        recordChangedSource();
+                    }
+                    else
+                    {
+                        outcome.logs.push_back(tr("Failed to copy: %1").arg(
+                            pathToQString(destination)));
+                        outcome.failed = 1;
+                    }
                 } else
                 {
                     outcome.logs.push_back(tr("Skipped (original copied): %1").arg(fileName));
@@ -734,15 +952,30 @@ namespace redactly
             }
 
             emit stageChanged(index, total, tr("Saving"), fileName);
-            if (!atomicImwrite(destination, image, encodeParams))
+            const auto writeResult = imwriteUnicodeNoReplaceAtRoot(
+                safeRoot, outputRelativePath(item), image, encodeParams,
+                preserveMetadata_ ? processingSource : std::filesystem::path{}, canPublish);
+            if (writeResult == ImageWriteResult::Failed)
             {
-                outcome.logs.push_back(tr("Failed to save: %1").arg(pathToQString(destination)));
-                outcome.failed = 1;
+                if (cancelled_.load(std::memory_order_acquire))
+                {
+                    outcome.cancelled = true;
+                }
+                else if (!sourceIsUnchanged())
+                {
+                    recordChangedSource();
+                }
+                else
+                {
+                    outcome.logs.push_back(tr("Failed to save: %1").arg(pathToQString(destination)));
+                    outcome.failed = 1;
+                }
             } else
             {
-                if (preserveMetadata_ && !copyMetadata(source, destination, true))
+                if (writeResult == ImageWriteResult::SavedWithoutMetadata)
                 {
                     outcome.logs.push_back(tr("Saved, but could not copy metadata: %1").arg(fileName));
+                    outcome.warnings = 1;
                 }
                 if (finalFaces.empty())
                 {
@@ -773,6 +1006,7 @@ namespace redactly
     }
 
     ProcessorWorker::ItemOutcome ProcessorWorker::processVideoItem(const ScanResult &item,
+                                                                   const std::filesystem::path &safeRoot,
                                                                    const std::filesystem::path &destination,
                                                                    const int index,
                                                                    const int total)
@@ -785,6 +1019,7 @@ namespace redactly
             outcome.logs.push_back(
                 tr("Metadata preservation is not available for videos; metadata was removed: %1")
                     .arg(fileName));
+            outcome.warnings = 1;
         }
 
         QString toolsError;
@@ -831,20 +1066,20 @@ namespace redactly
         options.crf = videoCrf_;
         options.codec = videoCodec_;
         options.hardwareEncoder = gpuAcceleration_;
+        options.outputRootPath = pathToQString(safeRoot);
+        options.outputRelativePath = pathToQString(outputRelativePath(item));
 
-        if (detector_ && !videoDetector_)
+        if (detectFaces_ && detector_ && !videoDetector_)
         {
             emit logMessage(tr("Loading face detection model for video..."));
             try
             {
                 videoDetector_ = std::make_shared<ScrfdFaceDetector>(
-                    modelPath_.toStdString(), kVideoDetectionInputSize, gpuAcceleration_);
-                if (videoDetector_->accelerator() != OrtAccelerator::None)
-                {
-                    const cv::Mat warmupFrame(kVideoDetectionInputSize, kVideoDetectionInputSize,
-                                              CV_8UC3, cv::Scalar(0, 0, 0));
-                    videoDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
-                }
+                    modelPath_.toStdString(), kVideoDetectionInputSize, gpuAcceleration_,
+                    modelSha256_);
+                const cv::Mat warmupFrame(kVideoDetectionInputSize, kVideoDetectionInputSize,
+                                          CV_8UC3, cv::Scalar(0, 0, 0));
+                videoDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
             }
             catch (const Ort::Exception &)
             {
@@ -852,7 +1087,11 @@ namespace redactly
                                    "using the CPU instead.")
                                     .arg(kVideoDetectionInputSize));
                 videoDetector_ = std::make_shared<ScrfdFaceDetector>(
-                    modelPath_.toStdString(), kVideoDetectionInputSize, false);
+                    modelPath_.toStdString(), kVideoDetectionInputSize, false,
+                    modelSha256_);
+                const cv::Mat warmupFrame(kVideoDetectionInputSize, kVideoDetectionInputSize,
+                                          CV_8UC3, cv::Scalar(0, 0, 0));
+                videoDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
             }
             emit logMessage(tr("Video face detection: %1 px · %2")
                                 .arg(videoDetector_->inputSize())
@@ -866,11 +1105,11 @@ namespace redactly
         {
             std::lock_guard lock(detectMutex_);
             FaceDetections detections;
-            if (videoDetector_)
+            if (detectFaces_ && videoDetector_)
             {
                 detections = videoDetector_->detect(frame, detectionThreshold, nmsThreshold_);
             }
-            if (plateDetector_)
+            if (detectPlates_ && plateDetector_)
             {
                 const auto plates =
                         plateDetector_->detect(frame, detectionThreshold, nmsThreshold_);
@@ -917,16 +1156,17 @@ namespace redactly
         VideoTrackReviewFn review;
         if (reviewEnabled_ && reviewReceiver_)
         {
-            review = [this, &tools, &info, &item, &fileName, index, total]
-                     (std::vector<Track> &tracks, qint64 frameCount)
+            review = [this, &tools, &fileName, index, total]
+                     (std::vector<Track> &tracks, qint64 frameCount,
+                      const QString &reviewSourcePath, const VideoInfo &reviewInfo)
             {
                 emit stageChanged(index, total, tr("Reviewing video tracks"), fileName);
                 VideoReviewRequest request;
-                request.sourcePath = pathToQString(item.sourcePath);
+                request.sourcePath = reviewSourcePath;
                 request.ffmpegPath = tools->ffmpegPath;
                 request.sourceName = fileName;
-                request.frameSize = QSize(info->displayWidth(), info->displayHeight());
-                request.fps = info->fps();
+                request.frameSize = QSize(reviewInfo.displayWidth(), reviewInfo.displayHeight());
+                request.fps = reviewInfo.fps();
                 request.frameCount = static_cast<int>(std::min<qint64>(
                     frameCount, std::numeric_limits<int>::max()));
                 request.tracks.reserve(static_cast<qsizetype>(tracks.size()));
@@ -1018,5 +1258,6 @@ namespace redactly
     void ProcessorWorker::cancel()
     {
         cancelled_.store(true, std::memory_order_release);
+        imageMemoryCv_.notify_all();
     }
 }

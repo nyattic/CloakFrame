@@ -63,16 +63,9 @@ namespace redactly
         return model;
     }
 
-    const BuiltinModel *findBuiltinModel(const QString &path)
+    bool modelDigestMatches(const BuiltinModel &model, const QByteArray &digest)
     {
-        const auto name = QFileInfo(path).fileName();
-        for (const auto &model: builtinModels())
-        {
-            if (model.fileName == name)
-            {
-                return &model;
-            }
-        }
-        return nullptr;
+        return digest.size() == 32 &&
+               digest.toHex().compare(model.sha256.toLatin1(), Qt::CaseInsensitive) == 0;
     }
 }

@@ -260,15 +260,19 @@ Continue?</translation>
         </message>
         <message>
             <location filename="../src/MainWindow.cpp" line="686" />
-            <source>Preserve original metadata (EXIF, location, color profile)</source>
-            <translation>Preserve original metadata (EXIF, location, color profile)</translation>
+            <source>Preserve selected EXIF metadata</source>
+            <translation>選択した EXIF メタデータを保持</translation>
         </message>
         <message>
             <location filename="../src/MainWindow.cpp" line="690" />
             <source>Off (default): output carries no metadata — GPS, camera, and timestamps are removed.
-On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preserves format and bit depth at maximum quality. Best for archiving high-resolution photos.</source>
-            <translation>Off (default): output carries no metadata — GPS, camera, and timestamps are removed.
-On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preserves format and bit depth at maximum quality. Best for archiving high-resolution photos.</translation>
+On: copies selected EXIF fields such as camera, timestamps, and location. Embedded previews, IPTC, XMP, comments, and color profiles are removed. Format and bit depth are preserved at maximum quality.</source>
+            <translation>オフ（既定）：出力にはメタデータが含まれず、GPS、カメラ、撮影日時は削除されます。
+オン：カメラ、撮影日時、位置情報など、選択した EXIF フィールドのみをコピーします。埋め込みプレビュー、IPTC、XMP、コメント、カラープロファイルは削除し、形式とビット深度は最高品質で保持します。</translation>
+        </message>
+        <message>
+            <source>Metadata preservation is unavailable in this build. Output metadata will be removed.</source>
+            <translation>このビルドではメタデータを保持できません。出力のメタデータは削除されます。</translation>
         </message>
         <message>
             <location filename="../src/MainWindow.cpp" line="699" />
@@ -653,12 +657,12 @@ Check these results before sharing them.</translation>
         <message>
             <location filename="../src/ProcessorWorker.cpp" line="50" />
             <source>cannot inspect image dimensions</source>
-            <translation>cannot inspect image dimensions</translation>
+            <translation>画像のサイズを確認できません</translation>
         </message>
         <message>
             <location filename="../src/ProcessorWorker.cpp" line="59" />
             <source>image too large, %1 x %2</source>
-            <translation>image too large, %1 x %2</translation>
+            <translation>画像が大きすぎます（%1 x %2）</translation>
         </message>
         <message>
             <location filename="../src/ProcessorWorker.cpp" line="178" />
@@ -785,9 +789,21 @@ Check these results before sharing them.</translation>
             <translation>スキップ: (%1): %2</translation>
         </message>
         <message>
+            <source>Skipped (animated or multi-page images are not supported): %1</source>
+            <translation>スキップ（アニメーション画像またはマルチページ画像はサポートされていません）: %1</translation>
+        </message>
+        <message>
             <location filename="../src/ProcessorWorker.cpp" line="427" />
             <source>Skipped unreadable image: %1</source>
             <translation>スキップ: unreadable image: %1</translation>
+        </message>
+        <message>
+            <source>Source file changed during processing: %1</source>
+            <translation>処理中に元のファイルが変更されました：%1</translation>
+        </message>
+        <message>
+            <source>Failed to create a private source snapshot: %1</source>
+            <translation>元ファイルの非公開スナップショットを作成できませんでした：%1</translation>
         </message>
         <message>
             <location filename="../src/ProcessorWorker.cpp" line="443" />
@@ -1219,6 +1235,10 @@ Continue?</translation>
             <translation>できませんでした: start FFmpeg for encoding.</translation>
         </message>
         <message>
+            <source>Could not create a temporary directory for encoding.</source>
+            <translation>エンコード用の一時ディレクトリを作成できませんでした。</translation>
+        </message>
+        <message>
             <source>Encoding failed: %1</source>
             <translation>Encoding failed: %1</translation>
         </message>
@@ -1237,6 +1257,26 @@ Continue?</translation>
         <message>
             <source>The output file already exists.</source>
             <translation>The output file already exists.</translation>
+        </message>
+        <message>
+            <source>the video resolution exceeds the safety limit</source>
+            <translation>動画の解像度が安全上限を超えています</translation>
+        </message>
+        <message>
+            <source>the video frame rate exceeds the safety limit</source>
+            <translation>動画のフレームレートが安全上限を超えています</translation>
+        </message>
+        <message>
+            <source>the video duration exceeds the safety limit</source>
+            <translation>動画の長さが安全上限を超えています</translation>
+        </message>
+        <message>
+            <source>the video frame count exceeds the safety limit</source>
+            <translation>動画のフレーム数が安全上限を超えています</translation>
+        </message>
+        <message>
+            <source>The source video changed during processing.</source>
+            <translation>処理中に元の動画が変更されました。</translation>
         </message>
     </context>
     <context>
@@ -1294,6 +1334,34 @@ Continue?</translation>
         <message>
             <source>No frames could be decoded.</source>
             <translation>デコードできるフレームがありません。</translation>
+        </message>
+        <message>
+            <source>Could not inspect the source video.</source>
+            <translation>元の動画を検査できませんでした。</translation>
+        </message>
+        <message>
+            <source>Could not create a private snapshot of the source video.</source>
+            <translation>元の動画の非公開スナップショットを作成できませんでした。</translation>
+        </message>
+        <message>
+            <source>The source video changed during processing. Start the operation again.</source>
+            <translation>処理中に元の動画が変更されました。操作を最初からやり直してください。</translation>
+        </message>
+        <message>
+            <source>The video frame count exceeds the safety limit.</source>
+            <translation>動画のフレーム数が安全上限を超えています。</translation>
+        </message>
+        <message>
+            <source>Video detection data exceeds the safety limit.</source>
+            <translation>動画の検出データが安全上限を超えています。</translation>
+        </message>
+        <message>
+            <source>Video tracking data exceeds the safety limit.</source>
+            <translation>動画の追跡データが安全上限を超えています。</translation>
+        </message>
+        <message>
+            <source>The source video changed during processing (frame count differs between passes).</source>
+            <translation>処理中に元の動画が変更されました（処理パス間でフレーム数が異なります）。</translation>
         </message>
     </context>
 </TS>

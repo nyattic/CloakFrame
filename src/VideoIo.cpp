@@ -1,5 +1,6 @@
 #include "redactly/VideoIo.hpp"
 
+#include "redactly/ImageIo.hpp"
 #include "redactly/PathUtil.hpp"
 
 #include <QCoreApplication>
@@ -18,6 +19,7 @@
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QStandardPaths>
+#include <QTemporaryDir>
 
 #include <spdlog/spdlog.h>
 
@@ -25,6 +27,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <limits>
 #include <mutex>
 
 namespace redactly
@@ -32,12 +35,13 @@ namespace redactly
     namespace
     {
         constexpr int kProcessStartTimeoutMs = 15000;
+        constexpr int kProcessStopTimeoutMs = 2000;
         constexpr int kProcessIoTimeoutMs = 60000;
         constexpr int kProcessFinishTimeoutMs = 300000;
 #if defined(_WIN32)
         constexpr qint64 kDecodeBufferBytes = 64LL * 1024 * 1024;
 #endif
-        constexpr qint64 kMaxEncodeBacklogBytes = 256LL * 1024 * 1024;
+        constexpr qint64 kMaxEncodeBacklogBytes = 16LL * 1024 * 1024;
 
         QString trVideo(const char *text)
         {
@@ -197,16 +201,6 @@ namespace redactly
             return value;
         }
 
-        QString uniqueVideoTempPath(const QString &destination)
-        {
-            const QFileInfo info(destination);
-            const auto suffix = QRandomGenerator::global()->generate64();
-            const QString name = info.completeBaseName() + ".redactly-" +
-                                 QString::number(suffix, 16) + "." + info.suffix();
-            const QString dir = info.absolutePath();
-            return dir.isEmpty() ? name : dir + "/" + name;
-        }
-
         QString processErrorDetail(QProcess &process)
         {
             const QString stderrText =
@@ -269,12 +263,14 @@ namespace redactly
         }
 
         bool encoderWorks(const FfmpegTools &tools, const QString &encoder,
-                          const int width, const int height)
+                          const int width, const int height,
+                          const int fpsNum, const int fpsDen)
         {
             QStringList arguments = {
                 "-v", "error", "-nostdin",
                 "-f", "lavfi",
-                "-i", QString("color=black:size=%1x%2:rate=30").arg(width).arg(height),
+                "-i", QString("color=black:size=%1x%2:rate=%3/%4")
+                          .arg(width).arg(height).arg(fpsNum).arg(fpsDen),
                 "-frames:v", "3",
                 "-pix_fmt", "yuv420p",
             };
@@ -297,7 +293,8 @@ namespace redactly
         }
 
         QString selectVideoEncoder(const FfmpegTools &tools, const VideoCodec codec,
-                                   const int width, const int height)
+                                   const int width, const int height,
+                                   const int fpsNum, const int fpsDen)
         {
             static std::mutex cacheMutex;
             static QHash<QString, bool> cache;
@@ -306,14 +303,17 @@ namespace redactly
             for (const auto &encoder : hardwareEncoderCandidates(codec))
             {
                 const QString key =
-                        QString("%1:%2x%3").arg(encoder).arg(width).arg(height);
+                        QString("%1:%2x%3:%4/%5")
+                            .arg(encoder).arg(width).arg(height).arg(fpsNum).arg(fpsDen);
                 auto it = cache.find(key);
                 if (it == cache.end())
                 {
-                    it = cache.insert(key, encoderWorks(tools, encoder, width, height));
-                    spdlog::info("Hardware video encoder {} {} at {}x{}",
+                    it = cache.insert(key, encoderWorks(tools, encoder, width, height,
+                                                        fpsNum, fpsDen));
+                    spdlog::info("Hardware video encoder {} {} at {}x{} {}/{} fps",
                                  encoder.toStdString(),
-                                 it.value() ? "available" : "unavailable", width, height);
+                                 it.value() ? "available" : "unavailable", width, height,
+                                 fpsNum, fpsDen);
                 }
                 if (it.value())
                 {
@@ -528,8 +528,14 @@ namespace redactly
         }
         if (info.estimatedFrameCount <= 0 && info.durationSeconds > 0 && info.fps() > 0)
         {
-            info.estimatedFrameCount =
-                    static_cast<qint64>(std::llround(info.durationSeconds * info.fps()));
+            const double estimate = info.durationSeconds * info.fps();
+            if (std::isfinite(estimate) && estimate > 0.0)
+            {
+                info.estimatedFrameCount =
+                        estimate >= static_cast<double>(std::numeric_limits<qint64>::max())
+                            ? std::numeric_limits<qint64>::max()
+                            : static_cast<qint64>(std::llround(estimate));
+            }
         }
 
         if (!videoFound)
@@ -545,9 +551,29 @@ namespace redactly
 
     QString videoUnsupportedReason(const VideoInfo &info)
     {
-        if (info.width <= 0 || info.height <= 0 || info.fpsNum <= 0)
+        if (info.width <= 0 || info.height <= 0 || info.fpsNum <= 0 || info.fpsDen <= 0)
         {
             return trVideo("the video stream could not be read");
+        }
+        const qint64 pixelCount = static_cast<qint64>(info.width) * info.height;
+        if (info.width > kMaxVideoDimension || info.height > kMaxVideoDimension
+            || pixelCount > kMaxVideoPixelCount)
+        {
+            return trVideo("the video resolution exceeds the safety limit");
+        }
+        const double frameRate = info.fps();
+        if (!std::isfinite(frameRate) || frameRate > kMaxVideoFrameRate)
+        {
+            return trVideo("the video frame rate exceeds the safety limit");
+        }
+        if (!std::isfinite(info.durationSeconds) || info.durationSeconds < 0.0
+            || info.durationSeconds > kMaxVideoDurationSeconds)
+        {
+            return trVideo("the video duration exceeds the safety limit");
+        }
+        if (info.estimatedFrameCount < 0 || info.estimatedFrameCount > kMaxVideoFrameCount)
+        {
+            return trVideo("the video frame count exceeds the safety limit");
         }
         if (info.videoCodec != "h264" && info.videoCodec != "hevc")
         {
@@ -581,7 +607,8 @@ namespace redactly
         atEnd_ = false;
         frameWidth_ = info.displayWidth();
         frameHeight_ = info.displayHeight();
-        if (frameWidth_ <= 0 || frameHeight_ <= 0 || info.fpsNum <= 0)
+        if (frameWidth_ <= 0 || frameHeight_ <= 0 ||
+            info.fpsNum <= 0 || info.fpsDen <= 0)
         {
             error_ = trVideo("Invalid video dimensions.");
             return false;
@@ -671,7 +698,8 @@ namespace redactly
         return frameHeight_;
     }
 
-    bool VideoFrameReader::readFrame(cv::Mat &frame)
+    bool VideoFrameReader::readFrame(cv::Mat &frame,
+                                     const std::function<bool()> &continueGuard)
     {
         if (!process_ || atEnd_)
         {
@@ -698,6 +726,11 @@ namespace redactly
         qint64 received = 0;
         while (received < frameBytes)
         {
+            if (continueGuard && !continueGuard())
+            {
+                atEnd_ = true;
+                return false;
+            }
             const qint64 chunk = device->read(
                 reinterpret_cast<char *>(frame.data) + received, frameBytes - received);
             if (chunk > 0)
@@ -721,11 +754,25 @@ namespace redactly
                 }
                 return false;
             }
-            if (!device->waitForReadyRead(kProcessIoTimeoutMs) && !exhausted())
+            QElapsedTimer waitTimer;
+            waitTimer.start();
+            bool ready = false;
+            while (!ready && !exhausted())
             {
-                error_ = trVideo("Decoding timed out.");
-                atEnd_ = true;
-                return false;
+                if (continueGuard && !continueGuard())
+                {
+                    atEnd_ = true;
+                    return false;
+                }
+                const qint64 remaining = kProcessIoTimeoutMs - waitTimer.elapsed();
+                if (remaining <= 0)
+                {
+                    error_ = trVideo("Decoding timed out.");
+                    atEnd_ = true;
+                    return false;
+                }
+                ready = device->waitForReadyRead(
+                    static_cast<int>(std::min<qint64>(remaining, 100)));
             }
         }
         return true;
@@ -738,7 +785,7 @@ namespace redactly
             if (process_->state() != QProcess::NotRunning)
             {
                 process_->kill();
-                process_->waitForFinished(kProcessStartTimeoutMs);
+                process_->waitForFinished(kProcessStopTimeoutMs);
             }
             process_.reset();
         }
@@ -770,13 +817,16 @@ namespace redactly
                                 const VideoInfo &info,
                                 const int crf,
                                 const bool hardwareEncoder,
-                                const VideoCodec codec)
+                                const VideoCodec codec,
+                                const QString &outputRoot,
+                                const QString &relativeDestination)
     {
         abort();
         error_.clear();
         frameWidth_ = info.displayWidth();
         frameHeight_ = info.displayHeight();
-        if (frameWidth_ <= 0 || frameHeight_ <= 0 || info.fpsNum <= 0)
+        if (frameWidth_ <= 0 || frameHeight_ <= 0 ||
+            info.fpsNum <= 0 || info.fpsDen <= 0)
         {
             error_ = trVideo("Invalid video dimensions.");
             return false;
@@ -787,12 +837,22 @@ namespace redactly
         {
             encoderName_ = selectVideoEncoder(tools, codec,
                                               frameWidth_ - (frameWidth_ % 2),
-                                              frameHeight_ - (frameHeight_ % 2));
+                                              frameHeight_ - (frameHeight_ % 2),
+                                              info.fpsNum, info.fpsDen);
         }
         spdlog::info("Video encoder: {}", encoderName_.toStdString());
 
         destinationPath_ = destination;
-        tempPath_ = uniqueVideoTempPath(destination);
+        outputRootPath_ = outputRoot;
+        relativeDestinationPath_ = relativeDestination;
+        stagingDirectory_ = std::make_unique<QTemporaryDir>();
+        if (!stagingDirectory_->isValid())
+        {
+            stagingDirectory_.reset();
+            error_ = trVideo("Could not create a temporary directory for encoding.");
+            return false;
+        }
+        tempPath_ = stagingDirectory_->filePath(QStringLiteral("video.mp4"));
 
         static const QStringList mp4CompatibleAudio = {"aac", "mp3", "ac3", "eac3", "alac"};
         const bool copyAudio = info.hasAudio && mp4CompatibleAudio.contains(info.audioCodec);
@@ -838,7 +898,6 @@ namespace redactly
         }
         arguments << "-map_metadata" << "-1"
                   << "-map_chapters" << "-1"
-                  << "-movflags" << "+faststart"
                   << "-f" << "mp4"
                   << tempPath_;
 
@@ -848,13 +907,20 @@ namespace redactly
         {
             error_ = trVideo("Could not start FFmpeg for encoding.");
             process_.reset();
+            stagingDirectory_.reset();
+            tempPath_.clear();
             return false;
         }
         return true;
     }
 
-    bool VideoFrameWriter::writeFrame(const cv::Mat &frame)
+    bool VideoFrameWriter::writeFrame(const cv::Mat &frame,
+                                      const std::function<bool()> &continueGuard)
     {
+        if (continueGuard && !continueGuard())
+        {
+            return false;
+        }
         if (!process_ || process_->state() != QProcess::Running)
         {
             error_ = trVideo("Encoding failed: %1")
@@ -879,6 +945,10 @@ namespace redactly
         qint64 written = 0;
         while (written < frameBytes)
         {
+            if (continueGuard && !continueGuard())
+            {
+                return false;
+            }
             const qint64 chunk = process_->write(
                 reinterpret_cast<const char *>(continuous.data) + written,
                 frameBytes - written);
@@ -890,18 +960,38 @@ namespace redactly
             written += chunk;
             while (process_->bytesToWrite() > kMaxEncodeBacklogBytes)
             {
-                if (!process_->waitForBytesWritten(kProcessIoTimeoutMs))
+                QElapsedTimer waitTimer;
+                waitTimer.start();
+                bool writtenToProcess = false;
+                while (!writtenToProcess &&
+                       process_->bytesToWrite() > kMaxEncodeBacklogBytes)
                 {
-                    error_ = trVideo("Encoding failed: %1")
-                            .arg(processErrorDetail(*process_));
-                    return false;
+                    if (continueGuard && !continueGuard())
+                    {
+                        return false;
+                    }
+                    if (process_->state() != QProcess::Running)
+                    {
+                        error_ = trVideo("Encoding failed: %1")
+                                .arg(processErrorDetail(*process_));
+                        return false;
+                    }
+                    const qint64 remaining = kProcessIoTimeoutMs - waitTimer.elapsed();
+                    if (remaining <= 0)
+                    {
+                        error_ = trVideo("Encoding failed: %1")
+                                .arg(processErrorDetail(*process_));
+                        return false;
+                    }
+                    writtenToProcess = process_->waitForBytesWritten(
+                        static_cast<int>(std::min<qint64>(remaining, 100)));
                 }
             }
         }
         return true;
     }
 
-    bool VideoFrameWriter::finish()
+    bool VideoFrameWriter::finish(const std::function<bool()> &publishGuard)
     {
         if (!process_)
         {
@@ -909,11 +999,24 @@ namespace redactly
         }
 
         process_->closeWriteChannel();
-        if (!process_->waitForFinished(kProcessFinishTimeoutMs))
+        QElapsedTimer finishTimer;
+        finishTimer.start();
+        while (process_->state() != QProcess::NotRunning)
         {
-            error_ = trVideo("Encoding timed out while finalizing.");
-            abort();
-            return false;
+            if (publishGuard && !publishGuard())
+            {
+                error_ = trVideo("The source video changed during processing.");
+                abort();
+                return false;
+            }
+            const qint64 remaining = kProcessFinishTimeoutMs - finishTimer.elapsed();
+            if (remaining <= 0)
+            {
+                error_ = trVideo("Encoding timed out while finalizing.");
+                abort();
+                return false;
+            }
+            process_->waitForFinished(static_cast<int>(std::min<qint64>(remaining, 100)));
         }
         const bool ok = process_->exitStatus() == QProcess::NormalExit &&
                         process_->exitCode() == 0;
@@ -925,22 +1028,71 @@ namespace redactly
         }
         process_.reset();
 
-        if (QFileInfo::exists(destinationPath_))
+        if (publishGuard && !publishGuard())
         {
-            QFile::remove(tempPath_);
-            error_ = trVideo("The output file already exists.");
+            stagingDirectory_.reset();
+            tempPath_.clear();
+            error_ = trVideo("The source video changed during processing.");
             return false;
         }
-        if (!QFile::rename(tempPath_, destinationPath_))
+
+        std::filesystem::path outputRoot;
+        std::filesystem::path relativeDestination;
+        if (!outputRootPath_.isEmpty() && !relativeDestinationPath_.isEmpty())
         {
-            if (!QFile::copy(tempPath_, destinationPath_))
-            {
-                QFile::remove(tempPath_);
-                error_ = trVideo("Could not move the finished video into place.");
-                return false;
-            }
-            QFile::remove(tempPath_);
+            outputRoot = pathFromQString(outputRootPath_);
+            relativeDestination = pathFromQString(relativeDestinationPath_);
         }
+        else
+        {
+            std::error_code ec;
+            const auto destination = std::filesystem::absolute(
+                pathFromQString(destinationPath_), ec);
+            if (!ec)
+            {
+                outputRoot = std::filesystem::canonical(destination.parent_path(), ec);
+                if (!ec)
+                {
+                    relativeDestination = destination.filename();
+                }
+            }
+        }
+
+        bool guardAccepted = true;
+        const auto finalGuard = [&]
+        {
+            guardAccepted = !publishGuard || publishGuard();
+            return guardAccepted;
+        };
+        bool published = false;
+        if (!outputRoot.empty() && !relativeDestination.empty())
+        {
+            const auto moveResult = moveFileNoReplaceAtRoot(
+                pathFromQString(tempPath_), outputRoot, relativeDestination, finalGuard);
+            published = moveResult == FileMoveResult::Moved;
+            if (!published && guardAccepted && !QFileInfo::exists(destinationPath_))
+            {
+                published = copyFileNoReplaceAtRoot(
+                    pathFromQString(tempPath_), outputRoot, relativeDestination, finalGuard);
+            }
+        }
+        if (!published)
+        {
+            stagingDirectory_.reset();
+            tempPath_.clear();
+            if (!guardAccepted)
+            {
+                error_ = trVideo("The source video changed during processing.");
+            }
+            else
+            {
+                error_ = QFileInfo::exists(destinationPath_)
+                             ? trVideo("The output file already exists.")
+                             : trVideo("Could not move the finished video into place.");
+            }
+            return false;
+        }
+        stagingDirectory_.reset();
         tempPath_.clear();
         return true;
     }
@@ -952,15 +1104,17 @@ namespace redactly
             if (process_->state() != QProcess::NotRunning)
             {
                 process_->kill();
-                process_->waitForFinished(kProcessStartTimeoutMs);
+                process_->waitForFinished(kProcessStopTimeoutMs);
             }
             process_.reset();
         }
         if (!tempPath_.isEmpty())
         {
-            QFile::remove(tempPath_);
             tempPath_.clear();
         }
+        stagingDirectory_.reset();
+        outputRootPath_.clear();
+        relativeDestinationPath_.clear();
     }
 
     QString VideoFrameWriter::errorString() const

@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <list>
 #include <map>
 #include <mutex>
 #include <tuple>
@@ -19,13 +21,26 @@ namespace redactly
     {
         cv::Rect paddedRegion(const cv::Rect2f &box, int width, int height, float paddingRatio)
         {
-            const float padX = box.width * paddingRatio;
-            const float padY = box.height * paddingRatio;
+            const double padding = std::isfinite(paddingRatio)
+                                       ? std::max(0.0, static_cast<double>(paddingRatio))
+                                       : 0.0;
+            const double padX = static_cast<double>(box.width) * padding;
+            const double padY = static_cast<double>(box.height) * padding;
+            const double leftValue = std::clamp(
+                static_cast<double>(box.x) - padX, 0.0, static_cast<double>(width));
+            const double topValue = std::clamp(
+                static_cast<double>(box.y) - padY, 0.0, static_cast<double>(height));
+            const double rightValue = std::clamp(
+                static_cast<double>(box.x) + box.width + padX,
+                0.0, static_cast<double>(width));
+            const double bottomValue = std::clamp(
+                static_cast<double>(box.y) + box.height + padY,
+                0.0, static_cast<double>(height));
 
-            int x = static_cast<int>(std::floor(box.x - padX));
-            int y = static_cast<int>(std::floor(box.y - padY));
-            int right = static_cast<int>(std::ceil(box.x + box.width + padX));
-            int bottom = static_cast<int>(std::ceil(box.y + box.height + padY));
+            int x = static_cast<int>(std::floor(leftValue));
+            int y = static_cast<int>(std::floor(topValue));
+            int right = static_cast<int>(std::ceil(rightValue));
+            int bottom = static_cast<int>(std::ceil(bottomValue));
 
             x = std::clamp(x, 0, width - 1);
             y = std::clamp(y, 0, height - 1);
@@ -195,6 +210,69 @@ namespace redactly
         cv::Mat softTransitionMask(const cv::Size &size, const cv::Rect &core, MaskShape shape,
                                    int innerTransition, int outerTransition)
         {
+            constexpr std::size_t maxDistanceTransformPixels = 2U * 1024U * 1024U;
+            const auto pixelCount = static_cast<std::size_t>(size.width) *
+                                    static_cast<std::size_t>(size.height);
+            if (pixelCount > maxDistanceTransformPixels)
+            {
+                cv::Mat mask(size, CV_8UC1);
+                const float transition = static_cast<float>(innerTransition + outerTransition);
+                const float centerX = static_cast<float>(core.x) +
+                                      static_cast<float>(core.width - 1) * 0.5F;
+                const float centerY = static_cast<float>(core.y) +
+                                      static_cast<float>(core.height - 1) * 0.5F;
+                const float radiusX = std::max(0.5F, static_cast<float>(core.width) * 0.5F);
+                const float radiusY = std::max(0.5F, static_cast<float>(core.height) * 0.5F);
+                const float radiusScale = std::min(radiusX, radiusY);
+
+                cv::parallel_for_(cv::Range(0, size.height), [&](const cv::Range &range)
+                {
+                    for (int y = range.start; y < range.end; ++y)
+                    {
+                        auto *row = mask.ptr<unsigned char>(y);
+                        for (int x = 0; x < size.width; ++x)
+                        {
+                            float signedDistance = 0.0F;
+                            if (shape == MaskShape::Ellipse)
+                            {
+                                const float dx = (static_cast<float>(x) - centerX) / radiusX;
+                                const float dy = (static_cast<float>(y) - centerY) / radiusY;
+                                signedDistance = (1.0F - std::sqrt(dx * dx + dy * dy)) *
+                                                 radiusScale;
+                            }
+                            else
+                            {
+                                const float outsideX = std::max(
+                                    {static_cast<float>(core.x - x), 0.0F,
+                                     static_cast<float>(x - (core.x + core.width - 1))});
+                                const float outsideY = std::max(
+                                    {static_cast<float>(core.y - y), 0.0F,
+                                     static_cast<float>(y - (core.y + core.height - 1))});
+                                if (outsideX > 0.0F || outsideY > 0.0F)
+                                {
+                                    signedDistance = -std::sqrt(outsideX * outsideX +
+                                                                outsideY * outsideY);
+                                }
+                                else
+                                {
+                                    signedDistance = static_cast<float>(std::min(
+                                        {x - core.x + 1, y - core.y + 1,
+                                         core.x + core.width - x,
+                                         core.y + core.height - y}));
+                                }
+                            }
+
+                            float ramp = (signedDistance + static_cast<float>(outerTransition)) /
+                                         transition;
+                            ramp = std::clamp(ramp, 0.0F, 1.0F);
+                            ramp = ramp * ramp * (3.0F - 2.0F * ramp);
+                            row[x] = cv::saturate_cast<unsigned char>(ramp * 255.0F);
+                        }
+                    }
+                });
+                return mask;
+            }
+
             cv::Mat inside(size, CV_8UC1, cv::Scalar(0));
             if (shape == MaskShape::Ellipse)
             {
@@ -225,9 +303,21 @@ namespace redactly
 
         using MaskKey = std::tuple<int, int, int, int, int, int, int, int, int>;
 
+        struct MaskCacheEntry
+        {
+            cv::Mat mask;
+            std::size_t bytes = 0;
+            std::list<MaskKey>::iterator recency;
+        };
+
         std::mutex g_maskCacheMutex;
-        std::map<MaskKey, cv::Mat> g_maskCache;
-        constexpr std::size_t kMaskCacheCap = 2048;
+        std::mutex g_maskComputationMutex;
+        std::map<MaskKey, MaskCacheEntry> g_maskCache;
+        std::list<MaskKey> g_maskCacheRecency;
+        std::size_t g_maskCacheBytes = 0;
+        constexpr std::size_t kMaskCacheEntryCap = 2048;
+        constexpr std::size_t kMaskCacheByteCap = 32U * 1024U * 1024U;
+        constexpr std::size_t kMaskCacheSingleEntryCap = 8U * 1024U * 1024U;
 
         cv::Mat cachedSoftTransitionMask(const cv::Size &size, const cv::Rect &core,
                                          MaskShape shape, int innerTransition,
@@ -241,40 +331,155 @@ namespace redactly
                 const auto it = g_maskCache.find(key);
                 if (it != g_maskCache.end())
                 {
-                    return it->second;
+                    g_maskCacheRecency.splice(g_maskCacheRecency.begin(),
+                                              g_maskCacheRecency,
+                                              it->second.recency);
+                    return it->second.mask;
+                }
+            }
+
+            const std::lock_guard<std::mutex> computationLock(g_maskComputationMutex);
+            {
+                const std::lock_guard<std::mutex> lock(g_maskCacheMutex);
+                const auto it = g_maskCache.find(key);
+                if (it != g_maskCache.end())
+                {
+                    g_maskCacheRecency.splice(g_maskCacheRecency.begin(),
+                                              g_maskCacheRecency,
+                                              it->second.recency);
+                    return it->second.mask;
                 }
             }
 
             cv::Mat mask = softTransitionMask(size, core, shape, innerTransition,
                                               outerTransition);
 
-            const std::lock_guard<std::mutex> lock(g_maskCacheMutex);
-            if (g_maskCache.size() >= kMaskCacheCap)
+            const std::size_t maskBytes = mask.total() * mask.elemSize();
+            if (maskBytes == 0 || maskBytes > kMaskCacheSingleEntryCap)
             {
-                const std::size_t drop = kMaskCacheCap / 4;
-                auto it = g_maskCache.begin();
-                for (std::size_t i = 0; i < drop && it != g_maskCache.end(); ++i)
+                return mask;
+            }
+
+            const std::lock_guard<std::mutex> lock(g_maskCacheMutex);
+            const auto existing = g_maskCache.find(key);
+            if (existing != g_maskCache.end())
+            {
+                g_maskCacheRecency.splice(g_maskCacheRecency.begin(),
+                                          g_maskCacheRecency,
+                                          existing->second.recency);
+                return existing->second.mask;
+            }
+
+            while (!g_maskCacheRecency.empty() &&
+                   (g_maskCache.size() >= kMaskCacheEntryCap ||
+                    g_maskCacheBytes > kMaskCacheByteCap - maskBytes))
+            {
+                const auto oldestKey = g_maskCacheRecency.back();
+                const auto oldest = g_maskCache.find(oldestKey);
+                if (oldest != g_maskCache.end())
                 {
-                    it = g_maskCache.erase(it);
+                    g_maskCacheBytes -= oldest->second.bytes;
+                    g_maskCache.erase(oldest);
+                }
+                g_maskCacheRecency.pop_back();
+            }
+
+            bool recencyAdded = false;
+            try
+            {
+                g_maskCacheRecency.push_front(key);
+                recencyAdded = true;
+                const auto [inserted, added] = g_maskCache.emplace(
+                    key, MaskCacheEntry{mask, maskBytes, g_maskCacheRecency.begin()});
+                if (!added)
+                {
+                    g_maskCacheRecency.pop_front();
+                    g_maskCacheRecency.splice(g_maskCacheRecency.begin(),
+                                              g_maskCacheRecency,
+                                              inserted->second.recency);
+                    return inserted->second.mask;
+                }
+                g_maskCacheBytes += maskBytes;
+            }
+            catch (...)
+            {
+                if (recencyAdded)
+                {
+                    g_maskCacheRecency.pop_front();
                 }
             }
-            g_maskCache.emplace(key, mask);
             return mask;
+        }
+
+        template<typename Pixel, typename Alpha>
+        void blendWithMaskTyped(cv::Mat roi, const cv::Mat &anonymized,
+                                const cv::Mat &alpha, const double alphaScale)
+        {
+            const int channels = roi.channels();
+            cv::parallel_for_(cv::Range(0, roi.rows), [&](const cv::Range &range)
+            {
+                for (int y = range.start; y < range.end; ++y)
+                {
+                    auto *destination = roi.ptr<Pixel>(y);
+                    const auto *source = anonymized.ptr<Pixel>(y);
+                    const auto *weights = alpha.ptr<Alpha>(y);
+                    for (int x = 0; x < roi.cols; ++x)
+                    {
+                        const double weight = static_cast<double>(weights[x]) * alphaScale;
+                        const int offset = x * channels;
+                        for (int channel = 0; channel < channels; ++channel)
+                        {
+                            const double original = static_cast<double>(destination[offset + channel]);
+                            const double changed = static_cast<double>(source[offset + channel]);
+                            destination[offset + channel] = cv::saturate_cast<Pixel>(
+                                original + (changed - original) * weight);
+                        }
+                    }
+                }
+            });
+        }
+
+        template<typename Pixel>
+        void blendWithMaskDepth(cv::Mat roi, const cv::Mat &anonymized, const cv::Mat &alpha)
+        {
+            if (alpha.depth() == CV_8U)
+            {
+                blendWithMaskTyped<Pixel, unsigned char>(roi, anonymized, alpha, 1.0 / 255.0);
+            }
+            else
+            {
+                blendWithMaskTyped<Pixel, float>(roi, anonymized, alpha, 1.0);
+            }
         }
 
         void blendWithMask(cv::Mat roi, const cv::Mat &anonymized, const cv::Mat &alpha)
         {
-            cv::Mat roiFloat;
-            cv::Mat anonymizedFloat;
-            roi.convertTo(roiFloat, CV_32F);
-            anonymized.convertTo(anonymizedFloat, CV_32F);
-
-            const std::vector<cv::Mat> alphaChannels(static_cast<size_t>(roi.channels()), alpha);
-            cv::Mat alphaMerged;
-            cv::merge(alphaChannels, alphaMerged);
-
-            cv::Mat blended = roiFloat + (anonymizedFloat - roiFloat).mul(alphaMerged);
-            blended.convertTo(roi, roi.type());
+            switch (roi.depth())
+            {
+                case CV_8U:
+                    blendWithMaskDepth<unsigned char>(roi, anonymized, alpha);
+                    break;
+                case CV_8S:
+                    blendWithMaskDepth<signed char>(roi, anonymized, alpha);
+                    break;
+                case CV_16U:
+                    blendWithMaskDepth<unsigned short>(roi, anonymized, alpha);
+                    break;
+                case CV_16S:
+                    blendWithMaskDepth<short>(roi, anonymized, alpha);
+                    break;
+                case CV_32S:
+                    blendWithMaskDepth<int>(roi, anonymized, alpha);
+                    break;
+                case CV_32F:
+                    blendWithMaskDepth<float>(roi, anonymized, alpha);
+                    break;
+                case CV_64F:
+                    blendWithMaskDepth<double>(roi, anonymized, alpha);
+                    break;
+                default:
+                    CV_Error(cv::Error::StsUnsupportedFormat, "Unsupported image depth");
+            }
         }
     }
 
@@ -314,6 +519,10 @@ namespace redactly
 
         for (const auto &detection: detections)
         {
+            if (!isValidFaceDetection(detection))
+            {
+                continue;
+            }
             const cv::Rect roiRect = paddedRegion(detection.box, width, height, paddingRatio);
 
             if (method == AnonymizationMethod::Sticker)

@@ -21,35 +21,49 @@ namespace redactly
     inline bool destinationIsSafe(const std::filesystem::path &destination,
                                   const std::filesystem::path &safeRoot)
     {
-        std::error_code ec;
-        auto current = destination;
-        while (!current.empty() && current != current.root_path())
+        const auto lexicalDestination = destination.lexically_normal();
+        const auto lexicalRoot = safeRoot.lexically_normal();
+        if (!(isWithinRoot(lexicalDestination, lexicalRoot) || lexicalDestination == lexicalRoot))
         {
-            if (std::filesystem::exists(current, ec))
-            {
-                if (std::filesystem::is_symlink(current, ec))
-                {
-                    auto resolved = std::filesystem::canonical(current, ec);
-                    if (ec || !isWithinRoot(resolved, safeRoot))
-                    {
-                        return false;
-                    }
-                }
-                break;
-            }
-            current = current.parent_path();
+            return false;
         }
 
-        if (std::filesystem::exists(destination, ec))
+        std::error_code ec;
+        const auto canonicalRoot = std::filesystem::weakly_canonical(safeRoot, ec);
+        if (ec)
         {
-            auto resolved = std::filesystem::canonical(destination, ec);
-            if (ec || !isWithinRoot(resolved, safeRoot))
+            return false;
+        }
+
+        auto current = lexicalDestination;
+        while (!current.empty() && current != current.root_path())
+        {
+            ec.clear();
+            const auto status = std::filesystem::symlink_status(current, ec);
+            if (ec)
+            {
+                if (ec == std::errc::no_such_file_or_directory ||
+                    ec == std::errc::not_a_directory)
+                {
+                    current = current.parent_path();
+                    continue;
+                }
+                return false;
+            }
+
+            if (std::filesystem::is_symlink(status))
             {
                 return false;
             }
-        }
 
-        const auto lexical = destination.lexically_normal();
-        return isWithinRoot(lexical, safeRoot) || lexical == safeRoot.lexically_normal();
+            if (std::filesystem::exists(status))
+            {
+                const auto resolved = std::filesystem::canonical(current, ec);
+                return !ec &&
+                       (resolved == canonicalRoot || isWithinRoot(resolved, canonicalRoot));
+            }
+            current = current.parent_path();
+        }
+        return false;
     }
 }

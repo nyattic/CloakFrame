@@ -241,6 +241,11 @@ if (Get-ChildItem -Path $DistDir -Recurse -Filter *.onnx -ErrorAction SilentlyCo
     throw "ONNX model files found in the package; models must not be bundled."
 }
 
+Write-Host "Running release tests..."
+$env:PATH = "$DistDir;$ffmpegDistDir;$(Join-Path $QtRoot 'bin');$env:PATH"
+ctest --test-dir $BuildDir -C $BuildType --output-on-failure
+if ($LASTEXITCODE -ne 0) { throw "Release tests failed (exit $LASTEXITCODE)" }
+
 Write-Host ""
 Write-Host "✅ Packaged app: $DistDir"
 Write-Host "   Run with:     $DistDir\Redactly.exe"

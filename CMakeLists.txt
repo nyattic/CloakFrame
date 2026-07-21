@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
 
+if(APPLE AND (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET OR
+              CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL ""))
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING
+        "Minimum supported macOS version" FORCE)
+endif()
+
 project(Redactly VERSION 1.9.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
