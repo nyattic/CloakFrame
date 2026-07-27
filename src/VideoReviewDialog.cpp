@@ -882,8 +882,8 @@ namespace cloakframe
             track = &manualTracks_.back();
 
             auto *item = new QListWidgetItem(trackList_);
-            item->setData(kTrackIdRole, track->id);
             item->setData(kManualTrackRole, true);
+            item->setData(kTrackIdRole, track->id);
             item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
         }
         else
