@@ -48,26 +48,52 @@
         <translation>모델 파일을 저장하지 못했습니다.</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="120"/>
-        <location filename="../src/ModelDownloader.cpp" line="142"/>
-        <source>Download Model</source>
-        <translation>모델 다운로드</translation>
-    </message>
-    <message>
-        <location filename="../src/ModelDownloader.cpp" line="121"/>
+        <location filename="../src/ModelDownloader.cpp" line="122"/>
         <source>The %1 model isn&apos;t on this computer yet.
 
-CloakFrame can download it once (%2 MB) from Hugging Face. The model is provided by InsightFace for non-commercial use. Your images are never uploaded.
+CloakFrame can download it once (%2 MB) from the yolov5-face-onnx-inference project on GitHub. The model is based on the GPL-3.0-licensed YOLO5Face project and was trained on the WIDER FACE dataset, so treat it as non-commercial only. Your images are never uploaded.
 
 Download now?</source>
         <translation>%1 모델이 아직 이 컴퓨터에 없습니다.
 
-CloakFrame이 Hugging Face에서 한 번(%2 MB) 다운로드할 수 있습니다. 이 모델은 InsightFace가 비상업적 용도로 제공합니다. 사진은 절대 업로드되지 않습니다.
+CloakFrame이 GitHub의 yolov5-face-onnx-inference 프로젝트에서 한 번(%2 MB) 다운로드할 수 있습니다. 이 모델은 GPL-3.0 라이선스의 YOLO5Face 프로젝트를 기반으로 WIDER FACE 데이터셋으로 학습되었으므로 비상업적 용도로만 사용하세요. 사진은 절대 업로드되지 않습니다.
 
 지금 다운로드할까요?</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="143"/>
+        <location filename="../src/ModelDownloader.cpp" line="131"/>
+        <source>The %1 model isn&apos;t on this computer yet.
+
+CloakFrame can download it once (%2 MB) from the OpenCV Zoo project on GitHub (MIT-licensed). Your images are never uploaded.
+
+Download now?</source>
+        <translation>%1 모델이 아직 이 컴퓨터에 없습니다.
+
+CloakFrame이 GitHub의 OpenCV Zoo 프로젝트에서 한 번(%2 MB) 다운로드할 수 있습니다(MIT 라이선스). 사진은 절대 업로드되지 않습니다.
+
+지금 다운로드할까요?</translation>
+    </message>
+    <message>
+        <location filename="../src/ModelDownloader.cpp" line="140"/>
+        <source>The %1 model isn&apos;t on this computer yet.
+
+CloakFrame can download it once (%2 MB) from its source project. Your images are never uploaded.
+
+Download now?</source>
+        <translation>%1 모델이 아직 이 컴퓨터에 없습니다.
+
+CloakFrame이 모델 제공 프로젝트에서 한 번(%2 MB) 다운로드할 수 있습니다. 사진은 절대 업로드되지 않습니다.
+
+지금 다운로드할까요?</translation>
+    </message>
+    <message>
+        <location filename="../src/ModelDownloader.cpp" line="153"/>
+        <location filename="../src/ModelDownloader.cpp" line="170"/>
+        <source>Download Model</source>
+        <translation>모델 다운로드</translation>
+    </message>
+    <message>
+        <location filename="../src/ModelDownloader.cpp" line="171"/>
         <source>The license plate detection model isn&apos;t on this computer yet.
 
 CloakFrame can download it once (%1 MB) from the open-image-models project (MIT-licensed). Your images are never uploaded.
@@ -80,38 +106,38 @@ CloakFrame이 open-image-models 프로젝트(MIT 라이선스)에서 한 번(%1 
 지금 다운로드할까요?</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="162"/>
-        <location filename="../src/ModelDownloader.cpp" line="168"/>
+        <location filename="../src/ModelDownloader.cpp" line="190"/>
+        <location filename="../src/ModelDownloader.cpp" line="196"/>
         <source>Invalid Model</source>
         <translation>잘못된 모델</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="163"/>
+        <location filename="../src/ModelDownloader.cpp" line="191"/>
         <source>Choose an existing ONNX model file.</source>
         <translation>존재하는 ONNX 모델 파일을 선택하세요.</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="169"/>
+        <location filename="../src/ModelDownloader.cpp" line="197"/>
         <source>The selected model must use the .onnx extension.</source>
         <translation>선택한 모델은 .onnx 확장자여야 합니다.</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="174"/>
+        <location filename="../src/ModelDownloader.cpp" line="202"/>
         <source>Model Too Large</source>
         <translation>모델이 너무 큼</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="175"/>
+        <location filename="../src/ModelDownloader.cpp" line="203"/>
         <source>The selected ONNX file is larger than 512 MB. Choose a smaller SCRFD model.</source>
         <translation>선택한 ONNX 파일이 512 MB보다 큽니다. 더 작은 SCRFD 모델을 선택하세요.</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="188"/>
+        <location filename="../src/ModelDownloader.cpp" line="216"/>
         <source>Load Custom Model</source>
         <translation>커스텀 모델 불러오기</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="189"/>
+        <location filename="../src/ModelDownloader.cpp" line="217"/>
         <source>Only load ONNX models from sources you trust.
 
 Model: %1
@@ -305,32 +331,32 @@ On: copies selected EXIF fields such as camera, timestamps, and location. Embedd
         <translation>설정</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1821"/>
+        <location filename="../src/MainWindow.cpp" line="1846"/>
         <source>Update available: %1</source>
         <translation>새 버전 있음: %1</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1827"/>
+        <location filename="../src/MainWindow.cpp" line="1852"/>
         <source>Update Available</source>
         <translation>업데이트 가능</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1830"/>
+        <location filename="../src/MainWindow.cpp" line="1855"/>
         <source>CloakFrame %1 is available. What&apos;s new:</source>
         <translation>CloakFrame %1 버전을 사용할 수 있습니다. 주요 변경 사항:</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1835"/>
+        <location filename="../src/MainWindow.cpp" line="1860"/>
         <source>No release notes were provided for this update.</source>
         <translation>이 업데이트에는 릴리스 노트가 제공되지 않았습니다.</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1838"/>
+        <location filename="../src/MainWindow.cpp" line="1863"/>
         <source>Update</source>
         <translation>업데이트</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1839"/>
+        <location filename="../src/MainWindow.cpp" line="1864"/>
         <source>Later</source>
         <translation>나중에</translation>
     </message>
@@ -528,7 +554,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="1070"/>
-        <location filename="../src/MainWindow.cpp" line="1651"/>
+        <location filename="../src/MainWindow.cpp" line="1667"/>
         <source>Custom — %1</source>
         <translation>커스텀 — %1</translation>
     </message>
@@ -553,12 +579,12 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <translation>출력 폴더 선택</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="2131"/>
+        <location filename="../src/MainWindow.cpp" line="2156"/>
         <source>Accurate  ·  YOLO5Face-n</source>
         <translation>정확  ·  YOLO5Face-n</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="2132"/>
+        <location filename="../src/MainWindow.cpp" line="2157"/>
         <source>Fast  ·  YuNet</source>
         <translation>빠름  ·  YuNet</translation>
     </message>
@@ -574,7 +600,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/MainWindow.cpp" line="1250"/>
         <location filename="../src/MainWindow.cpp" line="1273"/>
         <location filename="../src/MainWindow.cpp" line="1370"/>
-        <location filename="../src/MainWindow.cpp" line="2158"/>
+        <location filename="../src/MainWindow.cpp" line="2183"/>
         <source>Downloading %1…</source>
         <translation>%1 다운로드 중…</translation>
     </message>
@@ -582,7 +608,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/MainWindow.cpp" line="1253"/>
         <location filename="../src/MainWindow.cpp" line="1276"/>
         <location filename="../src/MainWindow.cpp" line="1376"/>
-        <location filename="../src/MainWindow.cpp" line="2165"/>
+        <location filename="../src/MainWindow.cpp" line="2190"/>
         <source>Model download was cancelled or failed.</source>
         <translation>모델 다운로드가 취소되었거나 실패했습니다.</translation>
     </message>
@@ -590,7 +616,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/MainWindow.cpp" line="1257"/>
         <location filename="../src/MainWindow.cpp" line="1279"/>
         <location filename="../src/MainWindow.cpp" line="1389"/>
-        <location filename="../src/MainWindow.cpp" line="2161"/>
+        <location filename="../src/MainWindow.cpp" line="2186"/>
         <source>Model ready: %1</source>
         <translation>모델 준비됨: %1</translation>
     </message>
@@ -702,7 +728,7 @@ Check these results before sharing them.</source>
         <translation type="vanished">정확  ·  SCRFD 10G</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="2182"/>
+        <location filename="../src/MainWindow.cpp" line="2207"/>
         <source>Not downloaded yet — click Download</source>
         <translation>아직 다운로드하지 않음 — 다운로드를 누르세요</translation>
     </message>
@@ -999,7 +1025,7 @@ Check these results before sharing them.</source>
     </message>
     <message numerus="yes">
         <location filename="../src/ProcessorWorker.cpp" line="1033"/>
-        <location filename="../src/ProcessorWorker.cpp" line="1320"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1323"/>
         <source>Redacted %n region(s): %1</source>
         <translation>
             <numerusform>영역 %n개 가림: %1</numerusform>
@@ -1012,7 +1038,7 @@ Check these results before sharing them.</source>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="1028"/>
-        <location filename="../src/ProcessorWorker.cpp" line="1314"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1317"/>
         <source>Saved with no regions redacted: %1</source>
         <translation>가려진 영역 없이 저장됨: %1</translation>
     </message>
@@ -1064,7 +1090,7 @@ Check these results before sharing them.</source>
         <translation>%1 처리 중 오류</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1209"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1212"/>
         <source>Reviewing video tracks</source>
         <translation>동영상 트랙 검토 중</translation>
     </message>
@@ -1095,17 +1121,17 @@ Check these results before sharing them.</source>
         <translation>참고: 가변 프레임레이트는 고정 프레임레이트로 변환됩니다: %1</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1188"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1191"/>
         <source>Analyzing %1%</source>
         <translation>분석 중 %1%</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1189"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1192"/>
         <source>Encoding %1%</source>
         <translation>인코딩 중 %1%</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1346"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1349"/>
         <source>Failed to process video %1: %2</source>
         <translation>동영상 처리 실패 %1: %2</translation>
     </message>
@@ -1115,32 +1141,32 @@ Check these results before sharing them.</source>
         <translation>동영상용 얼굴 탐지 모델 로딩 중...</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1133"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1136"/>
         <source>GPU acceleration can&apos;t run the video face model at %1 px; using the CPU instead.</source>
         <translation>GPU 가속으로 동영상 얼굴 모델을 %1 px에서 실행할 수 없어 CPU를 대신 사용합니다.</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1143"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1146"/>
         <source>Video face detection: %1 px · %2</source>
         <translation>동영상 얼굴 탐지: %1 px · %2</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1196"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1199"/>
         <source>%1m %2s left</source>
         <translation>%1분 %2초 남음</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1197"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1200"/>
         <source>%1s left</source>
         <translation>%1초 남음</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1329"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1332"/>
         <source>Processed %1 frames in %2s (%3× real time): %4</source>
         <translation>프레임 %1개를 %2초에 처리 (실시간의 %3배): %4</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1338"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1341"/>
         <source>Video encoder: %1</source>
         <translation>비디오 인코더: %1</translation>
     </message>

@@ -112,18 +112,46 @@ namespace cloakframe
         return true;
     }
 
+    namespace
+    {
+        QString builtinModelConsentText(const BuiltinModel &model)
+        {
+            switch (model.faceKind)
+            {
+                case FaceModelKind::Yolo5Face:
+                    return QCoreApplication::translate(
+                        "cloakframe::MainWindow",
+                        "The %1 model isn't on this computer yet.\n\n"
+                        "CloakFrame can download it once (%2 MB) from the "
+                        "yolov5-face-onnx-inference project on GitHub. The model is based on "
+                        "the GPL-3.0-licensed YOLO5Face project and was trained on the "
+                        "WIDER FACE dataset, so treat it as non-commercial only. "
+                        "Your images are never uploaded.\n\nDownload now?");
+                case FaceModelKind::YuNet:
+                    return QCoreApplication::translate(
+                        "cloakframe::MainWindow",
+                        "The %1 model isn't on this computer yet.\n\n"
+                        "CloakFrame can download it once (%2 MB) from the OpenCV Zoo project "
+                        "on GitHub (MIT-licensed). "
+                        "Your images are never uploaded.\n\nDownload now?");
+                case FaceModelKind::Scrfd:
+                    break;
+            }
+            return QCoreApplication::translate(
+                "cloakframe::MainWindow",
+                "The %1 model isn't on this computer yet.\n\n"
+                "CloakFrame can download it once (%2 MB) from its source project. "
+                "Your images are never uploaded.\n\nDownload now?");
+        }
+    }
+
     bool ensureBuiltinModelAvailable(QWidget *parent, const BuiltinModel &model, const QString &destPath)
     {
         const auto sizeMb = QString::number(model.approxBytes / 1024.0 / 1024.0, 'f', 1);
         const auto answer = QMessageBox::question(
             parent,
             QCoreApplication::translate("cloakframe::MainWindow", "Download Model"),
-            QCoreApplication::translate("cloakframe::MainWindow",
-                                        "The %1 model isn't on this computer yet.\n\n"
-                                        "CloakFrame can download it once (%2 MB) from Hugging Face. "
-                                        "The model is provided by InsightFace for non-commercial use. "
-                                        "Your images are never uploaded.\n\nDownload now?")
-                .arg(model.fileName, sizeMb),
+            builtinModelConsentText(model).arg(model.fileName, sizeMb),
             QMessageBox::Yes | QMessageBox::No,
             QMessageBox::Yes);
         if (answer != QMessageBox::Yes)

@@ -48,26 +48,52 @@
         <translation>无法保存模型文件。</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="120"/>
-        <location filename="../src/ModelDownloader.cpp" line="142"/>
-        <source>Download Model</source>
-        <translation>下载模型</translation>
-    </message>
-    <message>
-        <location filename="../src/ModelDownloader.cpp" line="121"/>
+        <location filename="../src/ModelDownloader.cpp" line="122"/>
         <source>The %1 model isn&apos;t on this computer yet.
 
-CloakFrame can download it once (%2 MB) from Hugging Face. The model is provided by InsightFace for non-commercial use. Your images are never uploaded.
+CloakFrame can download it once (%2 MB) from the yolov5-face-onnx-inference project on GitHub. The model is based on the GPL-3.0-licensed YOLO5Face project and was trained on the WIDER FACE dataset, so treat it as non-commercial only. Your images are never uploaded.
 
 Download now?</source>
         <translation>%1 模型尚未安装在此电脑上。
 
-CloakFrame 可以从 Hugging Face 下载一次（%2 MB）。该模型由 InsightFace 提供，仅限非商业用途。您的图像绝不会被上传。
+CloakFrame 可以从 GitHub 上的 yolov5-face-onnx-inference 项目下载一次（%2 MB）。该模型基于 GPL-3.0 许可的 YOLO5Face 项目，并使用 WIDER FACE 数据集训练，请仅用于非商业用途。您的图像绝不会被上传。
 
 立即下载？</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="143"/>
+        <location filename="../src/ModelDownloader.cpp" line="131"/>
+        <source>The %1 model isn&apos;t on this computer yet.
+
+CloakFrame can download it once (%2 MB) from the OpenCV Zoo project on GitHub (MIT-licensed). Your images are never uploaded.
+
+Download now?</source>
+        <translation>%1 模型尚未安装在此电脑上。
+
+CloakFrame 可以从 GitHub 上的 OpenCV Zoo 项目下载一次（%2 MB，MIT 许可证）。您的图像绝不会被上传。
+
+立即下载？</translation>
+    </message>
+    <message>
+        <location filename="../src/ModelDownloader.cpp" line="140"/>
+        <source>The %1 model isn&apos;t on this computer yet.
+
+CloakFrame can download it once (%2 MB) from its source project. Your images are never uploaded.
+
+Download now?</source>
+        <translation>%1 模型尚未安装在此电脑上。
+
+CloakFrame 可以从模型来源项目下载一次（%2 MB）。您的图像绝不会被上传。
+
+立即下载？</translation>
+    </message>
+    <message>
+        <location filename="../src/ModelDownloader.cpp" line="153"/>
+        <location filename="../src/ModelDownloader.cpp" line="170"/>
+        <source>Download Model</source>
+        <translation>下载模型</translation>
+    </message>
+    <message>
+        <location filename="../src/ModelDownloader.cpp" line="171"/>
         <source>The license plate detection model isn&apos;t on this computer yet.
 
 CloakFrame can download it once (%1 MB) from the open-image-models project (MIT-licensed). Your images are never uploaded.
@@ -80,38 +106,38 @@ CloakFrame 可以从 open-image-models 项目下载一次（%1 MB，MIT 许可�
 立即下载？</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="162"/>
-        <location filename="../src/ModelDownloader.cpp" line="168"/>
+        <location filename="../src/ModelDownloader.cpp" line="190"/>
+        <location filename="../src/ModelDownloader.cpp" line="196"/>
         <source>Invalid Model</source>
         <translation>模型无效</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="163"/>
+        <location filename="../src/ModelDownloader.cpp" line="191"/>
         <source>Choose an existing ONNX model file.</source>
         <translation>请选择现有的 ONNX 模型文件。</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="169"/>
+        <location filename="../src/ModelDownloader.cpp" line="197"/>
         <source>The selected model must use the .onnx extension.</source>
         <translation>所选模型必须使用 .onnx 扩展名。</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="174"/>
+        <location filename="../src/ModelDownloader.cpp" line="202"/>
         <source>Model Too Large</source>
         <translation>模型过大</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="175"/>
+        <location filename="../src/ModelDownloader.cpp" line="203"/>
         <source>The selected ONNX file is larger than 512 MB. Choose a smaller SCRFD model.</source>
         <translation>所选 ONNX 文件超过 512 MB。请选择较小的 SCRFD 模型。</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="188"/>
+        <location filename="../src/ModelDownloader.cpp" line="216"/>
         <source>Load Custom Model</source>
         <translation>加载自定义模型</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="189"/>
+        <location filename="../src/ModelDownloader.cpp" line="217"/>
         <source>Only load ONNX models from sources you trust.
 
 Model: %1
@@ -305,32 +331,32 @@ On: copies selected EXIF fields such as camera, timestamps, and location. Embedd
         <translation>设置</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1821"/>
+        <location filename="../src/MainWindow.cpp" line="1846"/>
         <source>Update available: %1</source>
         <translation>有可用更新：%1</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1827"/>
+        <location filename="../src/MainWindow.cpp" line="1852"/>
         <source>Update Available</source>
         <translation>有可用更新</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1830"/>
+        <location filename="../src/MainWindow.cpp" line="1855"/>
         <source>CloakFrame %1 is available. What&apos;s new:</source>
         <translation>CloakFrame %1 已发布。更新内容：</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1835"/>
+        <location filename="../src/MainWindow.cpp" line="1860"/>
         <source>No release notes were provided for this update.</source>
         <translation>此更新未提供发行说明。</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1838"/>
+        <location filename="../src/MainWindow.cpp" line="1863"/>
         <source>Update</source>
         <translation>更新</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1839"/>
+        <location filename="../src/MainWindow.cpp" line="1864"/>
         <source>Later</source>
         <translation>稍后</translation>
     </message>
@@ -528,7 +554,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="1070"/>
-        <location filename="../src/MainWindow.cpp" line="1651"/>
+        <location filename="../src/MainWindow.cpp" line="1667"/>
         <source>Custom — %1</source>
         <translation>自定义 — %1</translation>
     </message>
@@ -553,12 +579,12 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <translation>选择输出文件夹</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="2131"/>
+        <location filename="../src/MainWindow.cpp" line="2156"/>
         <source>Accurate  ·  YOLO5Face-n</source>
         <translation>精确  ·  YOLO5Face-n</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="2132"/>
+        <location filename="../src/MainWindow.cpp" line="2157"/>
         <source>Fast  ·  YuNet</source>
         <translation>快速  ·  YuNet</translation>
     </message>
@@ -574,7 +600,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/MainWindow.cpp" line="1250"/>
         <location filename="../src/MainWindow.cpp" line="1273"/>
         <location filename="../src/MainWindow.cpp" line="1370"/>
-        <location filename="../src/MainWindow.cpp" line="2158"/>
+        <location filename="../src/MainWindow.cpp" line="2183"/>
         <source>Downloading %1…</source>
         <translation>正在下载 %1…</translation>
     </message>
@@ -582,7 +608,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/MainWindow.cpp" line="1253"/>
         <location filename="../src/MainWindow.cpp" line="1276"/>
         <location filename="../src/MainWindow.cpp" line="1376"/>
-        <location filename="../src/MainWindow.cpp" line="2165"/>
+        <location filename="../src/MainWindow.cpp" line="2190"/>
         <source>Model download was cancelled or failed.</source>
         <translation>模型下载已取消或失败。</translation>
     </message>
@@ -590,7 +616,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/MainWindow.cpp" line="1257"/>
         <location filename="../src/MainWindow.cpp" line="1279"/>
         <location filename="../src/MainWindow.cpp" line="1389"/>
-        <location filename="../src/MainWindow.cpp" line="2161"/>
+        <location filename="../src/MainWindow.cpp" line="2186"/>
         <source>Model ready: %1</source>
         <translation>模型已就绪：%1</translation>
     </message>
@@ -702,7 +728,7 @@ Check these results before sharing them.</source>
         <translation type="vanished">精确  ·  SCRFD 10G</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="2182"/>
+        <location filename="../src/MainWindow.cpp" line="2207"/>
         <source>Not downloaded yet — click Download</source>
         <translation>尚未下载——请单击“下载”</translation>
     </message>
@@ -999,7 +1025,7 @@ Check these results before sharing them.</source>
     </message>
     <message numerus="yes">
         <location filename="../src/ProcessorWorker.cpp" line="1033"/>
-        <location filename="../src/ProcessorWorker.cpp" line="1320"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1323"/>
         <source>Redacted %n region(s): %1</source>
         <translation>
             <numerusform>已遮盖 %n 个区域：%1</numerusform>
@@ -1012,7 +1038,7 @@ Check these results before sharing them.</source>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="1028"/>
-        <location filename="../src/ProcessorWorker.cpp" line="1314"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1317"/>
         <source>Saved with no regions redacted: %1</source>
         <translation>保存时未遮盖任何区域：%1</translation>
     </message>
@@ -1064,7 +1090,7 @@ Check these results before sharing them.</source>
         <translation>处理 %1 时出错</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1209"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1212"/>
         <source>Reviewing video tracks</source>
         <translation>正在检查视频轨迹</translation>
     </message>
@@ -1095,17 +1121,17 @@ Check these results before sharing them.</source>
         <translation>注意：可变帧率将转换为恒定帧率：%1</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1188"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1191"/>
         <source>Analyzing %1%</source>
         <translation>正在分析 %1%</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1189"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1192"/>
         <source>Encoding %1%</source>
         <translation>正在编码 %1%</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1346"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1349"/>
         <source>Failed to process video %1: %2</source>
         <translation>处理视频 %1 失败：%2</translation>
     </message>
@@ -1115,32 +1141,32 @@ Check these results before sharing them.</source>
         <translation>正在加载视频人脸检测模型...</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1133"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1136"/>
         <source>GPU acceleration can&apos;t run the video face model at %1 px; using the CPU instead.</source>
         <translation>GPU 加速无法以 %1 像素运行视频人脸模型，已改用 CPU。</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1143"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1146"/>
         <source>Video face detection: %1 px · %2</source>
         <translation>视频人脸检测：%1 像素 · %2</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1196"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1199"/>
         <source>%1m %2s left</source>
         <translation>剩余 %1 分 %2 秒</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1197"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1200"/>
         <source>%1s left</source>
         <translation>剩余 %1 秒</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1329"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1332"/>
         <source>Processed %1 frames in %2s (%3× real time): %4</source>
         <translation>已处理 %1 帧，用时 %2 秒（实时速度的 %3 倍）：%4</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1338"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1341"/>
         <source>Video encoder: %1</source>
         <translation>视频编码器：%1</translation>
     </message>

@@ -48,26 +48,52 @@
         <translation>モデルファイルを保存できませんでした。</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="120"/>
-        <location filename="../src/ModelDownloader.cpp" line="142"/>
+        <location filename="../src/ModelDownloader.cpp" line="122"/>
+        <source>The %1 model isn&apos;t on this computer yet.
+
+CloakFrame can download it once (%2 MB) from the yolov5-face-onnx-inference project on GitHub. The model is based on the GPL-3.0-licensed YOLO5Face project and was trained on the WIDER FACE dataset, so treat it as non-commercial only. Your images are never uploaded.
+
+Download now?</source>
+        <translation>%1 モデルはまだこのコンピューターにありません。
+
+CloakFrame は GitHub の yolov5-face-onnx-inference プロジェクトから一度だけ（%2 MB）ダウンロードできます。このモデルは GPL-3.0 ライセンスの YOLO5Face プロジェクトを基に WIDER FACE データセットで学習されているため、非商用利用に限定してください。画像がアップロードされることはありません。
+
+今すぐダウンロードしますか？</translation>
+    </message>
+    <message>
+        <location filename="../src/ModelDownloader.cpp" line="131"/>
+        <source>The %1 model isn&apos;t on this computer yet.
+
+CloakFrame can download it once (%2 MB) from the OpenCV Zoo project on GitHub (MIT-licensed). Your images are never uploaded.
+
+Download now?</source>
+        <translation>%1 モデルはまだこのコンピューターにありません。
+
+CloakFrame は GitHub の OpenCV Zoo プロジェクトから一度だけ（%2 MB）ダウンロードできます（MIT ライセンス）。画像がアップロードされることはありません。
+
+今すぐダウンロードしますか？</translation>
+    </message>
+    <message>
+        <location filename="../src/ModelDownloader.cpp" line="140"/>
+        <source>The %1 model isn&apos;t on this computer yet.
+
+CloakFrame can download it once (%2 MB) from its source project. Your images are never uploaded.
+
+Download now?</source>
+        <translation>%1 モデルはまだこのコンピューターにありません。
+
+CloakFrame は提供元プロジェクトから一度だけ（%2 MB）ダウンロードできます。画像がアップロードされることはありません。
+
+今すぐダウンロードしますか？</translation>
+    </message>
+    <message>
+        <location filename="../src/ModelDownloader.cpp" line="153"/>
+        <location filename="../src/ModelDownloader.cpp" line="170"/>
         <source>Download Model</source>
         <translation>モデルをダウンロード</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="121"/>
-        <source>The %1 model isn&apos;t on this computer yet.
-
-CloakFrame can download it once (%2 MB) from Hugging Face. The model is provided by InsightFace for non-commercial use. Your images are never uploaded.
-
-Download now?</source>
-        <translation>The %1 model isn&apos;t on this computer yet.
-
-CloakFrame can download it once (%2 MB) from Hugging Face. The model is provided by InsightFace for non-commercial use. Your images are never uploaded.
-
-Download now?</translation>
-    </message>
-    <message>
-        <location filename="../src/ModelDownloader.cpp" line="143"/>
+        <location filename="../src/ModelDownloader.cpp" line="171"/>
         <source>The license plate detection model isn&apos;t on this computer yet.
 
 CloakFrame can download it once (%1 MB) from the open-image-models project (MIT-licensed). Your images are never uploaded.
@@ -80,38 +106,38 @@ CloakFrame can download it once (%1 MB) from the open-image-models project (MIT-
 Download now?</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="162"/>
-        <location filename="../src/ModelDownloader.cpp" line="168"/>
+        <location filename="../src/ModelDownloader.cpp" line="190"/>
+        <location filename="../src/ModelDownloader.cpp" line="196"/>
         <source>Invalid Model</source>
         <translation>無効なモデル</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="163"/>
+        <location filename="../src/ModelDownloader.cpp" line="191"/>
         <source>Choose an existing ONNX model file.</source>
         <translation>存在する ONNX モデルファイルを選択してください。</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="169"/>
+        <location filename="../src/ModelDownloader.cpp" line="197"/>
         <source>The selected model must use the .onnx extension.</source>
         <translation>選択するモデルの拡張子は .onnx である必要があります。</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="174"/>
+        <location filename="../src/ModelDownloader.cpp" line="202"/>
         <source>Model Too Large</source>
         <translation>モデルが大きすぎます</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="175"/>
+        <location filename="../src/ModelDownloader.cpp" line="203"/>
         <source>The selected ONNX file is larger than 512 MB. Choose a smaller SCRFD model.</source>
         <translation>The selected ONNX file is larger than 512 MB. Choose a smaller SCRFD model.</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="188"/>
+        <location filename="../src/ModelDownloader.cpp" line="216"/>
         <source>Load Custom Model</source>
         <translation>カスタムモデルを読み込む</translation>
     </message>
     <message>
-        <location filename="../src/ModelDownloader.cpp" line="189"/>
+        <location filename="../src/ModelDownloader.cpp" line="217"/>
         <source>Only load ONNX models from sources you trust.
 
 Model: %1
@@ -305,32 +331,32 @@ On: copies selected EXIF fields such as camera, timestamps, and location. Embedd
         <translation>設定</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1821"/>
+        <location filename="../src/MainWindow.cpp" line="1846"/>
         <source>Update available: %1</source>
         <translation>更新があります: %1</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1827"/>
+        <location filename="../src/MainWindow.cpp" line="1852"/>
         <source>Update Available</source>
         <translation>更新があります</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1830"/>
+        <location filename="../src/MainWindow.cpp" line="1855"/>
         <source>CloakFrame %1 is available. What&apos;s new:</source>
         <translation>CloakFrame %1 is available. What&apos;s new:</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1835"/>
+        <location filename="../src/MainWindow.cpp" line="1860"/>
         <source>No release notes were provided for this update.</source>
         <translation>No release notes were provided for this update.</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1838"/>
+        <location filename="../src/MainWindow.cpp" line="1863"/>
         <source>Update</source>
         <translation>更新</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="1839"/>
+        <location filename="../src/MainWindow.cpp" line="1864"/>
         <source>Later</source>
         <translation>後で</translation>
     </message>
@@ -454,8 +480,8 @@ The fade only extends outward, so the detected area stays fully covered. Default
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="465"/>
-            <source>Face model path</source>
-            <translation>顔モデルのパス</translation>
+        <source>Face model path</source>
+        <translation>顔モデルのパス</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="700"/>
@@ -528,7 +554,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="1070"/>
-        <location filename="../src/MainWindow.cpp" line="1651"/>
+        <location filename="../src/MainWindow.cpp" line="1667"/>
         <source>Custom — %1</source>
         <translation>Custom — %1</translation>
     </message>
@@ -553,14 +579,14 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <translation>出力フォルダーを選択</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="2131"/>
-            <source>Accurate  ·  YOLO5Face-n</source>
-            <translation>高精度  ·  YOLO5Face-n</translation>
+        <location filename="../src/MainWindow.cpp" line="2156"/>
+        <source>Accurate  ·  YOLO5Face-n</source>
+        <translation>高精度  ·  YOLO5Face-n</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="2132"/>
-            <source>Fast  ·  YuNet</source>
-            <translation>高速  ·  YuNet</translation>
+        <location filename="../src/MainWindow.cpp" line="2157"/>
+        <source>Fast  ·  YuNet</source>
+        <translation>高速  ·  YuNet</translation>
     </message>
     <message>
         <source>Choose a SCRFD ONNX model first.</source>
@@ -574,7 +600,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/MainWindow.cpp" line="1250"/>
         <location filename="../src/MainWindow.cpp" line="1273"/>
         <location filename="../src/MainWindow.cpp" line="1370"/>
-        <location filename="../src/MainWindow.cpp" line="2158"/>
+        <location filename="../src/MainWindow.cpp" line="2183"/>
         <source>Downloading %1…</source>
         <translation>Downloading %1…</translation>
     </message>
@@ -582,7 +608,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/MainWindow.cpp" line="1253"/>
         <location filename="../src/MainWindow.cpp" line="1276"/>
         <location filename="../src/MainWindow.cpp" line="1376"/>
-        <location filename="../src/MainWindow.cpp" line="2165"/>
+        <location filename="../src/MainWindow.cpp" line="2190"/>
         <source>Model download was cancelled or failed.</source>
         <translation>Model download was cancelled or failed.</translation>
     </message>
@@ -590,7 +616,7 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/MainWindow.cpp" line="1257"/>
         <location filename="../src/MainWindow.cpp" line="1279"/>
         <location filename="../src/MainWindow.cpp" line="1389"/>
-        <location filename="../src/MainWindow.cpp" line="2161"/>
+        <location filename="../src/MainWindow.cpp" line="2186"/>
         <source>Model ready: %1</source>
         <translation>Model ready: %1</translation>
     </message>
@@ -702,7 +728,7 @@ Check these results before sharing them.</translation>
         <translation type="vanished">高精度  ·  SCRFD 10G</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="2182"/>
+        <location filename="../src/MainWindow.cpp" line="2207"/>
         <source>Not downloaded yet — click Download</source>
         <translation>未ダウンロード — 「ダウンロード」をクリック</translation>
     </message>
@@ -764,14 +790,14 @@ Check these results before sharing them.</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="1238"/>
-            <source>Choose a face ONNX model first.</source>
-            <translation>先に顔検出用ONNXモデルを選択してください。</translation>
+        <source>Choose a face ONNX model first.</source>
+        <translation>先に顔検出用ONNXモデルを選択してください。</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="1247"/>
         <location filename="../src/MainWindow.cpp" line="1406"/>
-            <source>Choose a valid face ONNX model first.</source>
-            <translation>先に有効な顔検出用ONNXモデルを選択してください。</translation>
+        <source>Choose a valid face ONNX model first.</source>
+        <translation>先に有効な顔検出用ONNXモデルを選択してください。</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="1368"/>
@@ -999,7 +1025,7 @@ Check these results before sharing them.</translation>
     </message>
     <message numerus="yes">
         <location filename="../src/ProcessorWorker.cpp" line="1033"/>
-        <location filename="../src/ProcessorWorker.cpp" line="1320"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1323"/>
         <source>Redacted %n region(s): %1</source>
         <translation>
             <numerusform>%n 箇所を匿名化しました：%1</numerusform>
@@ -1012,7 +1038,7 @@ Check these results before sharing them.</translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="1028"/>
-        <location filename="../src/ProcessorWorker.cpp" line="1314"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1317"/>
         <source>Saved with no regions redacted: %1</source>
         <translation>Saved with no regions redacted: %1</translation>
     </message>
@@ -1064,7 +1090,7 @@ Check these results before sharing them.</translation>
         <translation>Error processing %1</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1209"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1212"/>
         <source>Reviewing video tracks</source>
         <translation>動画トラックを確認中</translation>
     </message>
@@ -1095,17 +1121,17 @@ Check these results before sharing them.</translation>
         <translation>Note: variable frame rate is converted to a constant frame rate: %1</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1188"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1191"/>
         <source>Analyzing %1%</source>
         <translation>解析中 %1%</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1189"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1192"/>
         <source>Encoding %1%</source>
         <translation>エンコード中 %1%</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1346"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1349"/>
         <source>Failed to process video %1: %2</source>
         <translation>失敗しました: process video %1: %2</translation>
     </message>
@@ -1115,32 +1141,32 @@ Check these results before sharing them.</translation>
         <translation>Loading face detection model for video...</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1133"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1136"/>
         <source>GPU acceleration can&apos;t run the video face model at %1 px; using the CPU instead.</source>
         <translation>GPU acceleration can&apos;t run the video face model at %1 px; using the CPU instead.</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1143"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1146"/>
         <source>Video face detection: %1 px · %2</source>
         <translation>Video face detection: %1 px · %2</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1196"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1199"/>
         <source>%1m %2s left</source>
         <translation>残り %1 分 %2 秒</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1197"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1200"/>
         <source>%1s left</source>
         <translation>残り %1 秒</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1329"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1332"/>
         <source>Processed %1 frames in %2s (%3× real time): %4</source>
         <translation>Processed %1 frames in %2s (%3× real time): %4</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1338"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1341"/>
         <source>Video encoder: %1</source>
         <translation>動画エンコーダー: %1</translation>
     </message>
