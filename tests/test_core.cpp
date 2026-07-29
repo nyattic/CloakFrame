@@ -1355,6 +1355,24 @@ namespace
             }
         }
     }
+
+    void testPlateModelRunsWhenProvided()
+    {
+        const QString platePath = qEnvironmentVariable("CLOAKFRAME_TEST_PLATE_MODEL");
+        if (platePath.isEmpty())
+        {
+            std::puts("skipping license plate model test: environment path not set");
+            return;
+        }
+
+        const auto &model = cloakframe::plateModel();
+        cloakframe::PlateDetector detector(
+            platePath.toStdString(), false, QByteArray::fromHex(model.sha256.toLatin1()));
+        const cv::Mat blank(360, 640, CV_8UC3, cv::Scalar(30, 30, 30));
+        assert(detector.detect(blank, 0.99F, 0.4F).empty());
+        const cv::Mat tall(640, 360, CV_8UC3, cv::Scalar(200, 200, 200));
+        assert(detector.detect(tall, 0.99F, 0.4F).empty());
+    }
 }
 
 int main(int argc, char **argv)
@@ -1398,6 +1416,7 @@ int main(int argc, char **argv)
     testFixedScrfdModelRunsAtRequestedSize();
     testDynamicScrfdModelRunsAtRequestedSize();
     testRecommendedFaceModels();
+    testPlateModelRunsWhenProvided();
     testDestinationPathSafety();
 #ifndef _WIN32
     testDestinationRejectsSymlinkEscape();

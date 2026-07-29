@@ -48,6 +48,10 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
+      - name: Fetch detection models for inference tests
+        shell: bash
+        run: .github/scripts/fetch_test_models.sh
+
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
@@ -113,6 +117,10 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Fetch detection models for inference tests
+        shell: bash
+        run: .github/scripts/fetch_test_models.sh
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
@@ -190,6 +198,10 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Fetch detection models for inference tests
+        shell: bash
+        run: .github/scripts/fetch_test_models.sh
 
       - name: Test
         shell: pwsh
