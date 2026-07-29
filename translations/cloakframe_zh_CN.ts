@@ -1025,7 +1025,7 @@ Check these results before sharing them.</source>
     </message>
     <message numerus="yes">
         <location filename="../src/ProcessorWorker.cpp" line="1033"/>
-        <location filename="../src/ProcessorWorker.cpp" line="1323"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1326"/>
         <source>Redacted %n region(s): %1</source>
         <translation>
             <numerusform>已遮盖 %n 个区域：%1</numerusform>
@@ -1038,7 +1038,7 @@ Check these results before sharing them.</source>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="1028"/>
-        <location filename="../src/ProcessorWorker.cpp" line="1317"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1320"/>
         <source>Saved with no regions redacted: %1</source>
         <translation>保存时未遮盖任何区域：%1</translation>
     </message>
@@ -1131,7 +1131,7 @@ Check these results before sharing them.</source>
         <translation>正在编码 %1%</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1349"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1352"/>
         <source>Failed to process video %1: %2</source>
         <translation>处理视频 %1 失败：%2</translation>
     </message>
@@ -1161,12 +1161,12 @@ Check these results before sharing them.</source>
         <translation>剩余 %1 秒</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1332"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1335"/>
         <source>Processed %1 frames in %2s (%3× real time): %4</source>
         <translation>已处理 %1 帧，用时 %2 秒（实时速度的 %3 倍）：%4</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1341"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1344"/>
         <source>Video encoder: %1</source>
         <translation>视频编码器：%1</translation>
     </message>
@@ -1533,22 +1533,22 @@ Continue?</source>
 <context>
     <name>cloakframe::VideoReviewCanvas</name>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="162"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="180"/>
         <source>Loading frame preview…</source>
         <translation>正在加载帧预览…</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="165"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="183"/>
         <source>Could not load this frame preview.</source>
         <translation>无法加载此帧预览。</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="200"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="218"/>
         <source>Track %1</source>
         <translation>轨迹 %1</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="227"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="245"/>
         <source>Manual %1</source>
         <translation>手动 %1</translation>
     </message>
@@ -1556,89 +1556,104 @@ Continue?</source>
 <context>
     <name>cloakframe::VideoReviewDialog</name>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="447"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="465"/>
         <source>Review video tracks — %1</source>
         <translation>检查视频轨迹 — %1</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="453"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="471"/>
         <source>Scrub the timeline and uncheck false detections. To cover a missed region, draw a manual track and add keyframes as it moves; the boxes between keyframes are interpolated before encoding.</source>
         <translation>浏览时间线并取消勾选误检项。要遮盖漏检区域，请绘制手动轨迹并随其移动添加关键帧；关键帧之间的框会在编码前自动插值。</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="488"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="480"/>
+        <source>Tracks marked &quot;low confidence&quot; had too few confident detections and are excluded by default — check any that cover a real face or plate.</source>
+        <translation>标记为“低置信度”的轨迹因可靠检测过少而默认被排除。如果某条轨迹覆盖了真实的人脸或车牌，请勾选它。</translation>
+    </message>
+    <message>
+        <location filename="../src/VideoReviewDialog.cpp" line="516"/>
         <source>Track %1  ·  %2–%3</source>
         <translation>轨迹 %1  ·  %2–%3</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="537"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="522"/>
+        <source>%1  ·  low confidence</source>
+        <translation>%1  ·  低置信度</translation>
+    </message>
+    <message>
+        <location filename="../src/VideoReviewDialog.cpp" line="531"/>
+        <source>Few confident detections — excluded by default. Check it to redact this track anyway.</source>
+        <translation>可靠检测较少，默认被排除。如仍要遮盖此轨迹，请勾选。</translation>
+    </message>
+    <message>
+        <location filename="../src/VideoReviewDialog.cpp" line="580"/>
         <source>Add missed track</source>
         <translation>添加漏检轨迹</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="538"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="581"/>
         <source>Add / update keyframe</source>
         <translation>添加 / 更新关键帧</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="539"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="582"/>
         <source>Set start here</source>
         <translation>将此处设为起点</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="540"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="583"/>
         <source>Set end here</source>
         <translation>将此处设为终点</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="541"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="584"/>
         <source>Remove manual track</source>
         <translation>删除手动轨迹</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="565"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="608"/>
         <source>Include all</source>
         <translation>全部包括</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="566"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="609"/>
         <source>Exclude all</source>
         <translation>全部排除</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="626"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="669"/>
         <source>Cancel all</source>
         <translation>全部取消</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="627"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="670"/>
         <source>Encode video</source>
         <translation>编码视频</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="671"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="714"/>
         <source>%1 / %2</source>
         <translation>%1 / %2</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="853"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="896"/>
         <source>Drag a box around the missed region on the current frame.</source>
         <translation>请在当前帧拖出一个框，圈住漏检区域。</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="854"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="897"/>
         <source>Drag the new box for manual track %1 on this frame.</source>
         <translation>请在此帧为手动轨迹 %1 拖出新框。</translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/VideoReviewDialog.cpp" line="1029"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="1072"/>
         <source>Manual %1  ·  %2–%3  ·  %n keyframe(s)</source>
         <translation>
             <numerusform>手动 %1  ·  %2–%3  ·  %n 个关键帧</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="1042"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="1085"/>
         <source>%1 of %2 automatic tracks included · %3 manual</source>
         <translation>已包含 %2 条自动轨迹中的 %1 条 · %3 条手动轨迹</translation>
     </message>

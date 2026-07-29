@@ -1223,6 +1223,7 @@ namespace cloakframe
                 {
                     VideoReviewTrack reviewTrack;
                     reviewTrack.id = track.id;
+                    reviewTrack.lowConfidence = track.lowConfidence;
                     reviewTrack.boxes.reserve(static_cast<qsizetype>(track.boxes.size()));
                     for (const auto &box: track.boxes)
                     {

@@ -1025,7 +1025,7 @@ Check these results before sharing them.</translation>
     </message>
     <message numerus="yes">
         <location filename="../src/ProcessorWorker.cpp" line="1033"/>
-        <location filename="../src/ProcessorWorker.cpp" line="1323"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1326"/>
         <source>Redacted %n region(s): %1</source>
         <translation>
             <numerusform>%n 箇所を匿名化しました：%1</numerusform>
@@ -1038,7 +1038,7 @@ Check these results before sharing them.</translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="1028"/>
-        <location filename="../src/ProcessorWorker.cpp" line="1317"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1320"/>
         <source>Saved with no regions redacted: %1</source>
         <translation>Saved with no regions redacted: %1</translation>
     </message>
@@ -1131,7 +1131,7 @@ Check these results before sharing them.</translation>
         <translation>エンコード中 %1%</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1349"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1352"/>
         <source>Failed to process video %1: %2</source>
         <translation>失敗しました: process video %1: %2</translation>
     </message>
@@ -1161,12 +1161,12 @@ Check these results before sharing them.</translation>
         <translation>残り %1 秒</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1332"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1335"/>
         <source>Processed %1 frames in %2s (%3× real time): %4</source>
         <translation>Processed %1 frames in %2s (%3× real time): %4</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="1341"/>
+        <location filename="../src/ProcessorWorker.cpp" line="1344"/>
         <source>Video encoder: %1</source>
         <translation>動画エンコーダー: %1</translation>
     </message>
@@ -1533,22 +1533,22 @@ Continue?</translation>
 <context>
     <name>cloakframe::VideoReviewCanvas</name>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="162"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="180"/>
         <source>Loading frame preview…</source>
         <translation>フレームプレビューを読み込み中…</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="165"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="183"/>
         <source>Could not load this frame preview.</source>
         <translation>このフレームのプレビューを読み込めませんでした。</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="200"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="218"/>
         <source>Track %1</source>
         <translation>トラック %1</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="227"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="245"/>
         <source>Manual %1</source>
         <translation>手動 %1</translation>
     </message>
@@ -1556,89 +1556,104 @@ Continue?</translation>
 <context>
     <name>cloakframe::VideoReviewDialog</name>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="447"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="465"/>
         <source>Review video tracks — %1</source>
         <translation>動画トラックを確認 — %1</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="453"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="471"/>
         <source>Scrub the timeline and uncheck false detections. To cover a missed region, draw a manual track and add keyframes as it moves; the boxes between keyframes are interpolated before encoding.</source>
         <translation>タイムラインを移動して誤検出のチェックを外してください。見逃した領域を覆うには、手動トラックを描画し、動きに合わせてキーフレームを追加します。キーフレーム間のボックスはエンコード前に補間されます。</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="488"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="480"/>
+        <source>Tracks marked &quot;low confidence&quot; had too few confident detections and are excluded by default — check any that cover a real face or plate.</source>
+        <translation>「低信頼度」と表示されたトラックは確実な検出が少なすぎるため、既定で除外されます。実際の顔やナンバープレートを覆うトラックにはチェックを入れてください。</translation>
+    </message>
+    <message>
+        <location filename="../src/VideoReviewDialog.cpp" line="516"/>
         <source>Track %1  ·  %2–%3</source>
         <translation>トラック %1  ·  %2–%3</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="537"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="522"/>
+        <source>%1  ·  low confidence</source>
+        <translation>%1  ·  低信頼度</translation>
+    </message>
+    <message>
+        <location filename="../src/VideoReviewDialog.cpp" line="531"/>
+        <source>Few confident detections — excluded by default. Check it to redact this track anyway.</source>
+        <translation>確実な検出が少ないため既定で除外されます。このトラックを隠すにはチェックを入れてください。</translation>
+    </message>
+    <message>
+        <location filename="../src/VideoReviewDialog.cpp" line="580"/>
         <source>Add missed track</source>
         <translation>見逃したトラックを追加</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="538"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="581"/>
         <source>Add / update keyframe</source>
         <translation>キーフレームを追加 / 更新</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="539"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="582"/>
         <source>Set start here</source>
         <translation>ここを開始位置に設定</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="540"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="583"/>
         <source>Set end here</source>
         <translation>ここを終了位置に設定</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="541"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="584"/>
         <source>Remove manual track</source>
         <translation>手動トラックを削除</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="565"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="608"/>
         <source>Include all</source>
         <translation>すべて含める</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="566"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="609"/>
         <source>Exclude all</source>
         <translation>すべて除外</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="626"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="669"/>
         <source>Cancel all</source>
         <translation>すべてキャンセル</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="627"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="670"/>
         <source>Encode video</source>
         <translation>動画をエンコード</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="671"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="714"/>
         <source>%1 / %2</source>
         <translation>%1 / %2</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="853"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="896"/>
         <source>Drag a box around the missed region on the current frame.</source>
         <translation>現在のフレームで、見逃した領域を囲むボックスをドラッグしてください。</translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="854"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="897"/>
         <source>Drag the new box for manual track %1 on this frame.</source>
         <translation>このフレームで手動トラック %1 の新しいボックスをドラッグしてください。</translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/VideoReviewDialog.cpp" line="1029"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="1072"/>
         <source>Manual %1  ·  %2–%3  ·  %n keyframe(s)</source>
         <translation>
             <numerusform>手動 %1  ·  %2–%3  ·  キーフレーム %n 件</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../src/VideoReviewDialog.cpp" line="1042"/>
+        <location filename="../src/VideoReviewDialog.cpp" line="1085"/>
         <source>%1 of %2 automatic tracks included · %3 manual</source>
         <translation>自動トラック %2 件中 %1 件を含む · 手動 %3 件</translation>
     </message>

@@ -685,7 +685,7 @@ namespace cloakframe
                            const TrackingContinueGuard &continueGuard)
     {
         std::size_t filteringOperations = 0;
-        std::erase_if(tracks, [&](const Track &track)
+        const auto isLowConfidence = [&](const Track &track)
         {
             int strong = 0;
             int real = 0;
@@ -711,7 +711,18 @@ namespace cloakframe
                     && static_cast<float>(strong)
                                >= config.shortTrackStrongRatio * static_cast<float>(real);
             return !cleanShortBurst;
-        });
+        };
+        if (config.retainLowConfidenceTracks)
+        {
+            for (auto &track: tracks)
+            {
+                track.lowConfidence = isLowConfidence(track);
+            }
+        }
+        else
+        {
+            std::erase_if(tracks, isLowConfidence);
+        }
         std::size_t totalBoxes = trackedBoxCount(tracks, kMaxFinalTrackedBoxes);
         for (auto &track: tracks)
         {

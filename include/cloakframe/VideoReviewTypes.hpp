@@ -22,6 +22,7 @@ namespace cloakframe
     struct VideoReviewTrack
     {
         int id = 0;
+        bool lowConfidence = false;
         QVector<VideoReviewBox> boxes;
     };
 

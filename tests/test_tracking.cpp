@@ -209,6 +209,35 @@ namespace
         assert(solidTracks.size() == 1);
     }
 
+    void testRetainedLowConfidenceTracksAreMarkedNotDropped()
+    {
+        auto weak = movingObjectSequence(20, 50.0F, 5.0F, 100.0F, 0.2F);
+        weak[3][0].score = 0.9F;
+        weak[4][0].score = 0.9F;
+        auto tracks = cloakframe::buildBidirectionalTracks(weak);
+        auto solid = movingObjectSequence(20, 300.0F, 5.0F, 300.0F);
+        auto solidTracks = cloakframe::buildBidirectionalTracks(solid);
+        tracks.insert(tracks.end(), solidTracks.begin(), solidTracks.end());
+        assert(tracks.size() == 2);
+
+        cloakframe::TrackPostProcessConfig retain;
+        retain.retainLowConfidenceTracks = true;
+        cloakframe::postProcessTracks(tracks, retain, 20);
+        assert(tracks.size() == 2);
+        int lowConfidence = 0;
+        for (const auto &track: tracks)
+        {
+            assert(!track.boxes.empty());
+            if (track.lowConfidence)
+            {
+                ++lowConfidence;
+                assert(track.boxAtFrame(3) != nullptr);
+                assert(track.boxAtFrame(4) != nullptr);
+            }
+        }
+        assert(lowConfidence == 1);
+    }
+
     void testShortStrongBurstIsKept()
     {
         auto burst = movingObjectSequence(2, 50.0F, 5.0F);
@@ -682,6 +711,7 @@ int main()
     testLowConfidenceDetectionsExtendButNeverStartTracks();
     testLowConfidenceCoastingExpires();
     testTracksWithFewStrongDetectionsAreDropped();
+    testRetainedLowConfidenceTracksAreMarkedNotDropped();
     testShortStrongBurstIsKept();
     testHighConfidenceSingletonIsKept();
     testMovingCoastingSurvivesLongerThanStatic();

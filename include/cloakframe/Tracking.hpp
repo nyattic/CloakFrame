@@ -35,6 +35,7 @@ namespace cloakframe
     struct Track
     {
         int id = 0;
+        bool lowConfidence = false;
         std::vector<TrackedBox> boxes;
 
         [[nodiscard]] int firstFrame() const;
@@ -94,6 +95,7 @@ namespace cloakframe
         int minStrongDetections = 3;
         int shortTrackMinStrong = 1;
         float shortTrackStrongRatio = 0.5F;
+        bool retainLowConfidenceTracks = false;
     };
 
     [[nodiscard]] std::vector<Track> buildTracks(const std::vector<FaceDetections> &frameDetections,

@@ -449,10 +449,21 @@ namespace cloakframe
         setModal(true);
 
         auto *root = new QVBoxLayout(this);
-        auto *hint = new QLabel(
+        QString hintText =
             tr("Scrub the timeline and uncheck false detections. To cover a missed region, "
                "draw a manual track and add keyframes as it moves; the boxes between "
-               "keyframes are interpolated before encoding."), this);
+               "keyframes are interpolated before encoding.");
+        const bool hasLowConfidenceTracks = std::any_of(
+            request_.tracks.cbegin(), request_.tracks.cend(),
+            [](const VideoReviewTrack &track) { return track.lowConfidence; });
+        if (hasLowConfidenceTracks)
+        {
+            hintText += QStringLiteral(" ");
+            hintText += tr("Tracks marked \"low confidence\" had too few confident "
+                           "detections and are excluded by default — check any that "
+                           "cover a real face or plate.");
+        }
+        auto *hint = new QLabel(hintText, this);
         hint->setWordWrap(true);
         root->addWidget(hint);
 
@@ -484,16 +495,30 @@ namespace cloakframe
             {
                 continue;
             }
-            auto *item = new QListWidgetItem(
-                tr("Track %1  ·  %2–%3")
+            const QString range = tr("Track %1  ·  %2–%3")
                     .arg(track.id)
                     .arg(formatTime(track.boxes.front().frame / request_.fps))
-                    .arg(formatTime(track.boxes.back().frame / request_.fps)),
+                    .arg(formatTime(track.boxes.back().frame / request_.fps));
+            auto *item = new QListWidgetItem(
+                track.lowConfidence
+                    ? tr("%1  ·  low confidence").arg(range)
+                    : range,
                 trackList_);
             item->setData(kTrackIdRole, track.id);
             item->setData(kManualTrackRole, false);
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-            item->setCheckState(Qt::Checked);
+            if (track.lowConfidence)
+            {
+                item->setToolTip(
+                    tr("Few confident detections — excluded by default. Check it to "
+                       "redact this track anyway."));
+                item->setCheckState(Qt::Unchecked);
+                excludedTrackIds_.insert(track.id);
+            }
+            else
+            {
+                item->setCheckState(Qt::Checked);
+            }
         }
         connect(trackList_, &QListWidget::itemChanged, this, [this](QListWidgetItem *item)
         {

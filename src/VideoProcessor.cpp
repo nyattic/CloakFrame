@@ -610,6 +610,7 @@ namespace cloakframe
                                                sceneCuts, trackingContinue);
             TrackPostProcessConfig postProcess = options.postProcess;
             postProcess.strongScoreThreshold = trackerConfig.highScoreThreshold;
+            postProcess.retainLowConfidenceTracks = static_cast<bool>(review);
             postProcessTracks(tracks, postProcess, static_cast<int>(frameCount), sceneCuts,
                               trackingContinue);
         }
