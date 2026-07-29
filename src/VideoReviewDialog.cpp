@@ -56,7 +56,8 @@ namespace cloakframe
         QStringList previewFrameArguments(const VideoReviewRequest &request, const int frame)
         {
             if (request.ffmpegPath.isEmpty() || request.sourcePath.isEmpty()
-                || request.fps <= 0.0 || !request.frameSize.isValid())
+                || request.fps <= 0.0 || request.fpsNum <= 0 || request.fpsDen <= 0
+                || frame < 0 || !request.frameSize.isValid())
             {
                 return {};
             }
@@ -73,14 +74,31 @@ namespace cloakframe
             previewWidth += previewWidth % 2;
             previewHeight += previewHeight % 2;
 
-            const double seconds = static_cast<double>(frame) / request.fps;
-            return {"-v", "error", "-nostdin",
-                    "-ss", QString::number(seconds, 'f', 6),
-                    "-i", request.sourcePath,
-                    "-map", "0:v:0", "-frames:v", "1",
-                    "-vf", QString("scale=%1:%2:flags=area")
-                               .arg(previewWidth).arg(previewHeight),
-                    "-f", "image2pipe", "-c:v", "png", "-"};
+            const int marginFrames = std::clamp(
+                static_cast<int>(std::ceil(request.fps * 3.0)), 1, 240);
+            const int seekFrame = std::max(0, frame - marginFrames);
+            const QString cfr = QStringLiteral("%1/%2")
+                                    .arg(request.fpsNum).arg(request.fpsDen);
+            const QString filter =
+                QString("fps=fps=%1%2,select=eq(n\\,%3),scale=%4:%5:flags=area")
+                    .arg(cfr,
+                         seekFrame > 0 ? QStringLiteral(":start_time=0") : QString())
+                    .arg(frame - seekFrame)
+                    .arg(previewWidth).arg(previewHeight);
+
+            QStringList arguments{"-v", "error", "-nostdin"};
+            if (seekFrame > 0)
+            {
+                const double seekSeconds = static_cast<double>(seekFrame)
+                                           * request.fpsDen / request.fpsNum;
+                arguments << "-ss" << QString::number(seekSeconds, 'f', 6);
+            }
+            arguments << "-i" << request.sourcePath
+                      << "-map" << "0:v:0"
+                      << "-vf" << filter
+                      << "-frames:v" << "1"
+                      << "-f" << "image2pipe" << "-c:v" << "png" << "-";
+            return arguments;
         }
     }
 

@@ -41,6 +41,8 @@ namespace cloakframe
         QString sourceName;
         QSize frameSize;
         double fps = 0.0;
+        int fpsNum = 0;
+        int fpsDen = 1;
         int frameCount = 0;
         QVector<VideoReviewTrack> tracks;
     };

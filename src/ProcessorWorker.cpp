@@ -1216,6 +1216,8 @@ namespace cloakframe
                 request.sourceName = fileName;
                 request.frameSize = QSize(reviewInfo.displayWidth(), reviewInfo.displayHeight());
                 request.fps = reviewInfo.fps();
+                request.fpsNum = reviewInfo.fpsNum;
+                request.fpsDen = reviewInfo.fpsDen;
                 request.frameCount = static_cast<int>(std::min<qint64>(
                     frameCount, std::numeric_limits<int>::max()));
                 request.tracks.reserve(static_cast<qsizetype>(tracks.size()));
