@@ -98,7 +98,8 @@ namespace cloakframe
             outputNames_.emplace_back(name.get());
         }
 
-        const auto inputType = session_.GetInputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        const auto inputTypeInfo = session_.GetInputTypeInfo(0);
+        const auto inputType = inputTypeInfo.GetTensorTypeAndShapeInfo();
         if (inputType.GetElementType() != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT)
         {
             throw std::runtime_error("License-plate model input must be a float tensor.");
@@ -230,6 +231,10 @@ namespace cloakframe
         if (rows > elementCount / stride)
         {
             throw std::runtime_error("License-plate model returned an invalid tensor size.");
+        }
+        if (rows == 0)
+        {
+            return {};
         }
         const float *data = outputs.front().GetTensorData<float>();
         if (data == nullptr)
