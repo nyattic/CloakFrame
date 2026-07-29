@@ -1137,17 +1137,70 @@ namespace cloakframe
             {
                 return false;
             }
-            struct stat existing{};
-            if (::fstatat(parentDescriptor, destination, &existing,
-                          AT_SYMLINK_NOFOLLOW) == 0)
+            PosixDescriptor source(::openat(stageDescriptor, payload,
+                                            O_RDONLY | O_NOFOLLOW | O_CLOEXEC));
+            if (!source.valid())
             {
                 return false;
             }
-            if (errno != ENOENT)
+            struct stat sourceInfo{};
+            if (::fstat(source.get(), &sourceInfo) != 0 || !S_ISREG(sourceInfo.st_mode))
             {
                 return false;
             }
-            return ::renameat(stageDescriptor, payload, parentDescriptor, destination) == 0;
+            PosixDescriptor target(::openat(parentDescriptor, destination,
+                                            O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW |
+                                                O_CLOEXEC,
+                                            sourceInfo.st_mode & 07777));
+            if (!target.valid())
+            {
+                return false;
+            }
+            const auto abandonTarget = [&]
+            {
+                ::unlinkat(parentDescriptor, destination, 0);
+                return false;
+            };
+            std::array<char, 65536> buffer{};
+            for (;;)
+            {
+                const ssize_t got = ::read(source.get(), buffer.data(), buffer.size());
+                if (got == 0)
+                {
+                    break;
+                }
+                if (got < 0)
+                {
+                    if (errno == EINTR)
+                    {
+                        continue;
+                    }
+                    return abandonTarget();
+                }
+                const char *cursor = buffer.data();
+                ssize_t remaining = got;
+                while (remaining > 0)
+                {
+                    const ssize_t wrote = ::write(target.get(), cursor,
+                                                  static_cast<std::size_t>(remaining));
+                    if (wrote < 0)
+                    {
+                        if (errno == EINTR)
+                        {
+                            continue;
+                        }
+                        return abandonTarget();
+                    }
+                    cursor += wrote;
+                    remaining -= wrote;
+                }
+            }
+            if (::fsync(target.get()) != 0)
+            {
+                return abandonTarget();
+            }
+            ::unlinkat(stageDescriptor, payload, 0);
+            return true;
         }
 
         template<typename Writer>
