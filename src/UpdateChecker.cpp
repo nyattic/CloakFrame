@@ -41,6 +41,7 @@ namespace cloakframe
     void UpdateChecker::check()
     {
         QNetworkRequest request{QUrl(QString::fromLatin1(kReleasesApiUrl))};
+        request.setTransferTimeout(15000);
         request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                              QNetworkRequest::NoLessSafeRedirectPolicy);
         request.setRawHeader("Accept", "application/vnd.github+json");
@@ -82,9 +83,13 @@ namespace cloakframe
             }
 
             const auto url = object.value("html_url").toString();
+            const QUrl parsedUrl(url);
+            const bool trustedUrl = parsedUrl.isValid()
+                                    && parsedUrl.scheme() == QLatin1String("https")
+                                    && parsedUrl.host() == QLatin1String("github.com");
             const auto releaseNotes = object.value("body").toString().trimmed();
             emit updateAvailable(tag,
-                                 url.isEmpty() ? QString::fromLatin1(kReleasesPageUrl) : url,
+                                 trustedUrl ? url : QString::fromLatin1(kReleasesPageUrl),
                                  releaseNotes);
         });
     }

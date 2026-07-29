@@ -1851,7 +1851,7 @@ namespace cloakframe
                     QMessageBox message(this);
                     message.setWindowTitle(tr("Update Available"));
                     message.setIcon(QMessageBox::Information);
-                    message.setTextFormat(Qt::MarkdownText);
+                    message.setTextFormat(Qt::PlainText);
                     message.setText(tr("CloakFrame %1 is available. What's new:")
                                         .arg(latestVersion));
                     const QString localizedNotes = releaseNotesSection(releaseNotes);
