@@ -16,6 +16,8 @@ namespace cloakframe
 
         ~UpdateChecker() override;
 
+        static QString releasesPageUrl();
+
         void check();
 
     signals:

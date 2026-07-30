@@ -1,6 +1,7 @@
 #include "cloakframe/MainWindow.hpp"
 #include "cloakframe/ProcessorWorker.hpp"
 #include "cloakframe/ReviewTypes.hpp"
+#include "cloakframe/SelfUpdater.hpp"
 #include "cloakframe/Theme.hpp"
 
 #include <QApplication>
@@ -96,6 +97,8 @@ namespace
 
 int main(int argc, char *argv[])
 {
+    cloakframe::SelfUpdater::runStartupHooks();
+
     QApplication app(argc, argv);
 
     configureApplicationAndMigrateSettings();

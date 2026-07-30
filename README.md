@@ -20,8 +20,10 @@ The interface is available in English, Korean, Japanese, and Simplified Chinese.
 Download from [Releases](https://github.com/nyattic/CloakFrame/releases/latest):
 
 - **macOS** (Apple Silicon, macOS 15+) — open the `.dmg`, drag to Applications
-- **Windows** (x64, Windows 10+) — unzip, run `CloakFrame.exe`. GPU acceleration needs Windows 10 1903+ and a DirectX 12 capable GPU (NVIDIA, AMD, or Intel); without one, detection runs on the CPU.
-- **Linux** (x86_64) — download the `.AppImage`, `chmod +x` it, and run it
+- **Windows** (x64, Windows 10+) — run `CloakFrame-win-Setup.exe` (installs per user, no administrator rights needed), or unzip the portable `CloakFrame-win-Portable.zip` and run `CloakFrame.exe`. GPU acceleration needs Windows 10 1903+ and a DirectX 12 capable GPU (NVIDIA, AMD, or Intel); without one, detection runs on the CPU.
+- **Linux** (x86_64) — download `CloakFrame.AppImage`, `chmod +x` it, and run it
+
+CloakFrame checks for updates when it starts (toggle under **Settings → Check for updates on startup**). When you accept an update, Windows and Linux builds download it and apply it in place — using a delta download when one is available — and macOS installs it through Sparkle. Nothing is downloaded until you choose **Update**.
 
 The first time you use a built-in model, CloakFrame downloads it once (0.23–11 MB) and caches it; after that it runs offline. The face models come from the YOLO5Face and OpenCV Zoo projects on GitHub; the license plate model comes from the open-image-models project on GitHub.
 
@@ -58,6 +60,8 @@ The built-in models are **not bundled** and **not committed** to this repository
 - `models/yolo-v9-t-512-license-plates-end2end.onnx` — License plates
 
 You can also launch the app and use **Browse…** to select a custom SCRFD `.onnx` file.
+
+Self-update support is controlled by the `CLOAKFRAME_SELF_UPDATE` CMake option (default `ON`). When enabled, the configure step downloads a pinned, checksum-verified copy of the update framework — Velopack on Windows and Linux, Sparkle on macOS — and the app gains in-place updates when run from a packaged release. Pass `-DCLOAKFRAME_SELF_UPDATE=OFF` to build without it (for example for distro packaging); the app then falls back to a notification that links to the releases page.
 
 Only load custom ONNX models from sources you trust. CloakFrame checks basic SCRFD tensor compatibility before processing, but ONNX files are still executable model inputs handled by native runtime libraries.
 
@@ -146,11 +150,11 @@ The video I/O tests exercise a real FFmpeg round trip and are skipped when FFmpe
 
 Out-of-tree CMake directories matching `build*/` are ignored by Git, as are local ONNX models, generated output, package artifacts, incomplete downloads, logs, and common IDE files. Source files, workflows, translations, assets, and documentation remain tracked.
 
-Packaging scripts: [`scripts/package_macos.sh`](scripts/package_macos.sh), [`scripts/package_windows.ps1`](scripts/package_windows.ps1), [`scripts/package_linux.sh`](scripts/package_linux.sh), [`scripts/notarize_macos.sh`](scripts/notarize_macos.sh).
+Packaging scripts: [`scripts/package_macos.sh`](scripts/package_macos.sh), [`scripts/package_windows.ps1`](scripts/package_windows.ps1), [`scripts/package_linux.sh`](scripts/package_linux.sh), [`scripts/notarize_macos.sh`](scripts/notarize_macos.sh). The Windows and Linux scripts produce the installer, portable bundle, and update packages with [vpk](https://docs.velopack.io) (`dotnet tool install --global vpk`) when it is on `PATH`, and otherwise fall back to the plain portable layout.
 
 ## Privacy
 
-Your images and videos never leave your device — they are read from disk, processed locally (video encoding runs through a local FFmpeg process), and written to the output folder you pick. CloakFrame makes only two kinds of network request, and neither sends any image or personal data: a one-time download of a detection model from GitHub the first time you use each built-in model, and a check at launch against the GitHub Releases API to see whether a newer version exists. The update check can be turned off under **Settings → Check for updates on startup**. Supplying a custom SCRFD model with **Browse…** avoids downloading a built-in face model; license plate detection still requires its separate model.
+Your images and videos never leave your device — they are read from disk, processed locally (video encoding runs through a local FFmpeg process), and written to the output folder you pick. CloakFrame makes only three kinds of network request, and none of them sends any image or personal data: a one-time download of a detection model from GitHub the first time you use each built-in model, a check at launch against GitHub to see whether a newer version exists, and — only after you accept an update — the download of that update from GitHub Releases. The update check can be turned off under **Settings → Check for updates on startup**. Supplying a custom SCRFD model with **Browse…** avoids downloading a built-in face model; license plate detection still requires its separate model.
 
 ## License
 
@@ -170,7 +174,7 @@ CloakFrame is free software: you can redistribute it and/or modify it under the 
 
 **License plate model** — the built-in license plate detector is **not distributed with CloakFrame**; the app downloads it on first use from the [open-image-models](https://github.com/ankandrew/open-image-models) project by ankandrew, which is MIT-licensed. It is a YOLOv9-architecture model (see [Citation](#citation)) and is downloaded at runtime and cached locally, under its upstream project's terms. Confirm the current terms with the open-image-models project before any commercial or redistribution use.
 
-**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT), DirectML (proprietary Microsoft license permitting redistribution; bundled with Windows releases only, as `DirectML.dll`), Exiv2 (GPL-2.0-or-later) with its own dependencies (Brotli, Expat, inih, zlib, GNU gettext), spdlog and {fmt} (MIT), and FFmpeg (LGPL-2.1-or-later with optional GPL components), which is invoked as a separate process for video decoding and encoding. Each retains its own license; the full texts are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and are bundled with each release.
+**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT), DirectML (proprietary Microsoft license permitting redistribution; bundled with Windows releases only, as `DirectML.dll`), Exiv2 (GPL-2.0-or-later) with its own dependencies (Brotli, Expat, inih, zlib, GNU gettext), spdlog and {fmt} (MIT), Velopack (MIT; self-update on Windows and Linux), Sparkle (MIT; self-update on macOS), and FFmpeg (LGPL-2.1-or-later with optional GPL components), which is invoked as a separate process for video decoding and encoding. Each retains its own license; the full texts are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and are bundled with each release.
 
 ## Citation
 

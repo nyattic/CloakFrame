@@ -135,6 +135,13 @@ if (-not $dmlDll) {
 Copy-Item $dmlDll $DistDir -Force
 Write-Host "Bundled: $dmlDll"
 
+$velopackDll = Join-Path (Split-Path $ExePath -Parent) "velopack_libc_win_x64_msvc.dll"
+if (-not (Test-Path $velopackDll)) {
+    throw "velopack_libc_win_x64_msvc.dll was not found next to CloakFrame.exe; the release would ship without self-update support."
+}
+Copy-Item $velopackDll $DistDir -Force
+Write-Host "Bundled: $velopackDll"
+
 $searchRoots = @(
     $OpenCvRoot,
     (Join-Path $OpenCvRoot ".."),
@@ -252,6 +259,43 @@ foreach ($testBinDir in $testBinDirs) {
 $env:PATH = "$DistDir;$ffmpegDistDir;$(Join-Path $QtRoot 'bin');$env:PATH"
 ctest --test-dir $BuildDir -C $BuildType --output-on-failure
 if ($LASTEXITCODE -ne 0) { throw "Release tests failed (exit $LASTEXITCODE)" }
+
+$vpk = Get-Command vpk -ErrorAction SilentlyContinue
+if ($vpk) {
+    $Version = ([regex]'project\(CloakFrame VERSION ([0-9.]+)').Match(
+        (Get-Content (Join-Path $RootDir "CMakeLists.txt") -Raw)).Groups[1].Value
+    if (-not $Version) { throw "Could not parse the project version from CMakeLists.txt" }
+
+    $ReleasesDir = Join-Path $RootDir "dist/windows/releases"
+    if (Test-Path $ReleasesDir) { Remove-Item $ReleasesDir -Recurse -Force }
+    New-Item -ItemType Directory -Path $ReleasesDir | Out-Null
+
+    & vpk download github --repoUrl "https://github.com/nyattic/CloakFrame" `
+        --channel win --outputDir $ReleasesDir
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "No previous Velopack release was found; packing without a delta."
+    }
+
+    $NotesArgs = @()
+    $NotesPath = Join-Path $RootDir "release-notes/v$Version.md"
+    if (Test-Path $NotesPath) { $NotesArgs = @("--releaseNotes", $NotesPath) }
+
+    & vpk pack -y `
+        --packId CloakFrame `
+        --packVersion $Version `
+        --packDir $DistDir `
+        --mainExe CloakFrame.exe `
+        --packTitle CloakFrame `
+        --packAuthors Nyabi `
+        --icon (Join-Path $RootDir "assets/cloakframe.ico") `
+        --channel win `
+        --outputDir $ReleasesDir `
+        @NotesArgs
+    if ($LASTEXITCODE -ne 0) { throw "vpk pack failed (exit $LASTEXITCODE)" }
+    Write-Host "✅ Velopack packages: $ReleasesDir"
+} else {
+    Write-Warning "vpk was not found on PATH; skipping installer and update packaging (portable dist only)."
+}
 
 Write-Host ""
 Write-Host "✅ Packaged app: $DistDir"

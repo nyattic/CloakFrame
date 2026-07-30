@@ -38,6 +38,11 @@ namespace cloakframe
 
     UpdateChecker::~UpdateChecker() = default;
 
+    QString UpdateChecker::releasesPageUrl()
+    {
+        return QString::fromLatin1(kReleasesPageUrl);
+    }
+
     void UpdateChecker::check()
     {
         QNetworkRequest request{QUrl(QString::fromLatin1(kReleasesApiUrl))};

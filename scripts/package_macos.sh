@@ -58,6 +58,16 @@ macdeployqt "$DIST_APP" \
 
 mkdir -p "$FRAMEWORKS_DIR"
 
+SPARKLE_SRC="$BUILD_DIR/_deps/sparkle-src/Sparkle.framework"
+if [[ -d "$SPARKLE_SRC" ]]; then
+    rm -rf "$FRAMEWORKS_DIR/Sparkle.framework"
+    ditto "$SPARKLE_SRC" "$FRAMEWORKS_DIR/Sparkle.framework"
+    install_name_tool -change "@rpath/Sparkle.framework/Versions/B/Sparkle" \
+        "@executable_path/../Frameworks/Sparkle.framework/Versions/B/Sparkle" "$EXECUTABLE"
+    install_name_tool -delete_rpath "$BUILD_DIR/_deps/sparkle-src" "$EXECUTABLE" 2>/dev/null || true
+    echo "Bundled: Sparkle.framework"
+fi
+
 is_bundle_candidate() {
   local dependency="$1"
   [[ "$dependency" == /opt/homebrew/* \
@@ -239,6 +249,18 @@ if [[ -d "$DIST_APP/Contents/PlugIns" ]]; then
     while IFS= read -r item; do
         codesign "${SIGN_FLAGS[@]}" --sign "$SIGN_IDENTITY" "$item"
     done < <(find "$DIST_APP/Contents/PlugIns" -type f \( -name '*.dylib' -o -name '*.so' \) -print)
+fi
+
+SPARKLE_FW="$FRAMEWORKS_DIR/Sparkle.framework"
+if [[ -d "$SPARKLE_FW" ]]; then
+    while IFS= read -r service; do
+        codesign --force --timestamp --options runtime \
+            --preserve-metadata=entitlements --sign "$SIGN_IDENTITY" "$service"
+    done < <(find "$SPARKLE_FW/Versions/B/XPCServices" -maxdepth 1 -type d -name '*.xpc' -print)
+    codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" \
+        "$SPARKLE_FW/Versions/B/Autoupdate"
+    codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" \
+        "$SPARKLE_FW/Versions/B/Updater.app"
 fi
 
 while IFS= read -r fw; do

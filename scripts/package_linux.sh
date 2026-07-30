@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT_DIR/build-release"
 DIST_DIR="$ROOT_DIR/dist/linux"
-APPDIR="$BUILD_DIR/AppDir"
+APPDIR="$BUILD_DIR/CloakFrame.AppDir"
 ARCH="${ARCH:-$(uname -m)}"
 export ARCH
 
@@ -127,18 +127,13 @@ fi
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
-OUTPUT="CloakFrame-${VERSION}-${ARCH}.AppImage"
-(
-    cd "$DIST_DIR"
-    OUTPUT="$OUTPUT" "$LINUXDEPLOY" \
-        --appdir "$APPDIR" \
-        --executable "$APPDIR/usr/bin/CloakFrame" \
-        --desktop-file "$APPDIR/usr/share/applications/cloakframe.desktop" \
-        --icon-file "$ICON_STAGE" \
-        --plugin qt \
-        "${DEPLOY_ARGS[@]}" \
-        --output appimage
-)
+"$LINUXDEPLOY" \
+    --appdir "$APPDIR" \
+    --executable "$APPDIR/usr/bin/CloakFrame" \
+    --desktop-file "$APPDIR/usr/share/applications/cloakframe.desktop" \
+    --icon-file "$ICON_STAGE" \
+    --plugin qt \
+    "${DEPLOY_ARGS[@]}"
 
 if find "$APPDIR" -name '*.onnx' -print -quit | grep -q .; then
     echo "❌ ONNX model files found in the AppDir; models must not be bundled."
@@ -156,4 +151,34 @@ if [[ "$ARCH" == "x86_64" ]]; then
     done
 fi
 
-echo "✅ AppImage created: $DIST_DIR/$OUTPUT"
+if command -v vpk >/dev/null 2>&1; then
+    vpk download github --repoUrl "https://github.com/nyattic/CloakFrame" \
+        --channel linux --outputDir "$DIST_DIR" \
+        || echo "⚠️  No previous Velopack release was found; packing without a delta."
+
+    NOTES_ARGS=()
+    NOTES_FILE="$ROOT_DIR/release-notes/v${VERSION}.md"
+    if [[ -s "$NOTES_FILE" ]]; then
+        NOTES_ARGS+=(--releaseNotes "$NOTES_FILE")
+    fi
+
+    vpk pack -y \
+        --packId CloakFrame \
+        --packVersion "$VERSION" \
+        --packDir "$APPDIR" \
+        --mainExe CloakFrame \
+        --packTitle CloakFrame \
+        --packAuthors Nyabi \
+        --channel linux \
+        --outputDir "$DIST_DIR" \
+        "${NOTES_ARGS[@]}"
+    echo "✅ Velopack packages created in $DIST_DIR"
+else
+    echo "⚠️  vpk was not found on PATH; building a plain AppImage without self-update support."
+    OUTPUT="CloakFrame-${VERSION}-${ARCH}.AppImage"
+    (
+        cd "$DIST_DIR"
+        OUTPUT="$OUTPUT" "$LINUXDEPLOY" --appdir "$APPDIR" --output appimage
+    )
+    echo "✅ AppImage created: $DIST_DIR/$OUTPUT"
+fi

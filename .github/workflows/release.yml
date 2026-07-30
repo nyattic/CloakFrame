@@ -24,6 +24,7 @@ env:
   ONNXRUNTIME_DIRECTML_SHA256: 57e9f11b73437bef7a309496135d4c1f96b1a8e9ddba60013fa27bfc1d788681
   DIRECTML_VERSION: 1.15.4
   DIRECTML_SHA256: 4e7cb7ddce8cf837a7a75dc029209b520ca0101470fcdf275c1f49736a3615b9
+  VELOPACK_VERSION: 1.2.0
 
 jobs:
   macos:
@@ -61,15 +62,37 @@ jobs:
           DMG=$(ls dist/macos/*.dmg | head -n1)
           bash scripts/notarize_macos.sh "$DMG"
 
-      - name: Stage artifact
+      - name: Stage artifact & generate appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           mkdir -p artifacts
-          cp "$(ls dist/macos/*.dmg | head -n1)" artifacts/
+          DMG="$(ls dist/macos/*.dmg | head -n1)"
+          cp "$DMG" artifacts/
+          NOTES="release-notes/${GITHUB_REF_NAME}.md"
+          if [ -s "$NOTES" ]; then
+            cp "$NOTES" "artifacts/$(basename "${DMG%.dmg}").md"
+          fi
+          GENERATE_APPCAST="build-release/_deps/sparkle-src/bin/generate_appcast"
+          APPCAST_ARGS=(
+            --link "https://github.com/nyattic/CloakFrame"
+            --download-url-prefix "https://github.com/nyattic/CloakFrame/releases/download/${GITHUB_REF_NAME}/"
+            --embed-release-notes
+            artifacts
+          )
+          if [ -n "$SPARKLE_ED_PRIVATE_KEY" ]; then
+            echo "$SPARKLE_ED_PRIVATE_KEY" | "$GENERATE_APPCAST" --ed-key-file - "${APPCAST_ARGS[@]}"
+          else
+            echo "SPARKLE_ED_PRIVATE_KEY is not set; the appcast will rely on Apple code signing validation."
+            "$GENERATE_APPCAST" "${APPCAST_ARGS[@]}"
+          fi
+          rm -rf artifacts/old_updates
+          rm -f "artifacts/$(basename "${DMG%.dmg}").md"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: macos-dmg
-          path: artifacts/*.dmg
+          path: artifacts/*
 
   windows:
     name: Build Windows zip
@@ -132,6 +155,10 @@ jobs:
         run: |
           & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install "spdlog:x64-windows-static-md" "exiv2:x64-windows-static-md"
 
+      - name: Install vpk
+        shell: pwsh
+        run: dotnet tool install --global vpk --version $env:VELOPACK_VERSION
+
       - name: Build & package
         shell: pwsh
         run: |
@@ -147,12 +174,18 @@ jobs:
         run: |
           $ver = ([regex]'VERSION ([0-9]+\.[0-9]+\.[0-9]+)').Match((Get-Content CMakeLists.txt -Raw)).Groups[1].Value
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          Compress-Archive -Path dist/windows/CloakFrame/* -DestinationPath "artifacts/CloakFrame-$ver-windows-x64.zip" -Force
+          Copy-Item dist/windows/releases/CloakFrame-win-Setup.exe artifacts/
+          Copy-Item dist/windows/releases/CloakFrame-win-Portable.zip artifacts/
+          Copy-Item "dist/windows/releases/CloakFrame-$ver-full.nupkg" artifacts/
+          if (Test-Path "dist/windows/releases/CloakFrame-$ver-delta.nupkg") {
+            Copy-Item "dist/windows/releases/CloakFrame-$ver-delta.nupkg" artifacts/
+          }
+          Copy-Item dist/windows/releases/releases.win.json artifacts/
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: windows-zip
-          path: artifacts/*.zip
+          name: windows-velopack
+          path: artifacts/*
 
   linux:
     name: Build Linux AppImage
@@ -212,6 +245,11 @@ jobs:
           tar -xzf onnx.tgz -C "$HOME/onnx"
           echo "ONNXRUNTIME_ROOT=$HOME/onnx/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}" >> "$GITHUB_ENV"
 
+      - name: Install vpk
+        run: |
+          dotnet tool install --global vpk --version "$VELOPACK_VERSION"
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
       - name: Build & package AppImage
         run: |
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
@@ -219,13 +257,19 @@ jobs:
 
       - name: Stage artifact
         run: |
+          ver="$(sed -n 's/^project(CloakFrame VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
           mkdir -p artifacts
-          cp dist/linux/*.AppImage artifacts/
+          cp dist/linux/CloakFrame.AppImage artifacts/
+          cp "dist/linux/CloakFrame-$ver-linux-full.nupkg" artifacts/
+          if [ -f "dist/linux/CloakFrame-$ver-linux-delta.nupkg" ]; then
+            cp "dist/linux/CloakFrame-$ver-linux-delta.nupkg" artifacts/
+          fi
+          cp dist/linux/releases.linux.json artifacts/
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: linux-appimage
-          path: artifacts/*.AppImage
+          name: linux-velopack
+          path: artifacts/*
 
   release:
     name: Publish release

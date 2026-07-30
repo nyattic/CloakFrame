@@ -10,6 +10,7 @@
 #include "cloakframe/ProcessorWorker.hpp"
 #include "cloakframe/ReviewDialog.hpp"
 #include "cloakframe/Detector.hpp"
+#include "cloakframe/SelfUpdater.hpp"
 #include "cloakframe/SettingsDialog.hpp"
 #include "cloakframe/Theme.hpp"
 #include "cloakframe/UpdateChecker.hpp"
@@ -42,6 +43,7 @@
 #include <QPointer>
 #include <QCloseEvent>
 #include <QProgressBar>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSettings>
@@ -1834,44 +1836,163 @@ namespace cloakframe
             return;
         }
 
+        auto *updater = SelfUpdater::create(this);
+        if (updater == nullptr)
+        {
+            startLegacyUpdateCheck();
+            return;
+        }
+        if (updater->mode() == SelfUpdater::Mode::OwnUi)
+        {
+            updater->checkForUpdates();
+            return;
+        }
+        connect(updater, &SelfUpdater::checkFailed, this, [this, updater](const QString &error)
+        {
+            spdlog::info("self-update unavailable, falling back to update notification: {}",
+                         error.toStdString());
+            updater->deleteLater();
+            startLegacyUpdateCheck();
+        });
+        connect(updater, &SelfUpdater::updateAvailable, this,
+                [this, updater](const QString &version, const QString &releaseNotes)
+                {
+                    showUpdateBanner(version, UpdateChecker::releasesPageUrl());
+                    if (askToUpdate(version, releaseNotes))
+                    {
+                        downloadUpdateWithProgress(updater, version);
+                    }
+                });
+        updater->checkForUpdates();
+    }
+
+    void MainWindow::startLegacyUpdateCheck()
+    {
         auto *checker = new UpdateChecker(QCoreApplication::applicationVersion(), this);
         connect(checker, &UpdateChecker::updateAvailable, this,
                 [this](const QString &latestVersion, const QString &releaseUrl,
                        const QString &releaseNotes)
                 {
-                    if (updateLabel_ == nullptr)
-                    {
-                        return;
-                    }
-                    const QString text = tr("Update available: %1").arg(latestVersion);
-                    updateLabel_->setText(QStringLiteral("<a href=\"%1\">%2</a>")
-                        .arg(releaseUrl.toHtmlEscaped(), text.toHtmlEscaped()));
-                    updateLabel_->setVisible(true);
-
-                    QMessageBox message(this);
-                    message.setWindowTitle(tr("Update Available"));
-                    message.setIcon(QMessageBox::Information);
-                    message.setTextFormat(Qt::PlainText);
-                    message.setText(tr("CloakFrame %1 is available. What's new:")
-                                        .arg(latestVersion));
-                    const QString localizedNotes = releaseNotesSection(releaseNotes);
-                    message.setInformativeText(
-                        localizedNotes.isEmpty()
-                            ? tr("No release notes were provided for this update.")
-                            : localizedNotes);
-
-                    auto *updateButton = message.addButton(tr("Update"), QMessageBox::AcceptRole);
-                    auto *laterButton = message.addButton(tr("Later"), QMessageBox::RejectRole);
-                    message.setDefaultButton(laterButton);
-                    message.setEscapeButton(laterButton);
-                    message.exec();
-
-                    if (message.clickedButton() == updateButton)
+                    showUpdateBanner(latestVersion, releaseUrl);
+                    if (askToUpdate(latestVersion, releaseNotes))
                     {
                         QDesktopServices::openUrl(QUrl(releaseUrl));
                     }
                 });
         checker->check();
+    }
+
+    void MainWindow::showUpdateBanner(const QString &latestVersion, const QString &releaseUrl)
+    {
+        if (updateLabel_ == nullptr)
+        {
+            return;
+        }
+        const QString text = tr("Update available: %1").arg(latestVersion);
+        updateLabel_->setText(QStringLiteral("<a href=\"%1\">%2</a>")
+            .arg(releaseUrl.toHtmlEscaped(), text.toHtmlEscaped()));
+        updateLabel_->setVisible(true);
+    }
+
+    bool MainWindow::askToUpdate(const QString &latestVersion, const QString &releaseNotes)
+    {
+        QMessageBox message(this);
+        message.setWindowTitle(tr("Update Available"));
+        message.setIcon(QMessageBox::Information);
+        message.setTextFormat(Qt::PlainText);
+        message.setText(tr("CloakFrame %1 is available. What's new:")
+                            .arg(latestVersion));
+        const QString localizedNotes = releaseNotesSection(releaseNotes);
+        message.setInformativeText(
+            localizedNotes.isEmpty()
+                ? tr("No release notes were provided for this update.")
+                : localizedNotes);
+
+        auto *updateButton = message.addButton(tr("Update"), QMessageBox::AcceptRole);
+        auto *laterButton = message.addButton(tr("Later"), QMessageBox::RejectRole);
+        message.setDefaultButton(laterButton);
+        message.setEscapeButton(laterButton);
+        message.exec();
+
+        return message.clickedButton() == updateButton;
+    }
+
+    void MainWindow::downloadUpdateWithProgress(SelfUpdater *updater, const QString &version)
+    {
+        QPointer<QProgressDialog> progress =
+                new QProgressDialog(tr("Downloading CloakFrame %1…").arg(version),
+                                    QString(), 0, 100, this);
+        progress->setWindowModality(Qt::WindowModal);
+        progress->setCancelButton(nullptr);
+        progress->setMinimumDuration(0);
+        progress->setAutoClose(false);
+        progress->setAutoReset(false);
+        connect(updater, &SelfUpdater::downloadProgress,
+                progress, &QProgressDialog::setValue);
+        connect(updater, &SelfUpdater::downloadFailed, this,
+                [this, updater, progress](const QString &error)
+                {
+                    if (progress)
+                    {
+                        progress->close();
+                        progress->deleteLater();
+                    }
+
+                    QMessageBox message(this);
+                    message.setWindowTitle(tr("Update Failed"));
+                    message.setIcon(QMessageBox::Warning);
+                    message.setTextFormat(Qt::PlainText);
+                    message.setText(tr("The update could not be installed: %1").arg(error));
+                    auto *openButton = message.addButton(tr("Open Download Page"),
+                                                         QMessageBox::AcceptRole);
+                    message.addButton(QMessageBox::Close);
+                    message.exec();
+                    if (message.clickedButton() == openButton)
+                    {
+                        QDesktopServices::openUrl(QUrl(UpdateChecker::releasesPageUrl()));
+                    }
+                    updater->deleteLater();
+                });
+        connect(updater, &SelfUpdater::downloadFinished, this,
+                [this, updater, progress, version]
+                {
+                    if (progress)
+                    {
+                        progress->close();
+                        progress->deleteLater();
+                    }
+
+                    if (processing_)
+                    {
+                        QMessageBox::information(
+                            this, tr("Update Ready"),
+                            tr("CloakFrame %1 will finish installing the next time the app starts.")
+                                .arg(version));
+                        return;
+                    }
+
+                    QMessageBox message(this);
+                    message.setWindowTitle(tr("Update Ready"));
+                    message.setIcon(QMessageBox::Information);
+                    message.setTextFormat(Qt::PlainText);
+                    message.setText(
+                        tr("CloakFrame %1 has been downloaded. Restart now to finish installing?")
+                            .arg(version));
+                    auto *restartButton = message.addButton(tr("Restart Now"),
+                                                            QMessageBox::AcceptRole);
+                    auto *laterButton = message.addButton(tr("Later"), QMessageBox::RejectRole);
+                    message.setDefaultButton(restartButton);
+                    message.setEscapeButton(laterButton);
+                    message.exec();
+
+                    if (message.clickedButton() == restartButton)
+                    {
+                        connect(updater, &SelfUpdater::readyToQuit,
+                                qApp, &QCoreApplication::quit, Qt::QueuedConnection);
+                        updater->restartToApply();
+                    }
+                });
+        updater->downloadUpdate();
     }
 
     void MainWindow::openSettings()

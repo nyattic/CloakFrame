@@ -92,12 +92,23 @@ qt_add_executable(CloakFrame ${CLOAKFRAME_APP_OPTIONS}
     ${PROJECT_SOURCE_DIR}/include/cloakframe/MainWindow.hpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/ModelDownloader.hpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/ReviewDialog.hpp
+    ${PROJECT_SOURCE_DIR}/include/cloakframe/SelfUpdater.hpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/SettingsDialog.hpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/Theme.hpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/UpdateChecker.hpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/VideoReviewDialog.hpp
     ${CLOAKFRAME_APP_RESOURCES}
 )
+
+if(CLOAKFRAME_USE_VELOPACK)
+    target_sources(CloakFrame PRIVATE SelfUpdaterVelopack.cpp)
+    cloakframe_enable_velopack(CloakFrame)
+elseif(CLOAKFRAME_USE_SPARKLE)
+    target_sources(CloakFrame PRIVATE SelfUpdaterSparkle.mm)
+    cloakframe_enable_sparkle(CloakFrame)
+else()
+    target_sources(CloakFrame PRIVATE SelfUpdaterNull.cpp)
+endif()
 
 if(WIN32)
     target_sources(CloakFrame PRIVATE ${PROJECT_SOURCE_DIR}/assets/CloakFrame.rc)
@@ -143,6 +154,10 @@ if(APPLE)
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_ICON_FILE "CloakFrame.icns"
     )
+    if(CLOAKFRAME_USE_SPARKLE)
+        set_target_properties(CloakFrame PROPERTIES
+            MACOSX_BUNDLE_INFO_PLIST "${PROJECT_SOURCE_DIR}/assets/MacOSXBundleInfo.plist.in")
+    endif()
 endif()
 
 install(TARGETS CloakFrame

@@ -38,6 +38,7 @@ namespace cloakframe
     class Detector;
     class ProcessorWorker;
     class PlateDetector;
+    class SelfUpdater;
 
     class MainWindow final : public QMainWindow
     {
@@ -126,6 +127,14 @@ namespace cloakframe
         void saveSettings() const;
 
         void checkForUpdates();
+
+        void startLegacyUpdateCheck();
+
+        void showUpdateBanner(const QString &latestVersion, const QString &releaseUrl);
+
+        bool askToUpdate(const QString &latestVersion, const QString &releaseNotes);
+
+        void downloadUpdateWithProgress(SelfUpdater *updater, const QString &version);
 
         void retranslateUi();
 
