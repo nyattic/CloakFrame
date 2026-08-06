@@ -13,10 +13,11 @@ const {
 test('includes user downloads and full updater packages', () =>
 {
   for (const name of [
-    'CloakFrame-1.11.0-arm64.dmg',
-    'CloakFrame-win-Setup.exe',
-    'CloakFrame-win-Portable.zip',
-    'CloakFrame.AppImage',
+    'CloakFrame-macOS-arm64.dmg',
+    'CloakFrame-Windows-x64-Setup.exe',
+    'CloakFrame-1.10.2-windows-x64.zip',
+    'CloakFrame-Linux-x86_64.AppImage',
+    'CloakFrame-1.10.2-x86_64.AppImage',
     'CloakFrame-1.11.0-full.nupkg',
     'CloakFrame-1.11.0-linux-full.nupkg',
   ])
@@ -30,9 +31,10 @@ test('keeps counting distributions released before the CloakFrame rename', () =>
   for (const name of [
     'Redactly-1.0.0-arm64.dmg',
     'Redactly-win-Setup.exe',
-    'Redactly-win-Portable.zip',
+    'Redactly-1.10.1-windows-x64.zip',
     'Redactly.AppImage',
     'Redactly-1.0.0-full.nupkg',
+    'FaceVeil-1.3.0-windows-x64.zip',
   ])
   {
     assert.equal(isDistributionAsset(name), true, name)

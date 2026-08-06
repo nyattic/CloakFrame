@@ -28,17 +28,19 @@ pixelation, blur, a solid color, or an image of your choice.
 
 | Platform | Requirements | Download |
 | --- | --- | --- |
-| Windows | Windows 10 or later, 64-bit | [Installer](https://github.com/nyattic/CloakFrame/releases/latest/download/CloakFrame-win-Setup.exe) · [Portable](https://github.com/nyattic/CloakFrame/releases/latest/download/CloakFrame-win-Portable.zip) |
-| macOS | macOS 15 or later, Apple Silicon | [Latest release](https://github.com/nyattic/CloakFrame/releases/latest) |
-| Linux | x86_64 | [AppImage](https://github.com/nyattic/CloakFrame/releases/latest/download/CloakFrame.AppImage) |
+| Windows | Windows 10 or later, 64-bit | [Download for Windows](https://github.com/nyattic/CloakFrame/releases/latest) |
+| macOS | macOS 15 or later, Apple Silicon | [Download for macOS](https://github.com/nyattic/CloakFrame/releases/latest) |
+| Linux | x86_64 | [Download for Linux](https://github.com/nyattic/CloakFrame/releases/latest) |
 
-The Windows installer installs for the current user without administrator
-rights. For the portable edition, unzip it and run `CloakFrame.exe`. On Linux,
-make the AppImage executable first.
+Open the link and choose the file for your platform under **Assets**. Starting
+with v1.11.0, use `CloakFrame-Windows-x64-Setup.exe` on Windows,
+`CloakFrame-macOS-arm64.dmg` on macOS, and
+`CloakFrame-Linux-x86_64.AppImage` on Linux. Releases through v1.10.2 include
+the version in each filename. Make the AppImage executable before launching it.
 
 ```bash
-chmod +x CloakFrame.AppImage
-./CloakFrame.AppImage
+chmod +x CloakFrame-Linux-x86_64.AppImage
+./CloakFrame-Linux-x86_64.AppImage
 ```
 
 The first time you use a built-in detector, CloakFrame downloads its model once

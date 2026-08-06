@@ -21,6 +21,12 @@ option(CLOAKFRAME_SELF_UPDATE
 option(CLOAKFRAME_WARNINGS_AS_ERRORS
     "Treat compiler warnings as errors" OFF)
 
+include(GNUInstallDirs)
+if(WIN32)
+    set(CMAKE_INSTALL_BINDIR "." CACHE PATH
+        "Install directory for Windows executables" FORCE)
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CloakFrameHarden)
 include(FindOnnxRuntimeLocal)
@@ -107,3 +113,4 @@ if(BUILD_TESTING)
 endif()
 
 include(CloakFrameTools)
+include(CloakFramePackaging)

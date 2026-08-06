@@ -26,17 +26,19 @@
 
 | 플랫폼 | 지원 환경 | 다운로드 |
 | --- | --- | --- |
-| Windows | Windows 10 이상, 64비트 | [인스톨러](https://github.com/nyattic/CloakFrame/releases/latest/download/CloakFrame-win-Setup.exe) · [포터블](https://github.com/nyattic/CloakFrame/releases/latest/download/CloakFrame-win-Portable.zip) |
-| macOS | macOS 15 이상, Apple Silicon | [최신 릴리스](https://github.com/nyattic/CloakFrame/releases/latest) |
-| Linux | x86_64 | [AppImage](https://github.com/nyattic/CloakFrame/releases/latest/download/CloakFrame.AppImage) |
+| Windows | Windows 10 이상, 64비트 | [Windows 다운로드](https://github.com/nyattic/CloakFrame/releases/latest) |
+| macOS | macOS 15 이상, Apple Silicon | [macOS 다운로드](https://github.com/nyattic/CloakFrame/releases/latest) |
+| Linux | x86_64 | [Linux 다운로드](https://github.com/nyattic/CloakFrame/releases/latest) |
 
-Windows 인스톨러는 관리자 권한 없이 현재 사용자 계정에 설치됩니다. 포터블
-버전은 압축을 풀고 `CloakFrame.exe`를 실행하면 됩니다. Linux에서는 AppImage에
-실행 권한을 준 뒤 실행하세요.
+링크를 연 뒤 **Assets**에서 플랫폼에 맞는 파일을 선택하세요. v1.11.0부터
+Windows는 `CloakFrame-Windows-x64-Setup.exe`, macOS는
+`CloakFrame-macOS-arm64.dmg`, Linux는
+`CloakFrame-Linux-x86_64.AppImage`입니다. v1.10.2 이하에서는 파일 이름에 버전이
+포함됩니다. Linux에서는 AppImage에 실행 권한을 준 뒤 실행하세요.
 
 ```bash
-chmod +x CloakFrame.AppImage
-./CloakFrame.AppImage
+chmod +x CloakFrame-Linux-x86_64.AppImage
+./CloakFrame-Linux-x86_64.AppImage
 ```
 
 처음 사용하는 내장 검출 모델은 GitHub에서 한 번만 다운로드하여 캐시합니다

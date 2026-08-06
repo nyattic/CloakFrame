@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -25,21 +25,106 @@ env:
   DIRECTML_VERSION: 1.15.4
   DIRECTML_SHA256: 4e7cb7ddce8cf837a7a75dc029209b520ca0101470fcdf275c1f49736a3615b9
   VELOPACK_VERSION: 1.2.0
+  WINDOWS_FFMPEG_URL: https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-essentials_build.zip
+  WINDOWS_FFMPEG_SHA256: db580001caa24ac104c8cb856cd113a87b0a443f7bdf47d8c12b1d740584a2ec
+  MACOS_FFMPEG_BASE_URL: https://ffmpeg.martin-riedl.de/download/macos/arm64/1783011502_8.1.2
+  MACOS_FFMPEG_SHA256: ef1aa60006c7b77ce170c1608c08d8e4ba1c30c5746f2ac986ded932d0ac2c3c
+  MACOS_FFPROBE_SHA256: c39787f4af7a3932502d2d48db6f6feaaa836b48a73ef78c32cc3285df61dfaf
+  LINUX_FFMPEG_BASE_URL: https://ffmpeg.martin-riedl.de/download/linux/amd64/1783011670_8.1.2
+  LINUX_FFMPEG_SHA256: 56452c0bfc4ee0325cd615d62f46ba8264f62eed34f727c2224c6c84fa7b8719
+  LINUX_FFPROBE_SHA256: c6f2d36e98f9a4445fad0b0be539f4c4faf13fd502116bf131becd53f56cd390
+  MACOS_ASSET_NAME: CloakFrame-macOS-arm64.dmg
+  WINDOWS_ASSET_NAME: CloakFrame-Windows-x64-Setup.exe
+  LINUX_ASSET_NAME: CloakFrame-Linux-x86_64.AppImage
 
 jobs:
   macos:
     name: Build macOS DMG
     runs-on: macos-15
+    timeout-minutes: 90
     env:
       CMAKE_PREFIX_PATH: /opt/homebrew
       PKG_CONFIG_PATH: /opt/homebrew/lib/pkgconfig
       HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
-      MACOSX_DEPLOYMENT_TARGET: '15.0'
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Install dependencies
-        run: brew install cmake qt opencv onnxruntime spdlog exiv2 ffmpeg
+        run: brew install cmake ninja qt opencv onnxruntime spdlog exiv2
+
+      - name: Prepare pinned FFmpeg
+        run: |
+          mkdir -p ffmpeg-bundle ffmpeg-download
+          curl -fL "$MACOS_FFMPEG_BASE_URL/ffmpeg.zip" \
+            -o ffmpeg-download/ffmpeg.zip
+          curl -fL "$MACOS_FFMPEG_BASE_URL/ffprobe.zip" \
+            -o ffmpeg-download/ffprobe.zip
+          echo "$MACOS_FFMPEG_SHA256  ffmpeg-download/ffmpeg.zip" | shasum -a 256 -c -
+          echo "$MACOS_FFPROBE_SHA256  ffmpeg-download/ffprobe.zip" | shasum -a 256 -c -
+          unzip -q ffmpeg-download/ffmpeg.zip ffmpeg -d ffmpeg-bundle
+          unzip -q ffmpeg-download/ffprobe.zip ffprobe -d ffmpeg-bundle
+          chmod 755 ffmpeg-bundle/ffmpeg ffmpeg-bundle/ffprobe
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+            "-DCMAKE_PREFIX_PATH=$(brew --prefix qt);/opt/homebrew" \
+            "-DCLOAKFRAME_FFMPEG_DIR=$PWD/ffmpeg-bundle"
+
+      - name: Build and test
+        run: |
+          cmake --build build-release --parallel
+          PATH="$PWD/ffmpeg-bundle:$PATH" \
+            ctest --test-dir build-release --output-on-failure
+
+      - name: Install deployable application
+        run: |
+          rm -rf dist/macos
+          cmake --install build-release --prefix "$PWD/dist/macos"
+          test -x dist/macos/CloakFrame.app/Contents/MacOS/CloakFrame
+          test -x dist/macos/CloakFrame.app/Contents/Resources/ffmpeg/ffmpeg
+          test -x dist/macos/CloakFrame.app/Contents/Resources/ffmpeg/ffprobe
+          if find dist/macos/CloakFrame.app -name '*.onnx' -print -quit | grep -q .; then
+            echo "ONNX model files must not be bundled" >&2
+            exit 1
+          fi
+
+      - name: Verify macOS compatibility
+        run: |
+          application="$PWD/dist/macos/CloakFrame.app"
+          declared=$(plutil -extract LSMinimumSystemVersion raw \
+            "$application/Contents/Info.plist")
+          if [[ "$declared" != "$MACOSX_DEPLOYMENT_TARGET" ]]; then
+            echo "Info.plist declares macOS $declared instead of $MACOSX_DEPLOYMENT_TARGET" >&2
+            exit 1
+          fi
+          version_exceeds() {
+            awk -v candidate="$1" -v target="$2" '
+              BEGIN {
+                split(candidate, candidate_parts, ".")
+                split(target, target_parts, ".")
+                for (i = 1; i <= 3; ++i) {
+                  if ((candidate_parts[i] + 0) > (target_parts[i] + 0)) exit 0
+                  if ((candidate_parts[i] + 0) < (target_parts[i] + 0)) exit 1
+                }
+                exit 1
+              }'
+          }
+          failed=0
+          while IFS= read -r -d '' binary; do
+            file "$binary" | grep -q 'Mach-O' || continue
+            while IFS= read -r minimum; do
+              if version_exceeds "$minimum" "$MACOSX_DEPLOYMENT_TARGET"; then
+                echo "$binary requires macOS $minimum" >&2
+                failed=1
+              fi
+            done < <(vtool -show-build "$binary" 2>/dev/null | \
+              awk '$1 == "minos" { print $2 }')
+          done < <(find "$application" -type f -print0)
+          exit "$failed"
 
       - name: Import signing certificate
         uses: apple-actions/import-codesign-certs@fe74d46e82474f87e1ba79832ad28a4013d0e33a # v6
@@ -48,62 +133,136 @@ jobs:
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           keychain-password: ${{ secrets.KEYCHAIN_PASSWORD }}
 
-      - name: Build, sign & package DMG
+      - name: Sign application
         env:
           DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
-        run: bash scripts/package_macos.sh
+        run: |
+          if [[ -z "$DEVELOPER_ID" ]]; then
+            echo "APPLE_DEVELOPER_ID is not configured" >&2
+            exit 1
+          fi
+          if ! security find-identity -p codesigning -v | grep -q -F "$DEVELOPER_ID"; then
+            echo "Developer signing identity was not found: $DEVELOPER_ID" >&2
+            security find-identity -p codesigning -v || true
+            exit 1
+          fi
+          application="$PWD/dist/macos/CloakFrame.app"
+          frameworks="$application/Contents/Frameworks"
+          sparkle="$frameworks/Sparkle.framework"
+          sign() {
+            codesign --force --timestamp --options runtime \
+              --sign "$DEVELOPER_ID" "$@"
+          }
+          while IFS= read -r -d '' library; do
+            sign "$library"
+          done < <(find "$frameworks" "$application/Contents/PlugIns" \
+            -type f \( -name '*.dylib' -o -name '*.so' \) -print0)
+          if [[ -d "$sparkle" ]]; then
+            while IFS= read -r service; do
+              sign "$service"
+            done < <(find "$sparkle/Versions/B/XPCServices" \
+              -maxdepth 1 -type d -name '*.xpc' -print)
+            sign "$sparkle/Versions/B/Autoupdate"
+            sign "$sparkle/Versions/B/Updater.app"
+          fi
+          for framework in "$frameworks"/*.framework; do
+            [[ -e "$framework" ]] || continue
+            sign "$framework"
+          done
+          for tool in \
+            "$application/Contents/Resources/ffmpeg/ffmpeg" \
+            "$application/Contents/Resources/ffmpeg/ffprobe"
+          do
+            sign "$tool"
+          done
+          codesign --force --timestamp --options runtime \
+            --entitlements scripts/entitlements.plist \
+            --sign "$DEVELOPER_ID" "$application"
+          codesign --verify --deep --strict --verbose=2 "$application"
 
-      - name: Notarize & staple
+      - name: Create signed DMG
+        env:
+          DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+        run: |
+          mkdir -p artifacts "$RUNNER_TEMP/cloakframe-dmg"
+          ditto dist/macos/CloakFrame.app \
+            "$RUNNER_TEMP/cloakframe-dmg/CloakFrame.app"
+          ln -s /Applications "$RUNNER_TEMP/cloakframe-dmg/Applications"
+          hdiutil create \
+            -volname CloakFrame \
+            -srcfolder "$RUNNER_TEMP/cloakframe-dmg" \
+            -format UDZO \
+            -ov \
+            "artifacts/$MACOS_ASSET_NAME"
+          codesign --force --timestamp --sign "$DEVELOPER_ID" \
+            "artifacts/$MACOS_ASSET_NAME"
+          codesign --verify --verbose=2 "artifacts/$MACOS_ASSET_NAME"
+
+      - name: Notarize and staple DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
-          DMG=$(ls dist/macos/*.dmg | head -n1)
-          bash scripts/notarize_macos.sh "$DMG"
+          for name in APPLE_ID TEAM_ID APP_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "$name is not configured" >&2
+              exit 1
+            fi
+          done
+          dmg="artifacts/$MACOS_ASSET_NAME"
+          xcrun notarytool submit "$dmg" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$TEAM_ID" \
+            --password "$APP_PASSWORD" \
+            --wait
+          xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+          hdiutil verify "$dmg"
 
-      - name: Stage artifact & generate appcast
+      - name: Generate Sparkle appcast
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
-          mkdir -p artifacts
-          DMG="$(ls dist/macos/*.dmg | head -n1)"
-          cp "$DMG" artifacts/
-          NOTES="release-notes/${GITHUB_REF_NAME}.md"
-          if [ -s "$NOTES" ]; then
-            cp "$NOTES" "artifacts/$(basename "${DMG%.dmg}").md"
+          notes="release-notes/${GITHUB_REF_NAME}.md"
+          if [[ -s "$notes" ]]; then
+            cp "$notes" "artifacts/${MACOS_ASSET_NAME%.dmg}.md"
           fi
-          GENERATE_APPCAST="build-release/_deps/sparkle-src/bin/generate_appcast"
-          APPCAST_ARGS=(
+          generator="build-release/_deps/sparkle-src/bin/generate_appcast"
+          args=(
             --link "https://github.com/nyattic/CloakFrame"
             --download-url-prefix "https://github.com/nyattic/CloakFrame/releases/download/${GITHUB_REF_NAME}/"
             --embed-release-notes
             artifacts
           )
-          if [ -n "$SPARKLE_ED_PRIVATE_KEY" ]; then
-            echo "$SPARKLE_ED_PRIVATE_KEY" | "$GENERATE_APPCAST" --ed-key-file - "${APPCAST_ARGS[@]}"
+          if [[ -n "$SPARKLE_ED_PRIVATE_KEY" ]]; then
+            echo "$SPARKLE_ED_PRIVATE_KEY" | \
+              "$generator" --ed-key-file - "${args[@]}"
           else
-            echo "SPARKLE_ED_PRIVATE_KEY is not set; the appcast will rely on Apple code signing validation."
-            "$GENERATE_APPCAST" "${APPCAST_ARGS[@]}"
+            echo "SPARKLE_ED_PRIVATE_KEY is not set; relying on Apple code signing validation."
+            "$generator" "${args[@]}"
           fi
           rm -rf artifacts/old_updates
-          rm -f "artifacts/$(basename "${DMG%.dmg}").md"
+          rm -f "artifacts/${MACOS_ASSET_NAME%.dmg}.md"
+          test -s "artifacts/$MACOS_ASSET_NAME"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: macos-dmg
           path: artifacts/*
+          if-no-files-found: error
 
   windows:
-    name: Build Windows zip
+    name: Build Windows installer
     runs-on: windows-2025
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
         with:
-          version: '${{ env.QT_VERSION }}'
+          version: "${{ env.QT_VERSION }}"
           host: windows
           target: desktop
           arch: win64_msvc2022_64
@@ -124,72 +283,150 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://github.com/opencv/opencv/releases/download/$env:OPENCV_VERSION/opencv-$env:OPENCV_VERSION-windows.exe" -OutFile opencv.exe
-          $h = (Get-FileHash -Algorithm SHA256 opencv.exe).Hash.ToLower()
-          if ($h -ne "$env:OPENCV_WINDOWS_SHA256") { throw "OpenCV SHA256 mismatch: got $h" }
+          $hash = (Get-FileHash -Algorithm SHA256 opencv.exe).Hash.ToLowerInvariant()
+          if ($hash -ne $env:OPENCV_WINDOWS_SHA256) { throw "OpenCV SHA256 mismatch: got $hash" }
           Start-Process -FilePath .\opencv.exe -ArgumentList '-o"C:\opencv" -y' -Wait
           $config = Get-ChildItem C:\opencv\opencv\build -Recurse -Filter OpenCVConfig.cmake -File |
             Where-Object { $_.FullName -match '\\x64\\vc[0-9]+\\lib\\OpenCVConfig\.cmake$' } |
             Select-Object -First 1
-          if (-not $config) { throw "OpenCVConfig.cmake was not found in the extracted package" }
+          if (-not $config) { throw "OpenCVConfig.cmake was not found" }
           "OpenCV_DIR=$($config.DirectoryName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Install ONNX Runtime (DirectML)
+      - name: Install ONNX Runtime and DirectML
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime.directml/$env:ONNXRUNTIME_DIRECTML_VERSION/microsoft.ml.onnxruntime.directml.$env:ONNXRUNTIME_DIRECTML_VERSION.nupkg" -OutFile onnx-dml.zip
-          $h = (Get-FileHash -Algorithm SHA256 onnx-dml.zip).Hash.ToLower()
-          if ($h -ne "$env:ONNXRUNTIME_DIRECTML_SHA256") { throw "ONNX Runtime DirectML SHA256 mismatch: got $h" }
+          $hash = (Get-FileHash -Algorithm SHA256 onnx-dml.zip).Hash.ToLowerInvariant()
+          if ($hash -ne $env:ONNXRUNTIME_DIRECTML_SHA256) { throw "ONNX Runtime SHA256 mismatch: got $hash" }
           Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/microsoft.ai.directml/$env:DIRECTML_VERSION/microsoft.ai.directml.$env:DIRECTML_VERSION.nupkg" -OutFile directml.zip
-          $h = (Get-FileHash -Algorithm SHA256 directml.zip).Hash.ToLower()
-          if ($h -ne "$env:DIRECTML_SHA256") { throw "DirectML SHA256 mismatch: got $h" }
-          Expand-Archive -Path onnx-dml.zip -DestinationPath C:\onnx-dml-pkg -Force
-          Expand-Archive -Path directml.zip -DestinationPath C:\directml-pkg -Force
+          $hash = (Get-FileHash -Algorithm SHA256 directml.zip).Hash.ToLowerInvariant()
+          if ($hash -ne $env:DIRECTML_SHA256) { throw "DirectML SHA256 mismatch: got $hash" }
+          Expand-Archive onnx-dml.zip C:\onnx-dml-pkg -Force
+          Expand-Archive directml.zip C:\directml-pkg -Force
           New-Item -ItemType Directory -Force -Path C:\onnx\include, C:\onnx\lib | Out-Null
           Copy-Item C:\onnx-dml-pkg\build\native\include\* C:\onnx\include
           Copy-Item C:\onnx-dml-pkg\runtimes\win-x64\native\onnxruntime.dll, C:\onnx-dml-pkg\runtimes\win-x64\native\onnxruntime.lib C:\onnx\lib
           Copy-Item C:\directml-pkg\bin\x64-win\DirectML.dll C:\onnx\lib
           "ONNXRUNTIME_ROOT=C:\onnx" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Install spdlog and Exiv2
+      - name: Install spdlog, Exiv2, and Velopack
         shell: pwsh
         run: |
           & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install "spdlog:x64-windows-static-md" "exiv2:x64-windows-static-md"
+          dotnet tool install --global vpk --version $env:VELOPACK_VERSION
 
-      - name: Install vpk
-        shell: pwsh
-        run: dotnet tool install --global vpk --version $env:VELOPACK_VERSION
-
-      - name: Build & package
+      - name: Prepare pinned FFmpeg
         shell: pwsh
         run: |
-          $env:CMAKE_PREFIX_PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows-static-md"
-          ./scripts/package_windows.ps1 `
-            -QtRoot $env:QT_ROOT_DIR `
-            -OpenCvRoot $env:OpenCV_DIR `
-            -OnnxRuntimeRoot $env:ONNXRUNTIME_ROOT `
-            -Generator "Ninja"
+          Invoke-WebRequest -Uri $env:WINDOWS_FFMPEG_URL -OutFile ffmpeg.zip
+          $hash = (Get-FileHash -Algorithm SHA256 ffmpeg.zip).Hash.ToLowerInvariant()
+          if ($hash -ne $env:WINDOWS_FFMPEG_SHA256) { throw "FFmpeg SHA256 mismatch: got $hash" }
+          Expand-Archive ffmpeg.zip ffmpeg-extracted -Force
+          $ffmpeg = Get-ChildItem ffmpeg-extracted -Recurse -Filter ffmpeg.exe -File | Select-Object -First 1
+          if (-not $ffmpeg) { throw "ffmpeg.exe was not found in the archive" }
+          New-Item -ItemType Directory -Force -Path ffmpeg-bundle | Out-Null
+          Copy-Item (Join-Path $ffmpeg.DirectoryName ffmpeg.exe), (Join-Path $ffmpeg.DirectoryName ffprobe.exe) ffmpeg-bundle
+          "FFMPEG_DIR=$((Resolve-Path ffmpeg-bundle).Path)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Stage artifact
+      - name: Configure and build
         shell: pwsh
         run: |
-          $ver = ([regex]'VERSION ([0-9]+\.[0-9]+\.[0-9]+)').Match((Get-Content CMakeLists.txt -Raw)).Groups[1].Value
-          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          Copy-Item dist/windows/releases/CloakFrame-win-Setup.exe artifacts/
-          Copy-Item dist/windows/releases/CloakFrame-win-Portable.zip artifacts/
-          Copy-Item "dist/windows/releases/CloakFrame-$ver-full.nupkg" artifacts/
-          if (Test-Path "dist/windows/releases/CloakFrame-$ver-delta.nupkg") {
-            Copy-Item "dist/windows/releases/CloakFrame-$ver-delta.nupkg" artifacts/
+          $prefix = "$env:QT_ROOT_DIR;$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows-static-md"
+          cmake -S . -B build-windows -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            "-DCMAKE_PREFIX_PATH=$prefix" `
+            "-DOpenCV_DIR=$env:OpenCV_DIR" `
+            "-DONNXRUNTIME_ROOT=$env:ONNXRUNTIME_ROOT" `
+            "-DCLOAKFRAME_DIRECTML_DLL=C:\onnx\lib\DirectML.dll" `
+            "-DCLOAKFRAME_FFMPEG_DIR=$env:FFMPEG_DIR" `
+            -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
+          cmake --build build-windows --config Release --parallel
+
+      - name: Install and test deployable application
+        shell: pwsh
+        run: |
+          $package = "$PWD\dist\windows\CloakFrame"
+          if (Test-Path $package) { Remove-Item $package -Recurse -Force }
+          cmake --install build-windows --config Release --prefix $package
+          foreach ($required in @(
+            "$package\CloakFrame.exe",
+            "$package\onnxruntime.dll",
+            "$package\DirectML.dll",
+            "$package\ffmpeg\ffmpeg.exe",
+            "$package\ffmpeg\ffprobe.exe"
+          )) {
+            if (-not (Test-Path $required)) { throw "Missing packaged file: $required" }
           }
+          if (Get-ChildItem $package -Recurse -Filter *.onnx -File) {
+            throw "ONNX model files must not be bundled"
+          }
+          $env:PATH = "$package;$package\ffmpeg;$env:PATH"
+          ctest --test-dir build-windows -C Release --output-on-failure
+
+      - name: Package installer with Velopack
+        shell: pwsh
+        run: |
+          $cmake = Get-Content CMakeLists.txt -Raw
+          if ($cmake -notmatch 'project\(CloakFrame VERSION ([0-9.]+)') {
+            throw "Could not determine application version"
+          }
+          $version = $Matches[1]
+          $notes = "release-notes/v$version.md"
+          $notesArgs = if (Test-Path $notes) { @('--releaseNotes', $notes) } else { @() }
+          New-Item -ItemType Directory -Force -Path dist/windows/releases | Out-Null
+          vpk pack -y `
+            --packId CloakFrame `
+            --packVersion $version `
+            --packDir dist/windows/CloakFrame `
+            --mainExe CloakFrame.exe `
+            --packTitle CloakFrame `
+            --packAuthors Nyabi `
+            --icon assets/cloakframe.ico `
+            --runtime win10-x64 `
+            --channel win `
+            --delta None `
+            --noPortable true `
+            --outputDir dist/windows/releases `
+            @notesArgs
+
+      - name: Stage and verify installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Copy-Item dist/windows/releases/CloakFrame-win-Setup.exe `
+            (Join-Path artifacts $env:WINDOWS_ASSET_NAME)
+          Copy-Item dist/windows/releases/*-full.nupkg artifacts/
           Copy-Item dist/windows/releases/releases.win.json artifacts/
+          $setup = Resolve-Path (Join-Path artifacts $env:WINDOWS_ASSET_NAME)
+          $installRoot = Join-Path $env:RUNNER_TEMP cloakframe-install-smoke
+          $installer = Start-Process -FilePath $setup `
+            -ArgumentList @('--silent', '--installto', $installRoot) `
+            -PassThru -Wait
+          if ($installer.ExitCode -ne 0) {
+            throw "Installer exited with code $($installer.ExitCode)"
+          }
+          $application = Join-Path $installRoot current\CloakFrame.exe
+          if (-not (Test-Path $application)) {
+            throw "Installed application was not found: $application"
+          }
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          $process = Start-Process $application -PassThru
+          Start-Sleep -Seconds 5
+          if ($process.HasExited) {
+            throw "Installed application exited with code $($process.ExitCode)"
+          }
+          Stop-Process -Id $process.Id -Force
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-velopack
           path: artifacts/*
+          if-no-files-found: error
 
   linux:
     name: Build Linux AppImage
     runs-on: ubuntu-26.04
+    timeout-minutes: 60
     env:
       APPIMAGE_EXTRACT_AND_RUN: 1
     steps:
@@ -199,7 +436,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build build-essential pkg-config file desktop-file-utils \
+            cmake ninja-build build-essential pkg-config curl unzip file desktop-file-utils patchelf \
             libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
             libspdlog-dev libexiv2-dev \
             libgl1-mesa-dev libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0
@@ -232,7 +469,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
         with:
-          version: '${{ env.QT_VERSION }}'
+          version: "${{ env.QT_VERSION }}"
           host: linux
           target: desktop
           arch: linux_gcc_64
@@ -245,31 +482,84 @@ jobs:
           tar -xzf onnx.tgz -C "$HOME/onnx"
           echo "ONNXRUNTIME_ROOT=$HOME/onnx/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}" >> "$GITHUB_ENV"
 
-      - name: Install vpk
+      - name: Install Velopack
         run: |
           dotnet tool install --global vpk --version "$VELOPACK_VERSION"
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
-      - name: Build & package AppImage
+      - name: Prepare pinned FFmpeg
         run: |
-          export QMAKE="$QT_ROOT_DIR/bin/qmake"
-          bash scripts/package_linux.sh
+          mkdir -p ffmpeg-bundle ffmpeg-download
+          curl -fL "$LINUX_FFMPEG_BASE_URL/ffmpeg.zip" \
+            -o ffmpeg-download/ffmpeg.zip
+          curl -fL "$LINUX_FFMPEG_BASE_URL/ffprobe.zip" \
+            -o ffmpeg-download/ffprobe.zip
+          echo "$LINUX_FFMPEG_SHA256  ffmpeg-download/ffmpeg.zip" | sha256sum -c -
+          echo "$LINUX_FFPROBE_SHA256  ffmpeg-download/ffprobe.zip" | sha256sum -c -
+          unzip -q ffmpeg-download/ffmpeg.zip ffmpeg -d ffmpeg-bundle
+          unzip -q ffmpeg-download/ffprobe.zip ffprobe -d ffmpeg-bundle
+          chmod 755 ffmpeg-bundle/ffmpeg ffmpeg-bundle/ffprobe
 
-      - name: Stage artifact
+      - name: Configure, build, and test
         run: |
-          ver="$(sed -n 's/^project(CloakFrame VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
-          mkdir -p artifacts
-          cp dist/linux/CloakFrame.AppImage artifacts/
-          cp "dist/linux/CloakFrame-$ver-linux-full.nupkg" artifacts/
-          if [ -f "dist/linux/CloakFrame-$ver-linux-delta.nupkg" ]; then
-            cp "dist/linux/CloakFrame-$ver-linux-delta.nupkg" artifacts/
+          cmake -S . -B build-release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            "-DCMAKE_PREFIX_PATH=$QT_ROOT_DIR;$HOME/opencv" \
+            "-DOpenCV_DIR=$OpenCV_DIR" \
+            "-DONNXRUNTIME_ROOT=$ONNXRUNTIME_ROOT" \
+            "-DCLOAKFRAME_FFMPEG_DIR=$PWD/ffmpeg-bundle" \
+            -DCLOAKFRAME_APPIMAGE_LAYOUT=ON
+          cmake --build build-release --parallel
+          PATH="$PWD/ffmpeg-bundle:$PATH" \
+            ctest --test-dir build-release --output-on-failure
+
+      - name: Install deployable AppDir
+        run: |
+          appdir="$PWD/build-release/CloakFrame.AppDir"
+          rm -rf "$appdir"
+          DESTDIR="$appdir" cmake --install build-release
+          test -x "$appdir/AppRun"
+          test -e "$appdir/cloakframe.desktop"
+          test -e "$appdir/cloakframe.png"
+          test -x "$appdir/usr/bin/CloakFrame"
+          test -x "$appdir/usr/bin/ffmpeg/ffmpeg"
+          test -x "$appdir/usr/bin/ffmpeg/ffprobe"
+          if find "$appdir" -name '*.onnx' -print -quit | grep -q .; then
+            echo "ONNX model files must not be bundled" >&2
+            exit 1
           fi
+
+      - name: Package and verify AppImage
+        run: |
+          version=$(sed -n 's/^project(CloakFrame VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          notes_args=()
+          if [[ -s "release-notes/v${version}.md" ]]; then
+            notes_args=(--releaseNotes "release-notes/v${version}.md")
+          fi
+          mkdir -p dist/linux artifacts
+          vpk pack -y \
+            --packId CloakFrame \
+            --packVersion "$version" \
+            --packDir build-release/CloakFrame.AppDir \
+            --mainExe CloakFrame \
+            --packTitle CloakFrame \
+            --packAuthors Nyabi \
+            --channel linux \
+            --delta None \
+            --outputDir dist/linux \
+            "${notes_args[@]}"
+          cp dist/linux/CloakFrame.AppImage "artifacts/$LINUX_ASSET_NAME"
+          cp dist/linux/*-full.nupkg artifacts/
           cp dist/linux/releases.linux.json artifacts/
+          test -x "artifacts/$LINUX_ASSET_NAME"
+          "artifacts/$LINUX_ASSET_NAME" --appimage-version
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: linux-velopack
           path: artifacts/*
+          if-no-files-found: error
 
   release:
     name: Publish release
@@ -283,9 +573,9 @@ jobs:
 
       - name: Verify release notes
         run: |
-          NOTES="release-notes/${GITHUB_REF_NAME}.md"
-          if [ ! -s "$NOTES" ]; then
-            echo "Missing release notes: $NOTES" >&2
+          notes="release-notes/${GITHUB_REF_NAME}.md"
+          if [[ ! -s "$notes" ]]; then
+            echo "Missing release notes: $notes" >&2
             exit 1
           fi
 
@@ -293,6 +583,19 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      - name: Verify fixed distribution asset names
+        run: |
+          for asset in \
+            "$MACOS_ASSET_NAME" \
+            "$WINDOWS_ASSET_NAME" \
+            "$LINUX_ASSET_NAME"
+          do
+            if [[ ! -s "artifacts/$asset" ]]; then
+              echo "Missing fixed-name distribution asset: $asset" >&2
+              exit 1
+            fi
+          done
 
       - name: Generate SHA256SUMS
         run: |
@@ -302,4 +605,4 @@ jobs:
       - uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           body_path: release-notes/${{ github.ref_name }}.md
-          files: artifacts/**/*
+          files: artifacts/*

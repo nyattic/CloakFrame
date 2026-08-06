@@ -83,8 +83,8 @@ ctest --preset release
 
 Official Windows packages use `Microsoft.ML.OnnxRuntime.DirectML`, with its
 headers and libraries staged under an `include`/`lib` root and `DirectML.dll`
-placed next to `onnxruntime.dll`. `scripts/package_windows.ps1` refuses to
-package a build without DirectML.
+placed next to `onnxruntime.dll`. Pass the DLL to CMake with
+`-DCLOAKFRAME_DIRECTML_DLL=C:\path\to\DirectML.dll` when staging a package.
 
 ## Linux
 
@@ -151,17 +151,29 @@ exported compilation database.
 | `BUILD_TESTING` | `ON` | Build and register the test suite |
 | `CLOAKFRAME_SELF_UPDATE` | `ON` | Include Velopack or Sparkle self-update support |
 | `CLOAKFRAME_WARNINGS_AS_ERRORS` | `OFF` | Promote compiler warnings to errors |
+| `CLOAKFRAME_FFMPEG_DIR` | empty | Bundle `ffmpeg` and `ffprobe` from this directory during installation |
+| `CLOAKFRAME_DIRECTML_DLL` | empty | Bundle DirectML with a Windows installation |
+| `CLOAKFRAME_APPIMAGE_LAYOUT` | `OFF` | Add the top-level links required by a staged Linux AppDir |
 
 Pass `-DCLOAKFRAME_SELF_UPDATE=OFF` for distribution packaging that must not
 embed the project's updater. The app then links users to GitHub Releases.
 
 ## Packaging
 
-- macOS: `scripts/package_macos.sh`
-- Windows: `scripts/package_windows.ps1`
-- Linux: `scripts/package_linux.sh`
-- macOS notarization: `scripts/notarize_macos.sh`
+Packaging uses the normal CMake install step. Configure with
+`CLOAKFRAME_FFMPEG_DIR` pointing to a directory that contains `ffmpeg` and
+`ffprobe`, then stage the application with:
 
-Windows and Linux packaging use `vpk` when available to create full and delta
-update packages. The release workflows are the canonical description of the
-signed, pinned distribution builds.
+```bash
+cmake --build build --config Release --parallel
+cmake --install build --config Release --prefix /path/to/staging
+```
+
+For a Linux AppImage staging tree, configure with
+`-DCMAKE_INSTALL_PREFIX=/usr -DCLOAKFRAME_APPIMAGE_LAYOUT=ON` and install with
+`DESTDIR` pointing to a directory whose name ends in `.AppDir`.
+
+The release workflow passes the staged Windows and Linux applications to
+Velopack, signs and notarizes the macOS application, and publishes the fixed
+asset names. It is the canonical description of the signed, pinned
+distribution builds.

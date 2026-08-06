@@ -1,5 +1,6 @@
 # CMake and packaging output
 build*/
+out/
 dist/
 cmake-build-*/
 CMakeUserPresets.json
