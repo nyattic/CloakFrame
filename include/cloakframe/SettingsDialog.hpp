@@ -17,9 +17,14 @@ namespace cloakframe
         Q_OBJECT
 
     public:
-        SettingsDialog(ThemeMode theme, const QString &language, bool checkForUpdates,
-                       bool fileLogging, bool gpuAcceleration, int videoQuality,
-                       int videoCodec, QWidget *parent = nullptr);
+        SettingsDialog(ThemeMode theme,
+            const QString &language,
+            bool checkForUpdates,
+            bool fileLogging,
+            bool gpuAcceleration,
+            int videoQuality,
+            int videoCodec,
+            QWidget *parent = nullptr);
 
     signals:
         void themeChanged(cloakframe::ThemeMode mode);

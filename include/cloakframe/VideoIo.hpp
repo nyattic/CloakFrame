@@ -70,9 +70,8 @@ namespace cloakframe
         [[nodiscard]] double fps() const;
     };
 
-    std::optional<VideoInfo> probeVideo(const FfmpegTools &tools,
-                                        const QString &path,
-                                        QString *error = nullptr);
+    std::optional<VideoInfo> probeVideo(
+        const FfmpegTools &tools, const QString &path, QString *error = nullptr);
 
     QString videoUnsupportedReason(const VideoInfo &info);
 
@@ -85,10 +84,11 @@ namespace cloakframe
         VideoFrameReader(const VideoFrameReader &) = delete;
         VideoFrameReader &operator=(const VideoFrameReader &) = delete;
 
-        bool open(const FfmpegTools &tools, const QString &path, const VideoInfo &info,
-                  int decodeLongEdge = 0);
-        bool readFrame(cv::Mat &frame,
-                       const std::function<bool()> &continueGuard = {});
+        bool open(const FfmpegTools &tools,
+            const QString &path,
+            const VideoInfo &info,
+            int decodeLongEdge = 0);
+        bool readFrame(cv::Mat &frame, const std::function<bool()> &continueGuard = {});
         void close();
 
         [[nodiscard]] int frameWidth() const;
@@ -117,16 +117,15 @@ namespace cloakframe
         VideoFrameWriter &operator=(const VideoFrameWriter &) = delete;
 
         bool open(const FfmpegTools &tools,
-                  const QString &destination,
-                  const QString &audioSource,
-                  const VideoInfo &info,
-                  int crf,
-                  bool hardwareEncoder = true,
-                  VideoCodec codec = VideoCodec::H264,
-                  const QString &outputRoot = {},
-                  const QString &relativeDestination = {});
-        bool writeFrame(const cv::Mat &frame,
-                        const std::function<bool()> &continueGuard = {});
+            const QString &destination,
+            const QString &audioSource,
+            const VideoInfo &info,
+            int crf,
+            bool hardwareEncoder = true,
+            VideoCodec codec = VideoCodec::H264,
+            const QString &outputRoot = {},
+            const QString &relativeDestination = {});
+        bool writeFrame(const cv::Mat &frame, const std::function<bool()> &continueGuard = {});
         bool finish(const std::function<bool()> &publishGuard = {});
         void abort();
 

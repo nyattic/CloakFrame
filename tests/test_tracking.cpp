@@ -31,8 +31,7 @@ namespace
         assert(afterLast && *afterLast == manual.keyframes.back().rect);
         assert(!cloakframe::manualTrackRectAtFrame(manual, 1));
 
-        const auto track = cloakframe::materializeManualVideoTrack(
-            manual, 10, QSize(100, 100), 12);
+        const auto track = cloakframe::materializeManualVideoTrack(manual, 10, QSize(100, 100), 12);
         assert(track && track->id == 12 && track->boxes.size() == 7);
         assert(track->firstFrame() == 2 && track->lastFrame() == 8);
         assert(track->boxAtFrame(3) && !track->boxAtFrame(3)->interpolated);
@@ -40,10 +39,8 @@ namespace
 
         auto invalid = manual;
         std::swap(invalid.keyframes[0], invalid.keyframes[1]);
-        assert(!cloakframe::materializeManualVideoTrack(
-            invalid, 10, QSize(100, 100), 13));
-        assert(!cloakframe::materializeManualVideoTrack(
-            manual, 8, QSize(100, 100), 13));
+        assert(!cloakframe::materializeManualVideoTrack(invalid, 10, QSize(100, 100), 13));
+        assert(!cloakframe::materializeManualVideoTrack(manual, 8, QSize(100, 100), 13));
     }
 
     cloakframe::FaceDetection det(float x, float y, float score = 0.9F, float size = 40.0F)
@@ -51,8 +48,8 @@ namespace
         return {cv::Rect2f(x, y, size, size), score};
     }
 
-    cloakframe::FaceDetection posedDet(float x, float y, float rollRadians,
-                                       float score = 0.9F, float size = 40.0F)
+    cloakframe::FaceDetection posedDet(
+        float x, float y, float rollRadians, float score = 0.9F, float size = 40.0F)
     {
         auto detection = det(x, y, score, size);
         detection.rollRadians = rollRadians;
@@ -60,8 +57,8 @@ namespace
         return detection;
     }
 
-    std::vector<cloakframe::FaceDetections> movingObjectSequence(int frames, float startX, float stepX,
-                                                               float y = 100.0F, float score = 0.9F)
+    std::vector<cloakframe::FaceDetections> movingObjectSequence(
+        int frames, float startX, float stepX, float y = 100.0F, float score = 0.9F)
     {
         std::vector<cloakframe::FaceDetections> sequence(frames);
         for (int frame = 0; frame < frames; ++frame)
@@ -74,8 +71,7 @@ namespace
     bool contains(const cv::Rect2f &outer, const cv::Rect2f &inner)
     {
         constexpr float kEpsilon = 0.001F;
-        return outer.x <= inner.x + kEpsilon
-               && outer.y <= inner.y + kEpsilon
+        return outer.x <= inner.x + kEpsilon && outer.y <= inner.y + kEpsilon
                && outer.x + outer.width >= inner.x + inner.width - kEpsilon
                && outer.y + outer.height >= inner.y + inner.height - kEpsilon;
     }
@@ -87,7 +83,7 @@ namespace
         assert(tracks[0].boxes.size() == 30);
         assert(tracks[0].firstFrame() == 0);
         assert(tracks[0].lastFrame() == 29);
-        for (const auto &box: tracks[0].boxes)
+        for (const auto &box : tracks[0].boxes)
         {
             assert(!box.interpolated);
         }
@@ -153,9 +149,8 @@ namespace
         const float angles[] = {0.2F, 0.2F, -0.6F, 0.2F, 0.2F};
         for (int frame = 0; frame < 5; ++frame)
         {
-            track.boxes.push_back({frame,
-                                   cv::Rect2f(50.0F, 100.0F, 40.0F, 40.0F),
-                                   0.9F, false, angles[frame], true});
+            track.boxes.push_back(
+                {frame, cv::Rect2f(50.0F, 100.0F, 40.0F, 40.0F), 0.9F, false, angles[frame], true});
         }
 
         cloakframe::smoothTrack(track, 2);
@@ -175,7 +170,8 @@ namespace
         assert(tracks[0].boxes.size() == 15);
         assert(tracks[0].boxAtFrame(6) != nullptr);
 
-        const auto lowOnly = cloakframe::buildTracks(movingObjectSequence(15, 50.0F, 5.0F, 100.0F, 0.2F));
+        const auto lowOnly =
+            cloakframe::buildTracks(movingObjectSequence(15, 50.0F, 5.0F, 100.0F, 0.2F));
         assert(lowOnly.empty());
     }
 
@@ -225,7 +221,7 @@ namespace
         cloakframe::postProcessTracks(tracks, retain, 20);
         assert(tracks.size() == 2);
         int lowConfidence = 0;
-        for (const auto &track: tracks)
+        for (const auto &track : tracks)
         {
             assert(!track.boxes.empty());
             if (track.lowConfidence)
@@ -252,15 +248,15 @@ namespace
         std::vector<cloakframe::FaceDetections> sequence(6);
         sequence[5].push_back(det(50.0F, 100.0F));
 
-        auto tracks = cloakframe::buildBidirectionalTracks(
-            sequence, {}, 0.5F, cloakframe::SceneCuts({5}));
+        auto tracks =
+            cloakframe::buildBidirectionalTracks(sequence, {}, 0.5F, cloakframe::SceneCuts({5}));
         assert(tracks.size() == 1);
         cloakframe::postProcessTracks(tracks, {}, 6, cloakframe::SceneCuts({5}));
         assert(tracks.size() == 1);
         assert(tracks[0].boxAtFrame(5) != nullptr);
 
-        auto strictTracks = cloakframe::buildBidirectionalTracks(
-            sequence, {}, 0.5F, cloakframe::SceneCuts({5}));
+        auto strictTracks =
+            cloakframe::buildBidirectionalTracks(sequence, {}, 0.5F, cloakframe::SceneCuts({5}));
         cloakframe::TrackPostProcessConfig strict;
         strict.shortTrackMinStrong = 2;
         cloakframe::postProcessTracks(strictTracks, strict, 6, cloakframe::SceneCuts({5}));
@@ -308,7 +304,8 @@ namespace
 
     void testBidirectionalMergeProducesSingleTrack()
     {
-        const auto tracks = cloakframe::buildBidirectionalTracks(movingObjectSequence(20, 50.0F, 5.0F));
+        const auto tracks =
+            cloakframe::buildBidirectionalTracks(movingObjectSequence(20, 50.0F, 5.0F));
         assert(tracks.size() == 1);
         assert(tracks[0].boxes.size() == 20);
     }
@@ -337,8 +334,8 @@ namespace
         for (int frame = 0; frame < 20; ++frame)
         {
             const float jitter = (frame % 2 == 0) ? 3.0F : -3.0F;
-            sequence[frame].push_back(det(100.0F + 5.0F * static_cast<float>(frame) + jitter,
-                                          100.0F + jitter));
+            sequence[frame].push_back(
+                det(100.0F + 5.0F * static_cast<float>(frame) + jitter, 100.0F + jitter));
         }
 
         auto tracks = cloakframe::buildTracks(sequence);
@@ -346,7 +343,7 @@ namespace
         const auto original = tracks[0];
 
         cloakframe::postProcessTracks(tracks, {}, 20);
-        for (const auto &box: original.boxes)
+        for (const auto &box : original.boxes)
         {
             const auto *processed = tracks[0].boxAtFrame(box.frame);
             assert(processed != nullptr);
@@ -441,7 +438,7 @@ namespace
 
         const auto split = cloakframe::buildTracks(sequence, {}, cloakframe::SceneCuts({10}));
         assert(split.size() == 2);
-        for (const auto &track: split)
+        for (const auto &track : split)
         {
             assert(track.firstFrame() >= 10 || track.lastFrame() < 10);
         }
@@ -480,9 +477,9 @@ namespace
     {
         const auto sequence = movingObjectSequence(20, 50.0F, 5.0F);
         const auto tracks =
-                cloakframe::buildBidirectionalTracks(sequence, {}, 0.5F, cloakframe::SceneCuts({10}));
+            cloakframe::buildBidirectionalTracks(sequence, {}, 0.5F, cloakframe::SceneCuts({10}));
         assert(tracks.size() == 2);
-        for (const auto &track: tracks)
+        for (const auto &track : tracks)
         {
             assert(track.firstFrame() >= 10 || track.lastFrame() < 10);
         }
@@ -581,9 +578,9 @@ namespace
         }
         const auto tracks = cloakframe::buildTracks(sequence);
         assert(tracks.size() == 2);
-        for (const auto &track: tracks)
+        for (const auto &track : tracks)
         {
-            for (const auto &tracked: track.boxes)
+            for (const auto &tracked : track.boxes)
             {
                 assert(tracked.box.width == track.boxes.front().box.width);
             }
@@ -635,7 +632,7 @@ namespace
         bool crowdedRejected = false;
         try
         {
-            (void) cloakframe::buildTracks(crowded);
+            (void)cloakframe::buildTracks(crowded);
         }
         catch (const std::length_error &)
         {
@@ -655,7 +652,7 @@ namespace
         bool trackCountRejected = false;
         try
         {
-            (void) cloakframe::buildTracks(singletons, {}, cloakframe::SceneCuts(cuts));
+            (void)cloakframe::buildTracks(singletons, {}, cloakframe::SceneCuts(cuts));
         }
         catch (const std::length_error &)
         {
@@ -671,8 +668,11 @@ namespace
         bool buildCancelled = false;
         try
         {
-            (void) cloakframe::buildBidirectionalTracks(
-                sequence, {}, 0.5F, {}, [&checks]
+            (void)cloakframe::buildBidirectionalTracks(sequence,
+                {},
+                0.5F,
+                {},
+                [&checks]
                 {
                     return ++checks < 5;
                 });
@@ -687,10 +687,14 @@ namespace
         bool postProcessCancelled = false;
         try
         {
-            cloakframe::postProcessTracks(tracks, {}, 120, {}, []
-            {
-                return false;
-            });
+            cloakframe::postProcessTracks(tracks,
+                {},
+                120,
+                {},
+                []
+                {
+                    return false;
+                });
         }
         catch (const cloakframe::TrackingCancelled &)
         {

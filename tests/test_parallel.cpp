@@ -16,7 +16,10 @@ namespace
         std::vector<std::size_t> consumed;
 
         cloakframe::processOrdered<std::size_t>(
-            count, 8, 8, cancelled,
+            count,
+            8,
+            8,
+            cancelled,
             [](std::size_t index)
             {
                 std::this_thread::sleep_for(std::chrono::microseconds((index * 7) % 300));
@@ -45,7 +48,10 @@ namespace
         std::size_t consumedCount = 0;
 
         cloakframe::processOrdered<int>(
-            count, 8, maxInFlight, cancelled,
+            count,
+            8,
+            maxInFlight,
+            cancelled,
             [&](std::size_t index)
             {
                 const int now = ++active;
@@ -73,7 +79,10 @@ namespace
         std::size_t consumedCount = 0;
 
         cloakframe::processOrdered<int>(
-            count, 4, 4, cancelled,
+            count,
+            4,
+            4,
+            cancelled,
             [](std::size_t index)
             {
                 std::this_thread::sleep_for(std::chrono::microseconds(50));
@@ -98,14 +107,29 @@ namespace
         std::size_t consumedCount = 0;
 
         cloakframe::processOrdered<int>(
-            0, 4, 4, cancelled,
-            [](std::size_t) { return 0; },
-            [&](std::size_t, int &&) { ++consumedCount; });
+            0,
+            4,
+            4,
+            cancelled,
+            [](std::size_t)
+            {
+                return 0;
+            },
+            [&](std::size_t, int &&)
+            {
+                ++consumedCount;
+            });
         assert(consumedCount == 0);
 
         cloakframe::processOrdered<int>(
-            5, 1, 1, cancelled,
-            [](std::size_t index) { return static_cast<int>(index); },
+            5,
+            1,
+            1,
+            cancelled,
+            [](std::size_t index)
+            {
+                return static_cast<int>(index);
+            },
             [&](std::size_t index, int &&value)
             {
                 assert(static_cast<std::size_t>(value) == index);

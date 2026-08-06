@@ -14,9 +14,9 @@
 #include <QStyleFactory>
 #include <QVector>
 
-#include <spdlog/spdlog.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 
 #include <exception>
 #include <memory>
@@ -51,7 +51,7 @@ namespace
             return;
         }
 
-        for (const auto &key: legacySettings.allKeys())
+        for (const auto &key : legacySettings.allKeys())
         {
             if (!currentSettings.contains(key))
             {
@@ -70,7 +70,8 @@ namespace
             sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
 
             const bool fileLogging = QSettings().value("fileLogging", true).toBool();
-            const auto dataDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+            const auto dataDir =
+                QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
             if (fileLogging && !dataDir.isEmpty())
             {
                 const auto logDir = dataDir + "/CloakFrame/logs";
@@ -82,7 +83,8 @@ namespace
                 }
             }
 
-            auto logger = std::make_shared<spdlog::logger>("cloakframe", sinks.begin(), sinks.end());
+            auto logger =
+                std::make_shared<spdlog::logger>("cloakframe", sinks.begin(), sinks.end());
             logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
             logger->flush_on(spdlog::level::info);
             spdlog::set_default_logger(logger);
@@ -108,14 +110,15 @@ int main(int argc, char *argv[])
     QApplication::setStyle(QStyleFactory::create("Fusion"));
     {
         QSettings settings;
-        const auto mode = cloakframe::themeModeFromString(settings.value("theme", "system").toString());
+        const auto mode =
+            cloakframe::themeModeFromString(settings.value("theme", "system").toString());
         cloakframe::applyTheme(app, mode);
     }
 
     qRegisterMetaType<cloakframe::ReviewResult>("cloakframe::ReviewResult");
     qRegisterMetaType<cloakframe::RunOutcome>("cloakframe::RunOutcome");
     qRegisterMetaType<cloakframe::RunSummary>("cloakframe::RunSummary");
-    qRegisterMetaType<QVector<QRectF> >("QVector<QRectF>");
+    qRegisterMetaType<QVector<QRectF>>("QVector<QRectF>");
 
 #ifdef Q_OS_MACOS
     QFont defaultFont("SF Pro Text", 13);

@@ -5,10 +5,11 @@
 #include "cloakframe/FaceDetection.hpp"
 #include "cloakframe/OrtAcceleration.hpp"
 
-#include <onnxruntime_cxx_api.h>
+#include <QByteArray>
+
 #include <opencv2/core.hpp>
 
-#include <QByteArray>
+#include <onnxruntime_cxx_api.h>
 
 #include <cstdint>
 #include <string>
@@ -19,15 +20,23 @@ namespace cloakframe
     class ScrfdFaceDetector final : public Detector
     {
     public:
-        explicit ScrfdFaceDetector(const std::string &modelPath, int inputSize = 640,
-                                   bool enableAcceleration = false,
-                                   const QByteArray &expectedSha256 = {});
+        explicit ScrfdFaceDetector(const std::string &modelPath,
+            int inputSize = 640,
+            bool enableAcceleration = false,
+            const QByteArray &expectedSha256 = {});
 
-        FaceDetections detect(const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
+        FaceDetections detect(
+            const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
 
-        [[nodiscard]] OrtAccelerator accelerator() const noexcept { return accelerator_; }
+        [[nodiscard]] OrtAccelerator accelerator() const noexcept
+        {
+            return accelerator_;
+        }
 
-        [[nodiscard]] int inputSize() const noexcept override { return inputSize_; }
+        [[nodiscard]] int inputSize() const noexcept override
+        {
+            return inputSize_;
+        }
 
         [[nodiscard]] const char *backendName() const noexcept override
         {
@@ -52,11 +61,12 @@ namespace cloakframe
         [[nodiscard]] PreparedImage prepare(const cv::Mat &bgrImage) const;
 
         [[nodiscard]] FaceDetections decode(const std::vector<Ort::Value> &outputs,
-                                            const PreparedImage &prepared,
-                                            float scoreThreshold,
-                                            float nmsThreshold) const;
+            const PreparedImage &prepared,
+            float scoreThreshold,
+            float nmsThreshold) const;
 
-        [[nodiscard]] static std::vector<cv::Point2f> anchorCenters(int featureHeight, int featureWidth, int stride);
+        [[nodiscard]] static std::vector<cv::Point2f> anchorCenters(
+            int featureHeight, int featureWidth, int stride);
 
         int inputSize_;
         OrtAccelerator accelerator_ = OrtAccelerator::None;

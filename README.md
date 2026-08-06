@@ -1,208 +1,147 @@
+<p align="center">
+  <img src="assets/cloakframe-512.png" width="128" alt="CloakFrame 앱 아이콘">
+</p>
+
 # CloakFrame
 
-![Release](https://img.shields.io/github/v/release/nyattic/CloakFrame?style=for-the-badge&logo=github&logoColor=white&labelColor=1e1b2e&color=6366f1)
-![Downloads](https://img.shields.io/github/downloads/nyattic/CloakFrame/total?style=for-the-badge&logo=github&logoColor=white&labelColor=1e1b2e&color=6366f1)
-![Last Commit](https://img.shields.io/github/last-commit/nyattic/CloakFrame?style=for-the-badge&logo=git&logoColor=white&labelColor=1e1b2e&color=6366f1)
-![License](https://img.shields.io/badge/license-GPL--3.0--or--later-6366f1?style=for-the-badge&logo=gnu&logoColor=white&labelColor=1e1b2e)
+[![Latest Release](https://img.shields.io/github/v/release/nyattic/CloakFrame?style=for-the-badge&logo=github&logoColor=white&labelColor=1e1b2e&color=6366f1)](https://github.com/nyattic/CloakFrame/releases/latest)
+[![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fnyattic%2FCloakFrame%2Fdownload-badge%2Fdownloads.json&style=for-the-badge&logo=github&logoColor=white&labelColor=1e1b2e)](https://github.com/nyattic/CloakFrame/releases)
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-6366f1?style=for-the-badge&logo=gnu&logoColor=white&labelColor=1e1b2e)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-6366f1?style=for-the-badge&logo=qt&logoColor=white&labelColor=1e1b2e)
 
-![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?style=for-the-badge&logo=apple&logoColor=white&labelColor=1e1b2e)
-![Windows](https://img.shields.io/badge/Windows-x64-0078D6?style=for-the-badge&logo=windows&logoColor=white&labelColor=1e1b2e)
-![Linux](https://img.shields.io/badge/Linux-x86__64-FCC624?style=for-the-badge&logo=linux&logoColor=white&labelColor=1e1b2e)
+<p align="center"><b>KR</b> · <a href="README.en.md">EN</a> · <a href="README.ja.md">JP</a></p>
 
-Local desktop app that automatically redacts faces and license plates in your photos and videos. Drop in images, videos, or folders, choose what to detect, get anonymized copies — your files are processed entirely on your machine and never uploaded.
+사진과 영상 속 얼굴·자동차 번호판을 자동으로 가려 주는 데스크톱 앱입니다.
+파일은 내 컴퓨터 안에서만 처리되며 서버로 업로드되지 않습니다.
 
-The interface is available in English, Korean, Japanese, and Simplified Chinese. The initial language follows the system locale and can be changed at any time in Settings.
+사진, 영상, 폴더를 창에 끌어다 놓고 가릴 대상을 고르면 원본을 건드리지 않고
+익명화된 사본을 만듭니다. 모자이크, 흐림, 단색, 원하는 이미지로 가릴 수
+있습니다.
 
-> **Renamed from Redactly:** CloakFrame imports existing settings on first launch and continues to use models already downloaded by earlier releases.
+> [!IMPORTANT]
+> 자동 검출은 완벽하지 않습니다. 저장 전 검토를 켜고 결과를 확인한 뒤
+> 공유해 주세요. 앱이 **검토 필요**로 끝났다면 완료된 작업으로 간주하지 마세요.
 
-## Install
+## 다운로드와 설치
 
-Download from [Releases](https://github.com/nyattic/CloakFrame/releases/latest):
+| 플랫폼 | 지원 환경 | 다운로드 |
+| --- | --- | --- |
+| Windows | Windows 10 이상, 64비트 | [인스톨러](https://github.com/nyattic/CloakFrame/releases/latest/download/CloakFrame-win-Setup.exe) · [포터블](https://github.com/nyattic/CloakFrame/releases/latest/download/CloakFrame-win-Portable.zip) |
+| macOS | macOS 15 이상, Apple Silicon | [최신 릴리스](https://github.com/nyattic/CloakFrame/releases/latest) |
+| Linux | x86_64 | [AppImage](https://github.com/nyattic/CloakFrame/releases/latest/download/CloakFrame.AppImage) |
 
-- **macOS** (Apple Silicon, macOS 15+) — open the `.dmg`, drag to Applications
-- **Windows** (x64, Windows 10+) — run `CloakFrame-win-Setup.exe` (installs per user, no administrator rights needed), or unzip the portable `CloakFrame-win-Portable.zip` and run `CloakFrame.exe`. GPU acceleration needs Windows 10 1903+ and a DirectX 12 capable GPU (NVIDIA, AMD, or Intel); without one, detection runs on the CPU.
-- **Linux** (x86_64) — download `CloakFrame.AppImage`, `chmod +x` it, and run it
-
-CloakFrame checks for updates when it starts (toggle under **Settings → Check for updates on startup**). When you accept an update, Windows and Linux builds download it and apply it in place — using a delta download when one is available — and macOS installs it through Sparkle. Nothing is downloaded until you choose **Update**.
-
-The first time you use a built-in model, CloakFrame downloads it once (0.23–11 MB) and caches it; after that it runs offline. The face models come from the YOLO5Face and OpenCV Zoo projects on GitHub; the license plate model comes from the open-image-models project on GitHub.
-
-## Use
-
-1. Drop images, videos, or folders onto the window
-2. Choose what to detect — **Faces**, **License plates**, or **both**
-3. For faces, pick **Accurate · YOLO5Face-n** (recommended) or **Fast · YuNet**
-4. Choose an output folder
-5. Click **Start**
-
-Faces and plates can be hidden with pixelation, Gaussian blur, solid fill, or a custom image you select. Custom images keep their aspect ratio and are processed locally. Face overlays follow the head tilt reported by landmark-capable face models; video overlays also smooth and interpolate that angle between detections. Their transparency is preserved, with a safety mosaic underneath so transparent pixels never reveal the original detected region.
-
-Originals are never modified. Enable **Review before saving** to inspect image detections, add missed regions, or review video tracks on a timeline before encoding. False video tracks can be excluded from the entire output with one click. Missed video regions can be drawn as manual tracks, bounded to the relevant time range, and followed with interpolated keyframes as they move.
-
-CloakFrame refuses to start if two inputs would write to the same output path or if any planned output already exists, so results are never silently overwritten. Move or rename existing results before running the same batch again.
-
-When every item is processed and redacted successfully, the run finishes as **Done**. If any file fails, is skipped, or is saved without a detected region, CloakFrame finishes as **Review required** and shows a summary. Treat that state as incomplete, use the activity log to identify the affected files, and inspect them before sharing.
-
-Supported inputs: `.jpg` `.jpeg` `.png` `.bmp` `.tif` `.tiff` `.webp` images, and `.mp4` `.mov` `.m4v` videos (H.264/HEVC, 8-bit SDR). Video support is currently in **beta** — check the output before sharing it. On Linux the video pipeline is covered by automated tests but has not been manually tested yet.
-
-YOLO5Face-n detection runs on the GPU where available — CoreML on macOS, DirectML on Windows (bundled with the release and accelerating NVIDIA, AMD, and Intel GPUs alike), CUDA on NVIDIA Linux systems, and MIGraphX on supported AMD Linux systems — with automatic CPU fallback and a Settings toggle (on by default). YuNet uses OpenCV's CPU backend. Linux GPU detection requires a source build linked against a GPU-enabled ONNX Runtime; the current AppImage uses CPU inference.
-
-Videos are processed in two passes — detection with bidirectional tracking, then encoding — so faces stay covered through motion blur and brief occlusions. When review is enabled, CloakFrame pauses between the passes to show a track timeline. Encoding uses the GPU's hardware encoder when one works — NVENC or Quick Sync on Windows and Linux, VideoToolbox on macOS — falling back to CPU x264/x265 otherwise or when GPU acceleration is off in Settings. Output is an H.264 (default) or HEVC MP4, selectable in Settings, with the original audio (re-encoded to AAC only when the source codec doesn't fit MP4), container metadata removed, and rotation baked into the pixels. Variable frame rate input is converted to a constant frame rate; 10-bit/HDR input is rejected rather than silently degraded. Video processing uses an FFmpeg bundled next to the app when present, otherwise an FFmpeg found on `PATH`. The video quality preset lives in Settings.
-
-## Build from source
-
-Requires CMake 3.24+, a C++23 compiler, Qt 6.8.1+ available to CMake (with the Linguist tools for UI translations; Qt Svg is optional and gives a crisp settings icon, falling back to a glyph without it), OpenCV 4.10.0 or newer with the `dnn` and `objdetect` modules (including OpenCV 5.x), ONNX Runtime, spdlog, and Exiv2 (optional, for metadata preservation). Linux and Windows release builds use Qt 6.10.3 and OpenCV 4.13.0. macOS builds use the latest stable Homebrew packages available when the workflow runs, while rolling-release development systems may also use OpenCV 5.x. FFmpeg is not a build dependency, but video processing needs `ffmpeg` and `ffprobe` at runtime (bundled next to the app, or on `PATH`). The detection models (YOLO5Face-n and YuNet for faces, YOLOv9 for license plates) are not build dependencies — the app downloads them on first use, or you can pre-place them (see below).
-
-The built-in models are **not bundled** and **not committed** to this repository. The app downloads them on first use (with an integrity check) and caches them under the platform data directory. To pre-place them for offline use, drop them in `models/`:
-
-- `models/yolov5n_face.onnx` — Accurate (faces, recommended)
-- `models/face_detection_yunet_2023mar.onnx` — Fast (faces)
-- `models/yolo-v9-t-512-license-plates-end2end.onnx` — License plates
-
-You can also launch the app and use **Browse…** to select a custom SCRFD `.onnx` file.
-
-Self-update support is controlled by the `CLOAKFRAME_SELF_UPDATE` CMake option (default `ON`). When enabled, the configure step downloads a pinned, checksum-verified copy of the update framework — Velopack on Windows and Linux, Sparkle on macOS — and the app gains in-place updates when run from a packaged release. Pass `-DCLOAKFRAME_SELF_UPDATE=OFF` to build without it (for example for distro packaging); the app then falls back to a notification that links to the releases page.
-
-Only load custom ONNX models from sources you trust. CloakFrame checks basic SCRFD tensor compatibility before processing, but ONNX files are still executable model inputs handled by native runtime libraries.
-
-### macOS
+Windows 인스톨러는 관리자 권한 없이 현재 사용자 계정에 설치됩니다. 포터블
+버전은 압축을 풀고 `CloakFrame.exe`를 실행하면 됩니다. Linux에서는 AppImage에
+실행 권한을 준 뒤 실행하세요.
 
 ```bash
-cmake -S . -B build
-cmake --build build
-open build/CloakFrame.app
+chmod +x CloakFrame.AppImage
+./CloakFrame.AppImage
 ```
 
-Install dependencies with Homebrew:
+처음 사용하는 내장 검출 모델은 GitHub에서 한 번만 다운로드하여 캐시합니다
+(약 0.23~11 MB). 이후에는 오프라인으로 처리할 수 있습니다.
 
-```bash
-brew install cmake qt opencv onnxruntime spdlog exiv2
-```
+> [!NOTE]
+> 이전 이름은 Redactly였습니다. 기존 사용자는 첫 실행 때 설정과 이미 받은
+> 모델을 자동으로 이어서 사용합니다.
 
-The application still builds when Qt Linguist Tools are unavailable, but only the English interface is embedded. Check the CMake configure output for `Qt6LinguistTools`; if it is not found, install a Qt distribution that includes the Linguist Tools and reconfigure the build directory before testing the Korean, Japanese, or Simplified Chinese interface.
+## 사용 방법
 
-### Windows (PowerShell)
+1. 사진, 영상 또는 폴더를 창에 끌어다 놓습니다.
+2. **얼굴**, **번호판** 또는 둘 다 선택합니다.
+3. 얼굴 모델은 **정확 · YOLO5Face-n**(권장) 또는 **빠름 · YuNet**을 고릅니다.
+4. 마스킹 방식과 출력 폴더를 정합니다.
+5. **시작**을 누릅니다.
 
-```powershell
-cmake -S . -B build-windows -G Ninja `
-  -DCMAKE_BUILD_TYPE=Release `
-  -DCMAKE_PREFIX_PATH="C:\Qt\6.10.3\msvc2022_64;C:\opencv\build" `
-  -DONNXRUNTIME_ROOT="C:\onnxruntime-directml-1.24.4"
-cmake --build build-windows --config Release
-```
+원본 파일은 수정하지 않습니다. 같은 이름의 결과가 이미 있거나 여러 입력이
+한 출력 경로를 함께 사용하게 되면 작업을 시작하지 않으므로, 기존 결과를
+실수로 덮어쓰지 않습니다.
 
-spdlog must also be discoverable by CMake — for example install it with [vcpkg](https://vcpkg.io) (`vcpkg install spdlog`) and add the vcpkg entries to `CMAKE_PREFIX_PATH`.
+### 저장 전에 검토하기
 
-Any ONNX Runtime build works for development, but official Windows releases use the DirectML build so detection runs on the GPU: the `Microsoft.ML.OnnxRuntime.DirectML` NuGet package staged into an `include`/`lib` layout, with `DirectML.dll` from the `Microsoft.AI.DirectML` package placed next to `onnxruntime.dll` (see the Windows job in `.github/workflows/release.yml`). `scripts/package_windows.ps1` refuses to package without `DirectML.dll`.
+**저장 전 검토**를 켜면 다음 작업을 할 수 있습니다.
 
-### Linux
+- 사진에서 잘못 잡힌 영역을 지우고 놓친 영역을 직접 추가
+- 영상의 얼굴·번호판 트랙을 타임라인에서 확인
+- 잘못 잡힌 영상 트랙을 전체 구간에서 제외
+- 놓친 대상을 수동 트랙으로 추가하고 이동에 맞춰 키프레임 조정
 
-The Linux CI and AppImage release baseline is Ubuntu 26.04 with Qt 6.10.3, OpenCV 4.13.0, and ONNX Runtime 1.27.1. Install the system build dependencies with:
+모든 항목이 문제없이 가려져야 **완료**로 끝납니다. 실패, 건너뜀, 검출 영역
+없는 저장이 하나라도 있으면 **검토 필요**와 요약을 표시합니다. 이때는 활동
+로그에서 해당 파일을 찾고 결과를 직접 확인해 주세요.
 
-```bash
-sudo apt install cmake ninja-build build-essential pkg-config \
-  libjpeg-dev libpng-dev libtiff-dev libwebp-dev libspdlog-dev libexiv2-dev
-```
+## 지원 파일과 처리 방식
 
-Install Qt 6.10.3 and OpenCV 4.13.0 separately when the distribution packages are older. The pinned source-build configuration used for releases is in [`.github/workflows/release.yml`](.github/workflows/release.yml).
+- 이미지: `.jpg` `.jpeg` `.png` `.bmp` `.tif` `.tiff` `.webp`
+- 영상: `.mp4` `.mov` `.m4v` (H.264/HEVC, 8비트 SDR)
+- 출력 영상: H.264(기본) 또는 HEVC MP4
 
-ONNX Runtime is detected via `pkg-config libonnxruntime` when available; otherwise point CMake at an ONNX Runtime release:
+영상은 양방향 추적으로 대상을 찾은 뒤 인코딩하는 두 단계로 처리합니다. 원본
+오디오는 MP4와 호환되면 유지하고, 필요할 때만 AAC로 변환합니다. 회전 정보는
+픽셀에 반영하고 컨테이너 메타데이터는 제거합니다. 10비트/HDR 영상은 품질을
+조용히 떨어뜨리는 대신 거부합니다.
 
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DONNXRUNTIME_ROOT=/path/to/onnxruntime-linux-x64
-cmake --build build
-./build/CloakFrame
-```
+> [!WARNING]
+> 영상 기능은 베타입니다. 공유 전 결과를 끝까지 재생해 확인해 주세요. Linux
+> 영상 경로는 자동 테스트로 검증하지만 아직 수동 검증 범위가 제한적입니다.
 
-On Arch Linux, install the CPU development environment with:
+가능한 경우 GPU를 사용하고 실패하면 CPU로 자동 전환합니다.
 
-```bash
-yay -S --needed base-devel cmake ninja pkgconf qt6-base qt6-tools qt6-svg \
-  opencv onnxruntime-cpu spdlog exiv2 ffmpeg
-```
+| 플랫폼 | 가속 방식 |
+| --- | --- |
+| macOS | CoreML 검출 · VideoToolbox 인코딩 |
+| Windows | DirectML 검출 · NVENC/Quick Sync 인코딩 |
+| Linux | 소스 빌드 시 CUDA/MIGraphX 검출 · NVENC/Quick Sync 인코딩 |
 
-Arch Linux currently provides OpenCV 5 through the official `opencv` package. It is supported directly; a separate `opencv4` AUR package is not required for development.
+공식 Linux AppImage의 검출은 현재 CPU를 사용합니다. 빠른 YuNet 모델도 모든
+플랫폼에서 CPU를 사용합니다.
 
-For NVIDIA GPU inference on AVX2-capable systems, replace `onnxruntime-cpu` with `onnxruntime-opt-cuda`:
+## 개인정보와 네트워크
 
-```bash
-yay -S --needed onnxruntime-opt-cuda
-```
+사진과 영상 내용은 기기 밖으로 전송되지 않습니다. CloakFrame이 만드는 네트워크
+요청은 다음 세 가지뿐이며 이미지나 개인 데이터를 포함하지 않습니다.
 
-For supported AMD GPUs, use the MIGraphX-enabled ROCm package instead:
+- 처음 쓰는 내장 모델 다운로드
+- 시작할 때 새 버전 확인
+- 사용자가 업데이트를 승인한 뒤 릴리스 파일 다운로드
 
-```bash
-yay -S --needed onnxruntime-rocm
-```
+업데이트 확인은 **설정 → 시작 시 업데이트 확인**에서 끌 수 있습니다. 사용자
+승인 전에는 업데이트 파일을 다운로드하지 않습니다.
 
-The ONNX Runtime variants conflict, so install only one. Reconfigure the CMake build directory after changing variants. CloakFrame selects CUDA first, then MIGraphX, accepts the legacy ROCm execution provider from ONNX Runtime versions before 1.23, and falls back to CPU when provider initialization or model warmup fails.
+## 자주 묻는 질문
 
-### Tests
+### 아무것도 검출되지 않아요
 
-```bash
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
-```
+먼저 얼굴 모델을 바꾸거나, 번호판/얼굴 선택이 맞는지 확인하세요. 검출되지 않은
+영역은 저장 전 검토에서 직접 추가할 수 있습니다.
 
-The video I/O tests exercise a real FFmpeg round trip and are skipped when FFmpeg is not installed.
+### 영상 처리가 시작되지 않아요
 
-Out-of-tree CMake directories matching `build*/` are ignored by Git, as are local ONNX models, generated output, package artifacts, incomplete downloads, logs, and common IDE files. Source files, workflows, translations, assets, and documentation remain tracked.
+`ffmpeg`와 `ffprobe`가 필요합니다. 공식 배포본에는 함께 들어 있지만 소스 빌드는
+두 프로그램이 `PATH`에 있어야 합니다. HDR·10비트 영상은 지원하지 않습니다.
 
-Packaging scripts: [`scripts/package_macos.sh`](scripts/package_macos.sh), [`scripts/package_windows.ps1`](scripts/package_windows.ps1), [`scripts/package_linux.sh`](scripts/package_linux.sh), [`scripts/notarize_macos.sh`](scripts/notarize_macos.sh). The Windows and Linux scripts produce the installer, portable bundle, and update packages with [vpk](https://docs.velopack.io) (`dotnet tool install --global vpk`) when it is on `PATH`, and otherwise fall back to the plain portable layout.
+### 커스텀 모델을 쓸 수 있나요?
 
-## Privacy
+**찾아보기…**에서 SCRFD `.onnx` 모델을 선택할 수 있습니다. 신뢰하는 출처의
+파일만 사용하세요. ONNX 파일은 네이티브 런타임이 실행하는 모델 입력입니다.
 
-Your images and videos never leave your device — they are read from disk, processed locally (video encoding runs through a local FFmpeg process), and written to the output folder you pick. CloakFrame makes only three kinds of network request, and none of them sends any image or personal data: a one-time download of a detection model from GitHub the first time you use each built-in model, a check at launch against GitHub to see whether a newer version exists, and — only after you accept an update — the download of that update from GitHub Releases. The update check can be turned off under **Settings → Check for updates on startup**. Supplying a custom SCRFD model with **Browse…** avoids downloading a built-in face model; license plate detection still requires its separate model.
+## 모델과 라이선스
 
-## License
+CloakFrame 소스 코드는 **GNU GPL v3.0 이상**으로 배포합니다. 자세한 조건은
+[LICENSE](LICENSE)를 확인하세요. 2026 Nyabi.
 
-**Application source code** — GNU General Public License v3.0 or later. SPDX identifier: `GPL-3.0-or-later`. You may use, study, share, and modify CloakFrame, including for commercial purposes; if you distribute it or a derivative, you must do so under the GPL and make the corresponding source available. See [LICENSE](LICENSE).
+내장 모델은 앱이나 저장소에 포함되지 않고 처음 사용할 때 다운로드합니다. 권장
+YOLO5Face-n 모델은 WIDER FACE 데이터 조건 때문에 **비상업적 연구 용도로만**
+취급해야 합니다. 빠른 YuNet 모델과 번호판 모델은 각각의 MIT 조건을 따릅니다.
+커스텀 모델의 조건은 제공처에 따라 다릅니다.
 
-> The application was previously licensed under PolyForm Noncommercial 1.0.0. It moved to the GPL v3.0-or-later starting with v1.1.0 because CloakFrame now links [Exiv2](https://exiv2.org/) (GPL-2.0-or-later) for metadata preservation. Versions released earlier under PolyForm Noncommercial remain under that license.
+모델 출처, 논문 인용, 런타임 구성요소의 정확한 조건은
+[모델과 제3자 고지](docs/MODELS.md) 및
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)에 정리되어 있습니다.
 
-Copyright © 2026 Nyabi.
+## 개발에 참여하기
 
-CloakFrame is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-
-**YOLO5Face-n model** — the recommended face model is **not distributed with CloakFrame**; the app downloads an ONNX conversion from the [yolov5-face-onnx-inference release](https://github.com/yakhyo/yolov5-face-onnx-inference/releases/tag/weights). It is based on [YOLO5Face](https://github.com/deepcam-cn/yolov5-face), whose code is GPL-3.0, and was trained on WIDER FACE. WIDER FACE is restricted to non-commercial research use, so treat this model as **non-commercial only** under terms separate from the application license.
-
-**YuNet model** — the fast face model is **not distributed with CloakFrame**; the app downloads `face_detection_yunet_2023mar.onnx` from the [OpenCV Zoo YuNet model directory](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet). The model directory identifies the model license as MIT.
-
-**Custom SCRFD models** — custom SCRFD files remain supported through **Browse…**. Their terms depend on the source. InsightFace's pretrained models are limited to non-commercial research use; a mirror or file conversion does not replace those upstream terms.
-
-**License plate model** — the built-in license plate detector is **not distributed with CloakFrame**; the app downloads it on first use from the [open-image-models](https://github.com/ankandrew/open-image-models) project by ankandrew, which is MIT-licensed. It is a YOLOv9-architecture model (see [Citation](#citation)) and is downloaded at runtime and cached locally, under its upstream project's terms. Confirm the current terms with the open-image-models project before any commercial or redistribution use.
-
-**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT), DirectML (proprietary Microsoft license permitting redistribution; bundled with Windows releases only, as `DirectML.dll`), Exiv2 (GPL-2.0-or-later) with its own dependencies (Brotli, Expat, inih, zlib, GNU gettext), spdlog and {fmt} (MIT), Velopack (MIT; self-update on Windows and Linux), Sparkle (MIT; self-update on macOS), and FFmpeg (LGPL-2.1-or-later with optional GPL components), which is invoked as a separate process for video decoding and encoding. Each retains its own license; the full texts are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and are bundled with each release.
-
-## Citation
-
-```bibtex
-@misc{guo2021sample,
-  title={Sample and Computation Redistribution for Efficient Face Detection},
-  author={Jia Guo and Jiankang Deng and Alexandros Lattas and Stefanos Zafeiriou},
-  year={2021},
-  eprint={2105.04714},
-  archivePrefix={arXiv},
-  primaryClass={cs.CV}
-}
-
-@misc{qi2021yolo5face,
-  title={YOLO5Face: Why Reinventing a Face Detector},
-  author={Delong Qi and Weijun Tan and Qi Yao and Jingfeng Liu},
-  year={2021},
-  eprint={2105.12931},
-  archivePrefix={arXiv},
-  primaryClass={cs.CV}
-}
-
-@misc{wang2024yolov9,
-  title={YOLOv9: Learning What You Want to Learn Using Programmable Gradient Information},
-  author={Chien-Yao Wang and Hong-Yuan Mark Liao},
-  year={2024},
-  eprint={2402.13616},
-  archivePrefix={arXiv},
-  primaryClass={cs.CV}
-}
-```
+직접 빌드하려면 [BUILDING.md](BUILDING.md), 변경을 제안하려면
+[CONTRIBUTING.md](CONTRIBUTING.md)를 확인하세요. CMake 프리셋, 테스트,
+`clang-format`, `clang-tidy` 사용법도 두 문서에 있습니다.

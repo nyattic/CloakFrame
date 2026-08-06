@@ -16,7 +16,7 @@ namespace cloakframe
         std::string lowercaseExtension(const std::filesystem::path &path)
         {
             auto extension = pathToUtf8(path.extension());
-            for (auto &ch: extension)
+            for (auto &ch : extension)
             {
                 if (ch >= 'A' && ch <= 'Z')
                 {
@@ -28,7 +28,7 @@ namespace cloakframe
 
         bool escapesBase(const std::filesystem::path &relative)
         {
-            for (const auto &part: relative)
+            for (const auto &part : relative)
             {
                 if (part == "..")
                 {
@@ -39,9 +39,9 @@ namespace cloakframe
         }
 
         void appendFile(std::vector<ScanResult> &results,
-                        const std::filesystem::path &file,
-                        const std::filesystem::path &base,
-                        const bool includeVideos)
+            const std::filesystem::path &file,
+            const std::filesystem::path &base,
+            const bool includeVideos)
         {
             if (!isSupportedImage(file) && !(includeVideos && isSupportedVideo(file)))
             {
@@ -61,9 +61,9 @@ namespace cloakframe
     bool isSupportedImage(const std::filesystem::path &path)
     {
         const auto extension = lowercaseExtension(path);
-        return extension == ".jpg" || extension == ".jpeg" || extension == ".png" ||
-               extension == ".bmp" || extension == ".tif" || extension == ".tiff" ||
-               extension == ".webp";
+        return extension == ".jpg" || extension == ".jpeg" || extension == ".png"
+               || extension == ".bmp" || extension == ".tif" || extension == ".tiff"
+               || extension == ".webp";
     }
 
     std::vector<ScanResult> scanImages(const QStringList &inputs, bool recursive)
@@ -71,8 +71,8 @@ namespace cloakframe
         return scanMedia(inputs, recursive, false);
     }
 
-    std::vector<ScanResult> scanMedia(const QStringList &inputs, bool recursive,
-                                      const bool includeVideos)
+    std::vector<ScanResult> scanMedia(
+        const QStringList &inputs, bool recursive, const bool includeVideos)
     {
         std::vector<ScanResult> results;
 
@@ -85,7 +85,7 @@ namespace cloakframe
             return visitedCanonical.insert(key).second;
         };
 
-        for (const auto &input: inputs)
+        for (const auto &input : inputs)
         {
             const QFileInfo info(input);
             const auto path = pathFromQString(input);
@@ -119,10 +119,10 @@ namespace cloakframe
                     }
                     it.increment(error);
                 }
-            } else
+            }
+            else
             {
-                for (const auto &entry:
-                     std::filesystem::directory_iterator(path, options, error))
+                for (const auto &entry : std::filesystem::directory_iterator(path, options, error))
                 {
                     if (error)
                     {
@@ -136,10 +136,11 @@ namespace cloakframe
             }
         }
 
-        std::ranges::sort(results, [](const ScanResult &a, const ScanResult &b)
-        {
-            return pathToUtf8(a.sourcePath) < pathToUtf8(b.sourcePath);
-        });
+        std::ranges::sort(results,
+            [](const ScanResult &a, const ScanResult &b)
+            {
+                return pathToUtf8(a.sourcePath) < pathToUtf8(b.sourcePath);
+            });
 
         return results;
     }

@@ -6,6 +6,6 @@
 
 namespace cloakframe
 {
-    [[nodiscard]] std::optional<std::vector<std::uint8_t>>
-    makeOnnxSpatialDimsFixed(const std::vector<std::uint8_t> &modelBytes, int size);
+    [[nodiscard]] std::optional<std::vector<std::uint8_t>> makeOnnxSpatialDimsFixed(
+        const std::vector<std::uint8_t> &modelBytes, int size);
 }

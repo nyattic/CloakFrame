@@ -55,27 +55,25 @@ namespace cloakframe
     [[nodiscard]] std::size_t imageFrameCount(const std::filesystem::path &source);
 
     bool imwriteUnicodeNoReplace(const std::filesystem::path &destination,
-                                 const cv::Mat &image,
-                                 const std::vector<int> &params = {});
+        const cv::Mat &image,
+        const std::vector<int> &params = {});
 
-    ImageWriteResult imwriteUnicodeNoReplaceAtRoot(
-        const std::filesystem::path &outputRoot,
+    ImageWriteResult imwriteUnicodeNoReplaceAtRoot(const std::filesystem::path &outputRoot,
         const std::filesystem::path &relativeDestination,
         const cv::Mat &image,
         const std::vector<int> &params = {},
         const std::filesystem::path &metadataSource = {},
         const std::function<bool()> &publishGuard = {});
 
-    bool copyFileNoReplace(const std::filesystem::path &source,
-                           const std::filesystem::path &destination);
+    bool copyFileNoReplace(
+        const std::filesystem::path &source, const std::filesystem::path &destination);
 
     bool copyFileNoReplaceAtRoot(const std::filesystem::path &source,
-                                 const std::filesystem::path &outputRoot,
-                                 const std::filesystem::path &relativeDestination,
-                                 const std::function<bool()> &publishGuard = {});
+        const std::filesystem::path &outputRoot,
+        const std::filesystem::path &relativeDestination,
+        const std::function<bool()> &publishGuard = {});
 
-    FileMoveResult moveFileNoReplaceAtRoot(
-        const std::filesystem::path &source,
+    FileMoveResult moveFileNoReplaceAtRoot(const std::filesystem::path &source,
         const std::filesystem::path &outputRoot,
         const std::filesystem::path &relativeDestination,
         const std::function<bool()> &publishGuard = {});
@@ -83,6 +81,6 @@ namespace cloakframe
     std::vector<int> encodeParamsForExtension(const std::string &extLower);
 
     bool copyMetadata(const std::filesystem::path &source,
-                      const std::filesystem::path &destination,
-                      bool normalizeOrientation);
+        const std::filesystem::path &destination,
+        bool normalizeOrientation);
 }

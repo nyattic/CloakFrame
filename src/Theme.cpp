@@ -427,7 +427,7 @@ namespace cloakframe
                 {"@toggleHoverText@", c.toggleHoverText},
                 {"@invalidBorder@", c.invalidBorder},
             };
-            for (const auto &[key, value]: tokens)
+            for (const auto &[key, value] : tokens)
             {
                 s.replace(QLatin1String(key), value);
             }
@@ -494,13 +494,13 @@ namespace cloakframe
     {
         switch (mode)
         {
-            case ThemeMode::Light:
-                return QStringLiteral("light");
-            case ThemeMode::Dark:
-                return QStringLiteral("dark");
-            case ThemeMode::System:
-            default:
-                return QStringLiteral("system");
+        case ThemeMode::Light:
+            return QStringLiteral("light");
+        case ThemeMode::Dark:
+            return QStringLiteral("dark");
+        case ThemeMode::System:
+        default:
+            return QStringLiteral("system");
         }
     }
 
@@ -515,8 +515,8 @@ namespace cloakframe
 
     void applyTheme(QApplication &app, ThemeMode mode)
     {
-        const bool dark = (mode == ThemeMode::Dark) ||
-                          (mode == ThemeMode::System && systemPrefersDark());
+        const bool dark =
+            (mode == ThemeMode::Dark) || (mode == ThemeMode::System && systemPrefersDark());
         const ThemeColors colors = dark ? darkColors() : lightColors();
         app.setPalette(dark ? darkPalette() : lightPalette());
         app.setStyleSheet(buildStyleSheet(colors));
@@ -525,8 +525,8 @@ namespace cloakframe
     QIcon settingsGearIcon(ThemeMode mode)
     {
 #ifdef CLOAKFRAME_HAVE_SVG
-        const bool dark = (mode == ThemeMode::Dark) ||
-                          (mode == ThemeMode::System && systemPrefersDark());
+        const bool dark =
+            (mode == ThemeMode::Dark) || (mode == ThemeMode::System && systemPrefersDark());
         const QString color = dark ? QStringLiteral("#8B949E") : QStringLiteral("#6B7280");
         const QString svg = QStringLiteral(
             "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' "
@@ -540,11 +540,12 @@ namespace cloakframe
             "a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09"
             "a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06"
             "a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09"
-            "a1.65 1.65 0 0 0-1.51 1z'/></svg>").arg(color);
+            "a1.65 1.65 0 0 0-1.51 1z'/></svg>")
+                                .arg(color);
 
         constexpr int logical = 20;
         qreal dpr = 1.0;
-        for (const QScreen *screen: QGuiApplication::screens())
+        for (const QScreen *screen : QGuiApplication::screens())
         {
             dpr = std::max(dpr, screen->devicePixelRatio());
         }

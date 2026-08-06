@@ -20,11 +20,15 @@ namespace cloakframe
         Ellipse,
     };
 
-    void applyAnonymization(cv::Mat &image, const FaceDetections &detections,
-                            AnonymizationMethod method, int blockSize, float paddingRatio,
-                            MaskShape shape = MaskShape::Rectangle, bool softEdges = false,
-                            const cv::Mat &customImage = {});
+    void applyAnonymization(cv::Mat &image,
+        const FaceDetections &detections,
+        AnonymizationMethod method,
+        int blockSize,
+        float paddingRatio,
+        MaskShape shape = MaskShape::Rectangle,
+        bool softEdges = false,
+        const cv::Mat &customImage = {});
 
-    void applyMosaic(cv::Mat &image, const FaceDetections &detections,
-                     int blockSize, float paddingRatio);
+    void applyMosaic(
+        cv::Mat &image, const FaceDetections &detections, int blockSize, float paddingRatio);
 }

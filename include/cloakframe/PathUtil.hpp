@@ -25,7 +25,7 @@ namespace cloakframe
     inline QString pathToQString(const std::filesystem::path &value)
     {
         const auto utf8 = value.u8string();
-        return QString::fromUtf8(reinterpret_cast<const char *>(utf8.data()),
-                                 static_cast<int>(utf8.size()));
+        return QString::fromUtf8(
+            reinterpret_cast<const char *>(utf8.data()), static_cast<int>(utf8.size()));
     }
 }

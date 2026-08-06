@@ -1,8 +1,8 @@
 #include "cloakframe/DetectionGeometry.hpp"
 #include "cloakframe/ImageIo.hpp"
 #include "cloakframe/ImageScanner.hpp"
-#include "cloakframe/Mosaic.hpp"
 #include "cloakframe/ModelCatalog.hpp"
+#include "cloakframe/Mosaic.hpp"
 #include "cloakframe/OnnxGraphPatch.hpp"
 #include "cloakframe/OrtAcceleration.hpp"
 #include "cloakframe/OutputPlan.hpp"
@@ -14,15 +14,15 @@
 #include "cloakframe/Yolo5FaceDetector.hpp"
 #include "cloakframe/YuNetFaceDetector.hpp"
 
-#include <opencv2/core.hpp>
-#include <opencv2/imgcodecs.hpp>
-
-#include <QDir>
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
 #include <QImage>
 #include <QTemporaryDir>
 #include <QThread>
+
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -33,8 +33,8 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <memory>
 #include <limits>
+#include <memory>
 #include <set>
 #include <stdexcept>
 #include <thread>
@@ -55,8 +55,8 @@ namespace
         Q_OBJECT
 
     public slots:
-        cloakframe::ReviewResult requestReview(const QImage &, const QString &,
-                                             const QVector<QRectF> &, int, int, double)
+        cloakframe::ReviewResult requestReview(
+            const QImage &, const QString &, const QVector<QRectF> &, int, int, double)
         {
             cloakframe::ReviewResult result;
             result.decision = cloakframe::ReviewDecision::CopyOriginal;
@@ -70,13 +70,14 @@ namespace
 
     public:
         ReplacingCopyOriginalReviewer(QString source, QString replacement)
-            : source_(std::move(source)), replacement_(std::move(replacement))
+            : source_(std::move(source))
+            , replacement_(std::move(replacement))
         {
         }
 
     public slots:
-        cloakframe::ReviewResult requestReview(const QImage &, const QString &,
-                                             const QVector<QRectF> &, int, int, double)
+        cloakframe::ReviewResult requestReview(
+            const QImage &, const QString &, const QVector<QRectF> &, int, int, double)
         {
             assert(QFile::remove(source_));
             assert(QFile::rename(replacement_, source_));
@@ -92,19 +93,25 @@ namespace
 
     void testAccelerationBackendNames()
     {
-        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::None)) == "CPU");
-        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::CoreML)) == "CoreML");
-        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::DirectML)) == "DirectML");
-        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::CUDA)) == "CUDA");
-        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::MIGraphX)) == "MIGraphX");
-        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::ROCm)) == "ROCm");
+        assert(
+            std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::None)) == "CPU");
+        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::CoreML))
+               == "CoreML");
+        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::DirectML))
+               == "DirectML");
+        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::CUDA))
+               == "CUDA");
+        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::MIGraphX))
+               == "MIGraphX");
+        assert(std::string(cloakframe::ortAcceleratorName(cloakframe::OrtAccelerator::ROCm))
+               == "ROCm");
     }
 
     void testBuiltinModelDigests()
     {
         assert(cloakframe::builtinModels()[0].faceKind == cloakframe::FaceModelKind::Yolo5Face);
         assert(cloakframe::builtinModels()[1].faceKind == cloakframe::FaceModelKind::YuNet);
-        for (const auto &model: cloakframe::builtinModels())
+        for (const auto &model : cloakframe::builtinModels())
         {
             const QByteArray digest = QByteArray::fromHex(model.sha256.toLatin1());
             assert(cloakframe::modelDigestMatches(model, digest));
@@ -113,8 +120,7 @@ namespace
             assert(!cloakframe::modelDigestMatches(model, changed));
         }
         const auto &plate = cloakframe::plateModel();
-        assert(cloakframe::modelDigestMatches(
-            plate, QByteArray::fromHex(plate.sha256.toLatin1())));
+        assert(cloakframe::modelDigestMatches(plate, QByteArray::fromHex(plate.sha256.toLatin1())));
     }
 
     void writeBytes(const QString &path)
@@ -128,12 +134,13 @@ namespace
     {
         QFile file(QString::fromStdString(path.string()));
         assert(file.open(QIODevice::WriteOnly));
-        assert(file.write(reinterpret_cast<const char *>(bytes.data()),
-                          static_cast<qint64>(bytes.size())) == static_cast<qint64>(bytes.size()));
+        assert(file.write(
+                   reinterpret_cast<const char *>(bytes.data()), static_cast<qint64>(bytes.size()))
+               == static_cast<qint64>(bytes.size()));
     }
 
-    void writeJpegWithExifOrientation(const std::filesystem::path &path,
-                                      const unsigned char orientation)
+    void writeJpegWithExifOrientation(
+        const std::filesystem::path &path, const unsigned char orientation)
     {
         std::vector<uchar> jpeg;
         cv::Mat pixels(2, 3, CV_8UC3, cv::Scalar(20, 40, 60));
@@ -141,20 +148,50 @@ namespace
         assert(jpeg.size() >= 2 && jpeg[0] == 0xFF && jpeg[1] == 0xD8);
 
         const std::vector<uchar> exif = {
-            0xFF, 0xE1, 0x00, 0x22,
-            'E', 'x', 'i', 'f', 0x00, 0x00,
-            'I', 'I', 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00,
-            0x01, 0x00,
-            0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00,
-            orientation, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
+            0xFF,
+            0xE1,
+            0x00,
+            0x22,
+            'E',
+            'x',
+            'i',
+            'f',
+            0x00,
+            0x00,
+            'I',
+            'I',
+            0x2A,
+            0x00,
+            0x08,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x12,
+            0x01,
+            0x03,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            orientation,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
         };
         jpeg.insert(jpeg.begin() + 2, exif.begin(), exif.end());
 
         QFile file(QString::fromStdString(path.string()));
         assert(file.open(QIODevice::WriteOnly));
-        assert(file.write(reinterpret_cast<const char *>(jpeg.data()),
-                          static_cast<qint64>(jpeg.size())) == static_cast<qint64>(jpeg.size()));
+        assert(file.write(
+                   reinterpret_cast<const char *>(jpeg.data()), static_cast<qint64>(jpeg.size()))
+               == static_cast<qint64>(jpeg.size()));
     }
 
     void testSupportedImageExtensions()
@@ -188,7 +225,7 @@ namespace
         assert(recursive.size() == 2);
 
         std::set<std::string> relativePaths;
-        for (const auto &item: recursive)
+        for (const auto &item : recursive)
         {
             relativePaths.insert(item.relativePath.generic_string());
         }
@@ -209,7 +246,8 @@ namespace
             {root / "input" / "two.mov", "nested/two.mov"},
         };
         assert(cloakframe::findOutputConflicts(unique, output).empty());
-        assert(cloakframe::outputRelativePath(unique[1]) == std::filesystem::path("nested/two.mp4"));
+        assert(
+            cloakframe::outputRelativePath(unique[1]) == std::filesystem::path("nested/two.mp4"));
 
         writeBytes(QString::fromStdString((output / "one.jpg").string()));
         const auto existing = cloakframe::findOutputConflicts(unique, output);
@@ -247,21 +285,33 @@ namespace
         cloakframe::RunOutcome firstOutcome = cloakframe::RunOutcome::Failed;
         cloakframe::RunSummary firstSummary;
         auto first = makeWorker();
-        QObject::connect(first.get(), &cloakframe::ProcessorWorker::summaryAvailable,
-                         [&](const cloakframe::RunSummary summary) { firstSummary = summary; });
-        QObject::connect(first.get(), &cloakframe::ProcessorWorker::finished,
-                         [&](const cloakframe::RunOutcome outcome) { firstOutcome = outcome; });
+        QObject::connect(first.get(),
+            &cloakframe::ProcessorWorker::summaryAvailable,
+            [&](const cloakframe::RunSummary summary)
+            {
+                firstSummary = summary;
+            });
+        QObject::connect(first.get(),
+            &cloakframe::ProcessorWorker::finished,
+            [&](const cloakframe::RunOutcome outcome)
+            {
+                firstOutcome = outcome;
+            });
         first->process();
         assert(firstOutcome == cloakframe::RunOutcome::CompletedWithWarnings);
-        assert(firstSummary.total == 1 && firstSummary.redacted == 0 &&
-               firstSummary.unredacted == 1);
+        assert(
+            firstSummary.total == 1 && firstSummary.redacted == 0 && firstSummary.unredacted == 1);
         assert(std::filesystem::exists(output / "input.png"));
 
         const auto savedSize = std::filesystem::file_size(output / "input.png");
         cloakframe::RunOutcome secondOutcome = cloakframe::RunOutcome::Completed;
         auto second = makeWorker();
-        QObject::connect(second.get(), &cloakframe::ProcessorWorker::finished,
-                         [&](const cloakframe::RunOutcome outcome) { secondOutcome = outcome; });
+        QObject::connect(second.get(),
+            &cloakframe::ProcessorWorker::finished,
+            [&](const cloakframe::RunOutcome outcome)
+            {
+                secondOutcome = outcome;
+            });
         second->process();
         assert(secondOutcome == cloakframe::RunOutcome::Failed);
         assert(std::filesystem::file_size(output / "input.png") == savedSize);
@@ -274,15 +324,13 @@ namespace
         const auto root = std::filesystem::path(temp.path().toStdString());
         const auto source = root / "input.png";
         const auto output = root / "out";
-        assert(cv::imwrite(source.string(), cv::Mat(24, 24, CV_8UC3,
-                                                    cv::Scalar(20, 40, 60))));
+        assert(cv::imwrite(source.string(), cv::Mat(24, 24, CV_8UC3, cv::Scalar(20, 40, 60))));
 
         qRegisterMetaType<cloakframe::ReviewResult>("cloakframe::ReviewResult");
         QThread reviewThread;
         auto *reviewer = new CopyOriginalReviewer;
         reviewer->moveToThread(&reviewThread);
-        QObject::connect(&reviewThread, &QThread::finished,
-                         reviewer, &QObject::deleteLater);
+        QObject::connect(&reviewThread, &QThread::finished, reviewer, &QObject::deleteLater);
         reviewThread.start();
 
         cloakframe::ProcessingRequest request;
@@ -295,10 +343,18 @@ namespace
         cloakframe::RunOutcome result = cloakframe::RunOutcome::Failed;
         cloakframe::RunSummary summary;
         cloakframe::ProcessorWorker worker(std::move(request));
-        QObject::connect(&worker, &cloakframe::ProcessorWorker::summaryAvailable,
-                         [&](const cloakframe::RunSummary value) { summary = value; });
-        QObject::connect(&worker, &cloakframe::ProcessorWorker::finished,
-                         [&](const cloakframe::RunOutcome value) { result = value; });
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::summaryAvailable,
+            [&](const cloakframe::RunSummary value)
+            {
+                summary = value;
+            });
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::finished,
+            [&](const cloakframe::RunOutcome value)
+            {
+                result = value;
+            });
         worker.process();
 
         reviewThread.quit();
@@ -316,10 +372,9 @@ namespace
         const auto source = root / "input.png";
         const auto replacement = root / "replacement.png";
         const auto output = root / "out";
-        assert(cv::imwrite(source.string(), cv::Mat(32, 32, CV_8UC3,
-                                                    cv::Scalar(10, 20, 30))));
-        assert(cv::imwrite(replacement.string(), cv::Mat(32, 32, CV_8UC3,
-                                                         cv::Scalar(200, 210, 220))));
+        assert(cv::imwrite(source.string(), cv::Mat(32, 32, CV_8UC3, cv::Scalar(10, 20, 30))));
+        assert(
+            cv::imwrite(replacement.string(), cv::Mat(32, 32, CV_8UC3, cv::Scalar(200, 210, 220))));
         QFile originalFile(QString::fromStdString(source.string()));
         assert(originalFile.open(QIODevice::ReadOnly));
         const QByteArray originalBytes = originalFile.readAll();
@@ -327,11 +382,9 @@ namespace
 
         QThread reviewThread;
         auto *reviewer = new ReplacingCopyOriginalReviewer(
-            QString::fromStdString(source.string()),
-            QString::fromStdString(replacement.string()));
+            QString::fromStdString(source.string()), QString::fromStdString(replacement.string()));
         reviewer->moveToThread(&reviewThread);
-        QObject::connect(&reviewThread, &QThread::finished,
-                         reviewer, &QObject::deleteLater);
+        QObject::connect(&reviewThread, &QThread::finished, reviewer, &QObject::deleteLater);
         reviewThread.start();
 
         cloakframe::ProcessingRequest request;
@@ -344,8 +397,12 @@ namespace
 
         cloakframe::RunOutcome result = cloakframe::RunOutcome::Failed;
         cloakframe::ProcessorWorker worker(std::move(request));
-        QObject::connect(&worker, &cloakframe::ProcessorWorker::finished,
-                         [&](const cloakframe::RunOutcome value) { result = value; });
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::finished,
+            [&](const cloakframe::RunOutcome value)
+            {
+                result = value;
+            });
         worker.process();
 
         reviewThread.quit();
@@ -363,8 +420,7 @@ namespace
         const auto root = std::filesystem::path(temp.path().toStdString());
         const auto source = root / "large.jpg";
         const auto output = root / "out";
-        assert(cv::imwrite(source.string(), cv::Mat(64, 64, CV_8UC3,
-                                                    cv::Scalar(40, 80, 120))));
+        assert(cv::imwrite(source.string(), cv::Mat(64, 64, CV_8UC3, cv::Scalar(40, 80, 120))));
         std::filesystem::resize_file(source, 31ULL * 1024ULL * 1024ULL);
 
         cloakframe::ProcessingRequest request;
@@ -374,8 +430,12 @@ namespace
 
         cloakframe::RunOutcome result = cloakframe::RunOutcome::Failed;
         cloakframe::ProcessorWorker worker(std::move(request));
-        QObject::connect(&worker, &cloakframe::ProcessorWorker::finished,
-                         [&](const cloakframe::RunOutcome value) { result = value; });
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::finished,
+            [&](const cloakframe::RunOutcome value)
+            {
+                result = value;
+            });
         worker.process();
         assert(result == cloakframe::RunOutcome::CompletedWithWarnings);
         assert(std::filesystem::exists(output / "large.jpg"));
@@ -405,21 +465,34 @@ namespace
         cloakframe::RunSummary summary;
         QStringList messages;
         cloakframe::ProcessorWorker worker(std::move(request));
-        QObject::connect(&worker, &cloakframe::ProcessorWorker::summaryAvailable,
-                         [&](const cloakframe::RunSummary value) { summary = value; });
-        QObject::connect(&worker, &cloakframe::ProcessorWorker::logMessage,
-                         [&](const QString &message) { messages.push_back(message); });
-        QObject::connect(&worker, &cloakframe::ProcessorWorker::finished,
-                         [&](const cloakframe::RunOutcome value) { result = value; });
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::summaryAvailable,
+            [&](const cloakframe::RunSummary value)
+            {
+                summary = value;
+            });
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::logMessage,
+            [&](const QString &message)
+            {
+                messages.push_back(message);
+            });
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::finished,
+            [&](const cloakframe::RunOutcome value)
+            {
+                result = value;
+            });
         worker.process();
 
         assert(result == cloakframe::RunOutcome::CompletedWithWarnings);
         assert(summary.total == 1 && summary.skipped == 1);
         assert(!std::filesystem::exists(output / "pages.tiff"));
-        assert(std::ranges::any_of(messages, [](const QString &message)
-        {
-            return message.contains("multi-page", Qt::CaseInsensitive);
-        }));
+        assert(std::ranges::any_of(messages,
+            [](const QString &message)
+            {
+                return message.contains("multi-page", Qt::CaseInsensitive);
+            }));
     }
 
     void testAnimatedImageContainersAreDetectedWithoutDecodingAllFrames()
@@ -429,32 +502,127 @@ namespace
         const auto root = std::filesystem::path(temp.path().toStdString());
 
         const auto apng = root / "animated.png";
-        writeBytes(apng, {
-            0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A,
-            0x00, 0x00, 0x00, 0x08, 'a', 'c', 'T', 'L',
-            0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
-        });
+        writeBytes(apng,
+            {
+                0x89,
+                'P',
+                'N',
+                'G',
+                0x0D,
+                0x0A,
+                0x1A,
+                0x0A,
+                0x00,
+                0x00,
+                0x00,
+                0x08,
+                'a',
+                'c',
+                'T',
+                'L',
+                0x00,
+                0x00,
+                0x00,
+                0x03,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+            });
         assert(cloakframe::imageFrameCount(apng) > 1);
 
         const auto webp = root / "animated.webp";
-        writeBytes(webp, {
-            'R', 'I', 'F', 'F', 0x12, 0x00, 0x00, 0x00,
-            'W', 'E', 'B', 'P',
-            'V', 'P', '8', 'X', 0x0A, 0x00, 0x00, 0x00,
-            0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        });
+        writeBytes(webp,
+            {
+                'R',
+                'I',
+                'F',
+                'F',
+                0x12,
+                0x00,
+                0x00,
+                0x00,
+                'W',
+                'E',
+                'B',
+                'P',
+                'V',
+                'P',
+                '8',
+                'X',
+                0x0A,
+                0x00,
+                0x00,
+                0x00,
+                0x02,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+            });
         assert(cloakframe::imageFrameCount(webp) > 1);
 
         const auto bigTiff = root / "pages-bigtiff.tiff";
-        writeBytes(bigTiff, {
-            'I', 'I', 0x2B, 0x00, 0x08, 0x00, 0x00, 0x00,
-            0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        });
+        writeBytes(bigTiff,
+            {
+                'I',
+                'I',
+                0x2B,
+                0x00,
+                0x08,
+                0x00,
+                0x00,
+                0x00,
+                0x10,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x20,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+            });
         assert(cloakframe::imageFrameCount(bigTiff) > 1);
     }
 
@@ -466,8 +634,8 @@ namespace
             for (int x = 0; x < image.cols; ++x)
             {
                 image.at<cv::Vec3b>(y, x) = cv::Vec3b(static_cast<uchar>(x * 20),
-                                                      static_cast<uchar>(y * 20),
-                                                      static_cast<uchar>((x + y) * 10));
+                    static_cast<uchar>(y * 20),
+                    static_cast<uchar>((x + y) * 10));
             }
         }
 
@@ -489,8 +657,13 @@ namespace
 
         cloakframe::FaceDetections detections;
         detections.push_back({cv::Rect2f(box), 1.0F});
-        cloakframe::applyAnonymization(image, detections, cloakframe::AnonymizationMethod::Fill,
-                                     4, 0.0F, cloakframe::MaskShape::Rectangle, true);
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::Fill,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            true);
 
         for (int y = box.y; y < box.y + box.height; ++y)
         {
@@ -502,7 +675,8 @@ namespace
 
         assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(100, 100, 100));
 
-        const cv::Vec3b feathered = image.at<cv::Vec3b>(box.y + box.height / 2, box.x + box.width + 1);
+        const cv::Vec3b feathered =
+            image.at<cv::Vec3b>(box.y + box.height / 2, box.x + box.width + 1);
         assert(feathered != cv::Vec3b(0, 0, 0));
         assert(feathered != cv::Vec3b(100, 100, 100));
     }
@@ -514,8 +688,13 @@ namespace
 
         cloakframe::FaceDetections detections;
         detections.push_back({cv::Rect2f(box), 1.0F});
-        cloakframe::applyAnonymization(image, detections, cloakframe::AnonymizationMethod::Fill,
-                                     4, 0.0F, cloakframe::MaskShape::Ellipse, true);
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::Fill,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Ellipse,
+            true);
 
         const int centerX = box.x + box.width / 2;
         const int centerY = box.y + box.height / 2;
@@ -537,8 +716,13 @@ namespace
         cloakframe::FaceDetections detections;
         detections.push_back({cv::Rect2f(0.0F, 0.0F, 12.0F, 12.0F), 1.0F});
         detections.push_back({cv::Rect2f(24.0F, 24.0F, 8.0F, 8.0F), 1.0F});
-        cloakframe::applyAnonymization(image, detections, cloakframe::AnonymizationMethod::Fill,
-                                     4, 0.0F, cloakframe::MaskShape::Rectangle, true);
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::Fill,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            true);
 
         assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(0, 0, 0));
         assert(image.at<cv::Vec3b>(31, 31) == cv::Vec3b(0, 0, 0));
@@ -551,8 +735,13 @@ namespace
 
         cloakframe::FaceDetections detections;
         detections.push_back({cv::Rect2f(box), 1.0F});
-        cloakframe::applyAnonymization(image, detections, cloakframe::AnonymizationMethod::Fill,
-                                     4, 0.25F, cloakframe::MaskShape::Rectangle, true);
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::Fill,
+            4,
+            0.25F,
+            cloakframe::MaskShape::Rectangle,
+            true);
 
         for (int y = box.y; y < box.y + box.height; ++y)
         {
@@ -578,8 +767,13 @@ namespace
         cloakframe::FaceDetections detections;
         detections.push_back({cv::Rect2f(100.0F, 100.0F, 1300.0F, 1300.0F), 1.0F});
 
-        cloakframe::applyAnonymization(image, detections, cloakframe::AnonymizationMethod::Fill,
-                                     8, 0.0F, cloakframe::MaskShape::Rectangle, true);
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::Fill,
+            8,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            true);
 
         assert(image.at<cv::Vec3b>(750, 750) == cv::Vec3b(0, 0, 0));
         assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(100, 100, 100));
@@ -596,10 +790,14 @@ namespace
 
         cloakframe::FaceDetections detections;
         detections.push_back({cv::Rect2f(box), 1.0F});
-        cloakframe::applyAnonymization(image, detections,
-                                     cloakframe::AnonymizationMethod::CustomImage,
-                                     4, 0.0F, cloakframe::MaskShape::Ellipse, true,
-                                     customImage);
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::CustomImage,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Ellipse,
+            true,
+            customImage);
 
         for (int y = box.y; y < box.y + box.height; ++y)
         {
@@ -618,8 +816,7 @@ namespace
         {
             for (int x = 0; x < image.cols; ++x)
             {
-                image.at<cv::Vec3b>(y, x) = cv::Vec3b(
-                    static_cast<unsigned char>(x * 7),
+                image.at<cv::Vec3b>(y, x) = cv::Vec3b(static_cast<unsigned char>(x * 7),
                     static_cast<unsigned char>(y * 7),
                     static_cast<unsigned char>((x + y) * 3));
             }
@@ -631,13 +828,21 @@ namespace
             {cv::Rect2f(8.0F, 8.0F, 16.0F, 16.0F), 1.0F},
         };
 
-        cloakframe::applyAnonymization(expected, detections,
-                                     cloakframe::AnonymizationMethod::Mosaic,
-                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false);
-        cloakframe::applyAnonymization(image, detections,
-                                     cloakframe::AnonymizationMethod::CustomImage,
-                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
-                                     transparent);
+        cloakframe::applyAnonymization(expected,
+            detections,
+            cloakframe::AnonymizationMethod::Mosaic,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            false);
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::CustomImage,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            false,
+            transparent);
 
         assert(cv::norm(image, expected, cv::NORM_INF) == 0.0);
         assert(image.at<cv::Vec3b>(0, 0) == original.at<cv::Vec3b>(0, 0));
@@ -651,10 +856,14 @@ namespace
             {cv::Rect2f(4.0F, 4.0F, 8.0F, 8.0F), 1.0F},
         };
 
-        cloakframe::applyAnonymization(image, detections,
-                                     cloakframe::AnonymizationMethod::CustomImage,
-                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
-                                     semitransparent);
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::CustomImage,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            false,
+            semitransparent);
 
         assert(image.at<cv::Vec3b>(8, 8) == cv::Vec3b(150, 80, 80));
         assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(100, 120, 140));
@@ -668,10 +877,14 @@ namespace
             {cv::Rect2f(4.0F, 4.0F, 8.0F, 8.0F), 1.0F},
         };
 
-        cloakframe::applyAnonymization(image, detections,
-                                     cloakframe::AnonymizationMethod::CustomImage,
-                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
-                                     customImage);
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::CustomImage,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            false,
+            customImage);
 
         assert(image.at<cv::Vec3w>(8, 8) == cv::Vec3w(2570, 5140, 61680));
         assert(image.at<cv::Vec3w>(0, 0) == cv::Vec3w(1000, 2000, 3000));
@@ -686,10 +899,14 @@ namespace
             {cv::Rect2f(8.0F, 8.0F, 24.0F, 24.0F), 1.0F},
         };
 
-        cloakframe::applyAnonymization(image, detections,
-                                     cloakframe::AnonymizationMethod::CustomImage,
-                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
-                                     wideImage);
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::CustomImage,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            false,
+            wideImage);
 
         assert(image.at<cv::Vec3b>(20, 20) == cv::Vec3b(10, 200, 20));
         assert(image.at<cv::Vec3b>(9, 12) == cv::Vec3b(10, 200, 20));
@@ -705,20 +922,27 @@ namespace
         cv::Mat customImage(8, 16, CV_8UC4, cv::Scalar(0, 0, 0, 0));
         customImage(cv::Rect(2, 1, 12, 6)).setTo(cv::Scalar(10, 40, 240, 255));
 
-        cloakframe::FaceDetection uprightFace{cv::Rect2f(16.0F, 16.0F, 32.0F, 32.0F),
-                                               1.0F};
+        cloakframe::FaceDetection uprightFace{cv::Rect2f(16.0F, 16.0F, 32.0F, 32.0F), 1.0F};
         cloakframe::FaceDetection tiltedFace = uprightFace;
         tiltedFace.rollRadians = 0.45F;
         tiltedFace.hasPose = true;
 
-        cloakframe::applyAnonymization(upright, {uprightFace},
-                                     cloakframe::AnonymizationMethod::CustomImage,
-                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
-                                     customImage);
-        cloakframe::applyAnonymization(tilted, {tiltedFace},
-                                     cloakframe::AnonymizationMethod::CustomImage,
-                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
-                                     customImage);
+        cloakframe::applyAnonymization(upright,
+            {uprightFace},
+            cloakframe::AnonymizationMethod::CustomImage,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            false,
+            customImage);
+        cloakframe::applyAnonymization(tilted,
+            {tiltedFace},
+            cloakframe::AnonymizationMethod::CustomImage,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            false,
+            customImage);
 
         assert(cv::norm(upright, tilted, cv::NORM_L1) > 1000.0);
         bool foundBlendedEdge = false;
@@ -747,10 +971,14 @@ namespace
         face.rollRadians = -0.6F;
         face.hasPose = true;
 
-        cloakframe::applyAnonymization(image, {face},
-                                     cloakframe::AnonymizationMethod::CustomImage,
-                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
-                                     opaque);
+        cloakframe::applyAnonymization(image,
+            {face},
+            cloakframe::AnonymizationMethod::CustomImage,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            false,
+            opaque);
 
         for (int y = 16; y < 48; ++y)
         {
@@ -851,7 +1079,7 @@ namespace
 
         assert(successes.load(std::memory_order_relaxed) == 1);
         assert(!cv::imread(destination.string(), cv::IMREAD_UNCHANGED).empty());
-        for (const auto &entry: std::filesystem::directory_iterator(root))
+        for (const auto &entry : std::filesystem::directory_iterator(root))
         {
             assert(entry.path().filename().string().find(".cloakframe-") == std::string::npos);
         }
@@ -861,19 +1089,19 @@ namespace
     {
         QTemporaryDir temp;
         assert(temp.isValid());
-        const auto base = std::filesystem::canonical(
-            std::filesystem::path(temp.path().toStdString()));
+        const auto base =
+            std::filesystem::canonical(std::filesystem::path(temp.path().toStdString()));
         const auto root = base / "output";
         const auto outside = base / "outside";
         assert(std::filesystem::create_directories(root));
         assert(std::filesystem::create_directories(outside));
 
         const cv::Mat image(32, 32, CV_8UC3, cv::Scalar(30, 60, 90));
-        assert(cloakframe::imwriteUnicodeNoReplaceAtRoot(
-                   root, "nested/result.png", image) == cloakframe::ImageWriteResult::Saved);
+        assert(cloakframe::imwriteUnicodeNoReplaceAtRoot(root, "nested/result.png", image)
+               == cloakframe::ImageWriteResult::Saved);
         assert(!cv::imread((root / "nested/result.png").string()).empty());
-        assert(cloakframe::imwriteUnicodeNoReplaceAtRoot(
-                   root, "../outside/escaped.png", image) == cloakframe::ImageWriteResult::Failed);
+        assert(cloakframe::imwriteUnicodeNoReplaceAtRoot(root, "../outside/escaped.png", image)
+               == cloakframe::ImageWriteResult::Failed);
         assert(!std::filesystem::exists(outside / "escaped.png"));
 
         const auto source = base / "original.bin";
@@ -891,9 +1119,8 @@ namespace
 
         const auto moveSource = base / "move-source.bin";
         writeBytes(moveSource, sourceBytes);
-        assert(cloakframe::moveFileNoReplaceAtRoot(
-                   moveSource, root, "moves/moved.bin") ==
-               cloakframe::FileMoveResult::Moved);
+        assert(cloakframe::moveFileNoReplaceAtRoot(moveSource, root, "moves/moved.bin")
+               == cloakframe::FileMoveResult::Moved);
         assert(!std::filesystem::exists(moveSource));
         std::ifstream moved(root / "moves/moved.bin", std::ios::binary);
         const std::istreambuf_iterator<char> movedBegin(moved);
@@ -909,9 +1136,8 @@ namespace
 #ifndef _WIN32
         assert(::chmod(blockedSource.c_str(), 0640) == 0);
 #endif
-        assert(cloakframe::moveFileNoReplaceAtRoot(
-                   blockedSource, root, "moves/existing.bin") ==
-               cloakframe::FileMoveResult::Failed);
+        assert(cloakframe::moveFileNoReplaceAtRoot(blockedSource, root, "moves/existing.bin")
+               == cloakframe::FileMoveResult::Failed);
         assert(std::filesystem::exists(blockedSource));
         std::ifstream existing(blockedDestination, std::ios::binary);
         const std::istreambuf_iterator<char> existingBegin(existing);
@@ -926,11 +1152,14 @@ namespace
 
         const auto guardedSource = base / "guarded-source.bin";
         writeBytes(guardedSource, sourceBytes);
-        assert(cloakframe::moveFileNoReplaceAtRoot(
-                   guardedSource, root, "moves/guarded.bin", []
+        assert(cloakframe::moveFileNoReplaceAtRoot(guardedSource,
+                   root,
+                   "moves/guarded.bin",
+                   []
                    {
                        return false;
-                   }) == cloakframe::FileMoveResult::Failed);
+                   })
+               == cloakframe::FileMoveResult::Failed);
         assert(std::filesystem::exists(guardedSource));
         assert(!std::filesystem::exists(root / "moves/guarded.bin"));
 #ifndef _WIN32
@@ -941,12 +1170,12 @@ namespace
         std::error_code ec;
         std::filesystem::create_directory_symlink(outside, root / "linked", ec);
         assert(!ec);
-        assert(cloakframe::imwriteUnicodeNoReplaceAtRoot(
-                   root, "linked/escaped.png", image) == cloakframe::ImageWriteResult::Failed);
+        assert(cloakframe::imwriteUnicodeNoReplaceAtRoot(root, "linked/escaped.png", image)
+               == cloakframe::ImageWriteResult::Failed);
         assert(!std::filesystem::exists(outside / "escaped.png"));
 #endif
 
-        for (const auto &entry: std::filesystem::recursive_directory_iterator(root))
+        for (const auto &entry : std::filesystem::recursive_directory_iterator(root))
         {
             assert(!entry.path().filename().string().starts_with(".cloakframe-"));
         }
@@ -956,11 +1185,13 @@ namespace
     {
         QTemporaryDir temp;
         assert(temp.isValid());
-        const auto root = std::filesystem::canonical(
-            std::filesystem::path(temp.path().toStdString()));
+        const auto root =
+            std::filesystem::canonical(std::filesystem::path(temp.path().toStdString()));
         const cv::Mat image(24, 24, CV_8UC3, cv::Scalar(15, 45, 75));
-        const auto result = cloakframe::imwriteUnicodeNoReplaceAtRoot(
-            root, "result.jpg", image, cloakframe::encodeParamsForExtension("jpg"),
+        const auto result = cloakframe::imwriteUnicodeNoReplaceAtRoot(root,
+            "result.jpg",
+            image,
+            cloakframe::encodeParamsForExtension("jpg"),
             root / "missing-metadata-source.jpg");
         assert(result == cloakframe::ImageWriteResult::SavedWithoutMetadata);
         assert(!cv::imread((root / "result.jpg").string()).empty());
@@ -978,7 +1209,8 @@ namespace
         assert(cloakframe::intersectionOverUnion(a, empty) == 0.0F);
 
         const cv::Rect2f halfShifted(5.0F, 0.0F, 10.0F, 10.0F);
-        assert(std::abs(cloakframe::intersectionOverUnion(a, halfShifted) - (50.0F / 150.0F)) < 1e-5F);
+        assert(
+            std::abs(cloakframe::intersectionOverUnion(a, halfShifted) - (50.0F / 150.0F)) < 1e-5F);
     }
 
     void testNonMaxSuppression()
@@ -1007,9 +1239,11 @@ namespace
 
         cv::Mat image(16, 16, CV_8UC3, cv::Scalar(30, 60, 90));
         const cv::Mat before = image.clone();
-        cloakframe::applyAnonymization(
-            image, {{cv::Rect2f(0.0F, nan, 10.0F, 10.0F), 0.9F}},
-            cloakframe::AnonymizationMethod::Fill, 8, 0.0F);
+        cloakframe::applyAnonymization(image,
+            {{cv::Rect2f(0.0F, nan, 10.0F, 10.0F), 0.9F}},
+            cloakframe::AnonymizationMethod::Fill,
+            8,
+            0.0F);
         assert(cv::norm(image, before, cv::NORM_INF) == 0.0);
     }
 
@@ -1017,8 +1251,7 @@ namespace
     {
         QTemporaryDir temp;
         assert(temp.isValid());
-        const std::filesystem::path root =
-            std::filesystem::path(temp.path().toStdString()) / "out";
+        const std::filesystem::path root = std::filesystem::path(temp.path().toStdString()) / "out";
         assert(std::filesystem::create_directories(root));
 
         assert(cloakframe::destinationIsSafe(root / "a.jpg", root));
@@ -1062,8 +1295,7 @@ namespace
         };
         const auto conflicts = cloakframe::findOutputConflicts(planned, root);
         assert(conflicts.size() == 1);
-        assert(conflicts.front().kind ==
-               cloakframe::OutputConflict::Kind::ExistingDestination);
+        assert(conflicts.front().kind == cloakframe::OutputConflict::Kind::ExistingDestination);
 
         const auto source = base / "source.jpg";
         assert(cv::imwrite(source.string(), cv::Mat(8, 8, CV_8UC3, cv::Scalar(1, 2, 3))));
@@ -1079,8 +1311,8 @@ namespace
     {
         QTemporaryDir temp;
         assert(temp.isValid());
-        const auto root = std::filesystem::canonical(
-            std::filesystem::path(temp.path().toStdString()));
+        const auto root =
+            std::filesystem::canonical(std::filesystem::path(temp.path().toStdString()));
         const std::filesystem::path src = root / "src.jpg";
         const std::filesystem::path dst = root / "dst.jpg";
 
@@ -1093,11 +1325,9 @@ namespace
             image->readMetadata();
             image->exifData()["Exif.Image.Artist"] = "TestPhotographer";
             image->exifData()["Exif.Image.Orientation"] = static_cast<uint16_t>(6);
-            image->exifData()["Exif.Photo.UserComment"] =
-                "data:image/jpeg;base64,unsafe-payload";
+            image->exifData()["Exif.Photo.UserComment"] = "data:image/jpeg;base64,unsafe-payload";
             image->xmpData()["Xmp.tiff.Orientation"] = "6";
-            image->xmpData()["Xmp.dc.description"] =
-                "data:image/jpeg;base64,unsafe-payload";
+            image->xmpData()["Xmp.dc.description"] = "data:image/jpeg;base64,unsafe-payload";
             image->setComment("data:image/jpeg;base64,unsafe-payload");
             image->writeMetadata();
         }
@@ -1121,29 +1351,27 @@ namespace
 #else
             assert(orientation->toLong() == 1);
 #endif
-            assert(image->xmpData().findKey(Exiv2::XmpKey("Xmp.tiff.Orientation")) ==
-                   image->xmpData().end());
+            assert(image->xmpData().findKey(Exiv2::XmpKey("Xmp.tiff.Orientation"))
+                   == image->xmpData().end());
             assert(image->xmpData().empty());
-            assert(image->exifData().findKey(
-                       Exiv2::ExifKey("Exif.Photo.UserComment")) ==
-                   image->exifData().end());
+            assert(image->exifData().findKey(Exiv2::ExifKey("Exif.Photo.UserComment"))
+                   == image->exifData().end());
             assert(image->comment().empty());
         }
 
         const auto published = root / "published.jpg";
-        assert(cloakframe::imwriteUnicodeNoReplaceAtRoot(
-                   root, published.filename(), img,
-                   cloakframe::encodeParamsForExtension("jpg"), src) ==
-               cloakframe::ImageWriteResult::Saved);
+        assert(
+            cloakframe::imwriteUnicodeNoReplaceAtRoot(
+                root, published.filename(), img, cloakframe::encodeParamsForExtension("jpg"), src)
+            == cloakframe::ImageWriteResult::Saved);
         auto publishedMetadata = Exiv2::ImageFactory::open(published.string());
         publishedMetadata->readMetadata();
-        const auto artist = publishedMetadata->exifData().findKey(
-            Exiv2::ExifKey("Exif.Image.Artist"));
+        const auto artist =
+            publishedMetadata->exifData().findKey(Exiv2::ExifKey("Exif.Image.Artist"));
         assert(artist != publishedMetadata->exifData().end());
         assert(artist->toString() == "TestPhotographer");
-        assert(publishedMetadata->xmpData().findKey(
-                   Exiv2::XmpKey("Xmp.tiff.Orientation")) ==
-               publishedMetadata->xmpData().end());
+        assert(publishedMetadata->xmpData().findKey(Exiv2::XmpKey("Xmp.tiff.Orientation"))
+               == publishedMetadata->xmpData().end());
     }
 
     long exifThumbnailBytes(Exiv2::ExifData &exif)
@@ -1217,8 +1445,8 @@ namespace
         bool faceRejected = false;
         try
         {
-            cloakframe::ScrfdFaceDetector detector(modelPath.toStdString(), 640, false,
-                                                  unexpectedHash);
+            cloakframe::ScrfdFaceDetector detector(
+                modelPath.toStdString(), 640, false, unexpectedHash);
         }
         catch (const std::runtime_error &error)
         {
@@ -1229,8 +1457,7 @@ namespace
         bool yoloRejected = false;
         try
         {
-            cloakframe::Yolo5FaceDetector detector(modelPath.toStdString(), false,
-                                                   unexpectedHash);
+            cloakframe::Yolo5FaceDetector detector(modelPath.toStdString(), false, unexpectedHash);
         }
         catch (const std::runtime_error &error)
         {
@@ -1313,9 +1540,8 @@ namespace
         const QString yuNetPath = qEnvironmentVariable("CLOAKFRAME_TEST_YUNET_MODEL");
         const QString faceImagePath = qEnvironmentVariable("CLOAKFRAME_TEST_FACE_IMAGE");
         const cv::Mat blank(360, 640, CV_8UC3, cv::Scalar(30, 30, 30));
-        const cv::Mat faceImage = faceImagePath.isEmpty()
-                                      ? cv::Mat{}
-                                      : cv::imread(faceImagePath.toStdString());
+        const cv::Mat faceImage =
+            faceImagePath.isEmpty() ? cv::Mat{} : cv::imread(faceImagePath.toStdString());
 
         if (yoloPath.isEmpty())
         {

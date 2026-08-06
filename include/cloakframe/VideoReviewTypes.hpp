@@ -1,5 +1,7 @@
 #pragma once
 
+#include "cloakframe/Tracking.hpp"
+
 #include <QMetaType>
 #include <QRectF>
 #include <QSize>
@@ -7,8 +9,6 @@
 #include <QVector>
 
 #include <optional>
-
-#include "cloakframe/Tracking.hpp"
 
 namespace cloakframe
 {
@@ -64,8 +64,10 @@ namespace cloakframe
         const VideoReviewManualTrack &track, int frame);
 
     [[nodiscard]] std::optional<Track> materializeManualVideoTrack(
-        const VideoReviewManualTrack &track, int frameCount,
-        const QSize &frameSize, int assignedId);
+        const VideoReviewManualTrack &track,
+        int frameCount,
+        const QSize &frameSize,
+        int assignedId);
 }
 
 Q_DECLARE_METATYPE(cloakframe::VideoReviewBox)

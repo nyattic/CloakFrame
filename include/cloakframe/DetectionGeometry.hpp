@@ -28,14 +28,16 @@ namespace cloakframe
 
     inline FaceDetections nonMaxSuppression(FaceDetections detections, float threshold)
     {
-        std::erase_if(detections, [](const FaceDetection &detection)
-        {
-            return !isValidFaceDetection(detection);
-        });
-        std::ranges::sort(detections, [](const FaceDetection &a, const FaceDetection &b)
-        {
-            return a.score > b.score;
-        });
+        std::erase_if(detections,
+            [](const FaceDetection &detection)
+            {
+                return !isValidFaceDetection(detection);
+            });
+        std::ranges::sort(detections,
+            [](const FaceDetection &a, const FaceDetection &b)
+            {
+                return a.score > b.score;
+            });
 
         FaceDetections kept;
         std::vector<bool> suppressed(detections.size(), false);
@@ -48,7 +50,8 @@ namespace cloakframe
             kept.push_back(detections[i]);
             for (size_t j = i + 1; j < detections.size(); ++j)
             {
-                if (!suppressed[j] && intersectionOverUnion(detections[i].box, detections[j].box) > threshold)
+                if (!suppressed[j]
+                    && intersectionOverUnion(detections[i].box, detections[j].box) > threshold)
                 {
                     suppressed[j] = true;
                 }

@@ -16,8 +16,8 @@
 #include <cerrno>
 #include <climits>
 #include <cstdint>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -25,8 +25,8 @@
 #include <mutex>
 #include <optional>
 #include <random>
-#include <system_error>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #ifdef _WIN32
@@ -38,9 +38,9 @@
 #endif
 #include <Windows.h>
 #include <aclapi.h>
-#include <sddl.h>
 #include <fcntl.h>
 #include <io.h>
+#include <sddl.h>
 #include <sys/stat.h>
 #else
 #include <fcntl.h>
@@ -96,15 +96,16 @@ namespace cloakframe
 
         bool initializeExiv2()
         {
-            std::call_once(g_exiv2Initialization, []
-            {
-                g_exiv2Available = Exiv2::XmpParser::initialize(
-                    exiv2Lock, &g_exiv2NamespaceMutex);
-                if (g_exiv2Available)
+            std::call_once(g_exiv2Initialization,
+                []
                 {
-                    std::atexit(terminateExiv2);
-                }
-            });
+                    g_exiv2Available =
+                        Exiv2::XmpParser::initialize(exiv2Lock, &g_exiv2NamespaceMutex);
+                    if (g_exiv2Available)
+                    {
+                        std::atexit(terminateExiv2);
+                    }
+                });
             return g_exiv2Available;
         }
 #endif
@@ -119,22 +120,22 @@ namespace cloakframe
         {
             switch (transformation.toInt())
             {
-                case QImageIOHandler::TransformationMirror:
-                    return 2;
-                case QImageIOHandler::TransformationRotate180:
-                    return 3;
-                case QImageIOHandler::TransformationFlip:
-                    return 4;
-                case QImageIOHandler::TransformationFlipAndRotate90:
-                    return 5;
-                case QImageIOHandler::TransformationRotate90:
-                    return 6;
-                case QImageIOHandler::TransformationMirrorAndRotate90:
-                    return 7;
-                case QImageIOHandler::TransformationRotate270:
-                    return 8;
-                default:
-                    return 1;
+            case QImageIOHandler::TransformationMirror:
+                return 2;
+            case QImageIOHandler::TransformationRotate180:
+                return 3;
+            case QImageIOHandler::TransformationFlip:
+                return 4;
+            case QImageIOHandler::TransformationFlipAndRotate90:
+                return 5;
+            case QImageIOHandler::TransformationRotate90:
+                return 6;
+            case QImageIOHandler::TransformationMirrorAndRotate90:
+                return 7;
+            case QImageIOHandler::TransformationRotate270:
+                return 8;
+            default:
+                return 1;
             }
         }
 
@@ -149,26 +150,26 @@ namespace cloakframe
         {
             if (littleEndian)
             {
-                return static_cast<std::uint16_t>(bytes[0]) |
-                       (static_cast<std::uint16_t>(bytes[1]) << 8U);
+                return static_cast<std::uint16_t>(bytes[0])
+                       | (static_cast<std::uint16_t>(bytes[1]) << 8U);
             }
-            return (static_cast<std::uint16_t>(bytes[0]) << 8U) |
-                   static_cast<std::uint16_t>(bytes[1]);
+            return (static_cast<std::uint16_t>(bytes[0]) << 8U)
+                   | static_cast<std::uint16_t>(bytes[1]);
         }
 
         std::uint32_t read32(const unsigned char *bytes, const bool littleEndian)
         {
             if (littleEndian)
             {
-                return static_cast<std::uint32_t>(bytes[0]) |
-                       (static_cast<std::uint32_t>(bytes[1]) << 8U) |
-                       (static_cast<std::uint32_t>(bytes[2]) << 16U) |
-                       (static_cast<std::uint32_t>(bytes[3]) << 24U);
+                return static_cast<std::uint32_t>(bytes[0])
+                       | (static_cast<std::uint32_t>(bytes[1]) << 8U)
+                       | (static_cast<std::uint32_t>(bytes[2]) << 16U)
+                       | (static_cast<std::uint32_t>(bytes[3]) << 24U);
             }
-            return (static_cast<std::uint32_t>(bytes[0]) << 24U) |
-                   (static_cast<std::uint32_t>(bytes[1]) << 16U) |
-                   (static_cast<std::uint32_t>(bytes[2]) << 8U) |
-                   static_cast<std::uint32_t>(bytes[3]);
+            return (static_cast<std::uint32_t>(bytes[0]) << 24U)
+                   | (static_cast<std::uint32_t>(bytes[1]) << 16U)
+                   | (static_cast<std::uint32_t>(bytes[2]) << 8U)
+                   | static_cast<std::uint32_t>(bytes[3]);
         }
 
         std::uint64_t read64(const unsigned char *bytes, const bool littleEndian)
@@ -208,21 +209,20 @@ namespace cloakframe
             }
 
             const auto magic = read16(header.data() + 2, littleEndian);
-            const bool bigTiff = magic == 43 && read16(header.data() + 4, littleEndian) == 8 &&
-                                 read16(header.data() + 6, littleEndian) == 0;
+            const bool bigTiff = magic == 43 && read16(header.data() + 4, littleEndian) == 8
+                                 && read16(header.data() + 6, littleEndian) == 0;
             if (magic != 42 && !bigTiff)
             {
                 return 0;
             }
 
-            std::uint64_t directoryOffset = bigTiff
-                                                ? read64(header.data() + 8, littleEndian)
-                                                : read32(header.data() + 4, littleEndian);
+            std::uint64_t directoryOffset = bigTiff ? read64(header.data() + 8, littleEndian)
+                                                    : read32(header.data() + 4, littleEndian);
             std::size_t count = 0;
             while (directoryOffset != 0 && count < 2)
             {
-                if (directoryOffset > static_cast<std::uint64_t>(
-                        std::numeric_limits<std::streamoff>::max()))
+                if (directoryOffset
+                    > static_cast<std::uint64_t>(std::numeric_limits<std::streamoff>::max()))
                 {
                     return count;
                 }
@@ -231,7 +231,7 @@ namespace cloakframe
                 std::array<unsigned char, 8> entryCountBytes{};
                 const std::size_t countBytes = bigTiff ? 8 : 2;
                 if (!input.read(reinterpret_cast<char *>(entryCountBytes.data()),
-                                static_cast<std::streamsize>(countBytes)))
+                        static_cast<std::streamsize>(countBytes)))
                 {
                     return count;
                 }
@@ -240,15 +240,15 @@ namespace cloakframe
                                                      : read16(entryCountBytes.data(), littleEndian);
                 const std::uint64_t entryBytes = bigTiff ? 20 : 12;
                 const auto maximum = std::numeric_limits<std::uint64_t>::max();
-                if (directoryOffset > maximum - countBytes ||
-                    entryCount > (maximum - directoryOffset - countBytes) / entryBytes)
+                if (directoryOffset > maximum - countBytes
+                    || entryCount > (maximum - directoryOffset - countBytes) / entryBytes)
                 {
                     return count;
                 }
-                const std::uint64_t nextOffsetPosition = directoryOffset + countBytes +
-                                                         entryCount * entryBytes;
-                if (nextOffsetPosition > static_cast<std::uint64_t>(
-                        std::numeric_limits<std::streamoff>::max()))
+                const std::uint64_t nextOffsetPosition =
+                    directoryOffset + countBytes + entryCount * entryBytes;
+                if (nextOffsetPosition
+                    > static_cast<std::uint64_t>(std::numeric_limits<std::streamoff>::max()))
                 {
                     return count;
                 }
@@ -257,14 +257,13 @@ namespace cloakframe
                 std::array<unsigned char, 8> nextOffsetBytes{};
                 const std::size_t offsetBytes = bigTiff ? 8 : 4;
                 if (!input.read(reinterpret_cast<char *>(nextOffsetBytes.data()),
-                                static_cast<std::streamsize>(offsetBytes)))
+                        static_cast<std::streamsize>(offsetBytes)))
                 {
                     return count;
                 }
                 ++count;
-                directoryOffset = bigTiff
-                                      ? read64(nextOffsetBytes.data(), littleEndian)
-                                      : read32(nextOffsetBytes.data(), littleEndian);
+                directoryOffset = bigTiff ? read64(nextOffsetBytes.data(), littleEndian)
+                                          : read32(nextOffsetBytes.data(), littleEndian);
             }
             return count;
         }
@@ -279,7 +278,14 @@ namespace cloakframe
             }
 
             const std::array<unsigned char, 8> pngSignature = {
-                0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A,
+                0x89,
+                'P',
+                'N',
+                'G',
+                0x0D,
+                0x0A,
+                0x1A,
+                0x0A,
             };
             if (std::equal(pngSignature.begin(), pngSignature.end(), header.begin()))
             {
@@ -287,30 +293,28 @@ namespace cloakframe
                 for (std::size_t chunk = 0; chunk < kMaxContainerChunks && input; ++chunk)
                 {
                     std::array<unsigned char, 8> chunkHeader{};
-                    if (!input.read(reinterpret_cast<char *>(chunkHeader.data()),
-                                    chunkHeader.size()))
+                    if (!input.read(
+                            reinterpret_cast<char *>(chunkHeader.data()), chunkHeader.size()))
                     {
                         break;
                     }
                     const std::uint32_t length = read32(chunkHeader.data(), false);
-                    const bool animationControl = chunkHeader[4] == 'a' &&
-                                                  chunkHeader[5] == 'c' &&
-                                                  chunkHeader[6] == 'T' &&
-                                                  chunkHeader[7] == 'L';
+                    const bool animationControl = chunkHeader[4] == 'a' && chunkHeader[5] == 'c'
+                                                  && chunkHeader[6] == 'T' && chunkHeader[7] == 'L';
                     if (animationControl && length >= 4)
                     {
                         std::array<unsigned char, 4> frameCount{};
-                        if (input.read(reinterpret_cast<char *>(frameCount.data()),
-                                       frameCount.size()))
+                        if (input.read(
+                                reinterpret_cast<char *>(frameCount.data()), frameCount.size()))
                         {
                             return read32(frameCount.data(), false) > 1 ? 2 : 1;
                         }
                         return 0;
                     }
-                    const bool imageEnd = chunkHeader[4] == 'I' && chunkHeader[5] == 'E' &&
-                                          chunkHeader[6] == 'N' && chunkHeader[7] == 'D';
-                    const bool imageData = chunkHeader[4] == 'I' && chunkHeader[5] == 'D' &&
-                                           chunkHeader[6] == 'A' && chunkHeader[7] == 'T';
+                    const bool imageEnd = chunkHeader[4] == 'I' && chunkHeader[5] == 'E'
+                                          && chunkHeader[6] == 'N' && chunkHeader[7] == 'D';
+                    const bool imageData = chunkHeader[4] == 'I' && chunkHeader[5] == 'D'
+                                           && chunkHeader[6] == 'A' && chunkHeader[7] == 'T';
                     input.seekg(static_cast<std::streamoff>(length) + 4, std::ios::cur);
                     if (imageEnd || imageData)
                     {
@@ -320,10 +324,9 @@ namespace cloakframe
                 return 1;
             }
 
-            const bool webp = header[0] == 'R' && header[1] == 'I' &&
-                              header[2] == 'F' && header[3] == 'F' &&
-                              header[8] == 'W' && header[9] == 'E' &&
-                              header[10] == 'B' && header[11] == 'P';
+            const bool webp = header[0] == 'R' && header[1] == 'I' && header[2] == 'F'
+                              && header[3] == 'F' && header[8] == 'W' && header[9] == 'E'
+                              && header[10] == 'B' && header[11] == 'P';
             if (!webp)
             {
                 return 0;
@@ -337,14 +340,14 @@ namespace cloakframe
                     break;
                 }
                 const std::uint32_t length = read32(chunkHeader.data() + 4, true);
-                const bool animationFrame = chunkHeader[0] == 'A' && chunkHeader[1] == 'N' &&
-                                            chunkHeader[2] == 'M' && chunkHeader[3] == 'F';
+                const bool animationFrame = chunkHeader[0] == 'A' && chunkHeader[1] == 'N'
+                                            && chunkHeader[2] == 'M' && chunkHeader[3] == 'F';
                 if (animationFrame)
                 {
                     return 2;
                 }
-                if (chunkHeader[0] == 'V' && chunkHeader[1] == 'P' &&
-                    chunkHeader[2] == '8' && chunkHeader[3] == 'X' && length > 0)
+                if (chunkHeader[0] == 'V' && chunkHeader[1] == 'P' && chunkHeader[2] == '8'
+                    && chunkHeader[3] == 'X' && length > 0)
                 {
                     unsigned char flags = 0;
                     if (!input.read(reinterpret_cast<char *>(&flags), 1))
@@ -355,18 +358,17 @@ namespace cloakframe
                     {
                         return 2;
                     }
-                    input.seekg(static_cast<std::streamoff>(length - 1U + (length & 1U)),
-                                std::ios::cur);
+                    input.seekg(
+                        static_cast<std::streamoff>(length - 1U + (length & 1U)), std::ios::cur);
                 }
                 else
                 {
-                    input.seekg(static_cast<std::streamoff>(length + (length & 1U)),
-                                std::ios::cur);
+                    input.seekg(static_cast<std::streamoff>(length + (length & 1U)), std::ios::cur);
                 }
 
-                const bool imageData = chunkHeader[0] == 'V' && chunkHeader[1] == 'P' &&
-                                       chunkHeader[2] == '8' &&
-                                       (chunkHeader[3] == ' ' || chunkHeader[3] == 'L');
+                const bool imageData = chunkHeader[0] == 'V' && chunkHeader[1] == 'P'
+                                       && chunkHeader[2] == '8'
+                                       && (chunkHeader[3] == ' ' || chunkHeader[3] == 'L');
                 if (imageData)
                 {
                     break;
@@ -380,18 +382,18 @@ namespace cloakframe
             static std::atomic<std::uint64_t> sequence{0};
             static thread_local std::mt19937_64 rng{std::random_device{}()};
 
-            return ".cloakframe-" + std::to_string(rng()) + "-" +
-                   std::to_string(sequence.fetch_add(1, std::memory_order_relaxed)) + ".tmp";
+            return ".cloakframe-" + std::to_string(rng()) + "-"
+                   + std::to_string(sequence.fetch_add(1, std::memory_order_relaxed)) + ".tmp";
         }
 
         bool validRelativeDestination(const std::filesystem::path &relative)
         {
-            if (relative.empty() || relative.is_absolute() || relative.has_root_name() ||
-                relative.filename().empty())
+            if (relative.empty() || relative.is_absolute() || relative.has_root_name()
+                || relative.filename().empty())
             {
                 return false;
             }
-            for (const auto &component: relative)
+            for (const auto &component : relative)
             {
                 if (component.empty() || component == "." || component == "..")
                 {
@@ -404,8 +406,8 @@ namespace cloakframe
         int openExclusive(const std::filesystem::path &path)
         {
 #ifdef _WIN32
-            return ::_wopen(path.c_str(), _O_BINARY | _O_CREAT | _O_EXCL | _O_WRONLY,
-                            _S_IREAD | _S_IWRITE);
+            return ::_wopen(
+                path.c_str(), _O_BINARY | _O_CREAT | _O_EXCL | _O_WRONLY, _S_IREAD | _S_IWRITE);
 #else
             int flags = O_CREAT | O_EXCL | O_WRONLY;
 #ifdef O_CLOEXEC
@@ -447,8 +449,9 @@ namespace cloakframe
             return true;
         }
 
-        bool writeStream(const int descriptor, std::istream &input,
-                         const std::function<bool()> &continueGuard = {})
+        bool writeStream(const int descriptor,
+            std::istream &input,
+            const std::function<bool()> &continueGuard = {})
         {
             constexpr std::size_t guardInterval = 16U * 1024U * 1024U;
             if (continueGuard && !continueGuard())
@@ -461,10 +464,10 @@ namespace cloakframe
             for (;;)
             {
                 input.read(reinterpret_cast<char *>(buffer.data()),
-                           static_cast<std::streamsize>(buffer.size()));
+                    static_cast<std::streamsize>(buffer.size()));
                 const auto count = input.gcount();
-                if (count > 0 &&
-                    !writeAll(descriptor, buffer.data(), static_cast<std::size_t>(count)))
+                if (count > 0
+                    && !writeAll(descriptor, buffer.data(), static_cast<std::size_t>(count)))
                 {
                     return false;
                 }
@@ -553,22 +556,21 @@ namespace cloakframe
             BY_HANDLE_FILE_INFORMATION info{};
             FILE_BASIC_INFO basic{};
             const HANDLE handle = reinterpret_cast<HANDLE>(rawHandle);
-            if (!::GetFileInformationByHandle(handle, &info) ||
-                !::GetFileInformationByHandleEx(handle, FileBasicInfo,
-                                                 &basic, sizeof(basic)) ||
-                (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+            if (!::GetFileInformationByHandle(handle, &info)
+                || !::GetFileInformationByHandleEx(handle, FileBasicInfo, &basic, sizeof(basic))
+                || (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
             {
                 return std::nullopt;
             }
             FileIdentity identity;
             identity.device = info.dwVolumeSerialNumber;
-            identity.file = (static_cast<std::uint64_t>(info.nFileIndexHigh) << 32U) |
-                            info.nFileIndexLow;
-            identity.size = (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32U) |
-                            info.nFileSizeLow;
+            identity.file =
+                (static_cast<std::uint64_t>(info.nFileIndexHigh) << 32U) | info.nFileIndexLow;
+            identity.size =
+                (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32U) | info.nFileSizeLow;
             identity.modifiedSeconds = static_cast<std::int64_t>(
-                (static_cast<std::uint64_t>(info.ftLastWriteTime.dwHighDateTime) << 32U) |
-                info.ftLastWriteTime.dwLowDateTime);
+                (static_cast<std::uint64_t>(info.ftLastWriteTime.dwHighDateTime) << 32U)
+                | info.ftLastWriteTime.dwLowDateTime);
             identity.changedSeconds = basic.ChangeTime.QuadPart;
             return identity;
 #else
@@ -599,16 +601,19 @@ namespace cloakframe
         FileDescriptor openReadOnlyDescriptor(const std::filesystem::path &path)
         {
 #ifdef _WIN32
-            const HANDLE handle = ::CreateFileW(
-                path.c_str(), GENERIC_READ | FILE_READ_ATTRIBUTES,
-                FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+            const HANDLE handle = ::CreateFileW(path.c_str(),
+                GENERIC_READ | FILE_READ_ATTRIBUTES,
+                FILE_SHARE_READ,
+                nullptr,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                nullptr);
             if (handle == INVALID_HANDLE_VALUE)
             {
                 return FileDescriptor{};
             }
-            const int descriptor = ::_open_osfhandle(
-                reinterpret_cast<intptr_t>(handle), _O_BINARY | _O_RDONLY);
+            const int descriptor =
+                ::_open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_BINARY | _O_RDONLY);
             if (descriptor < 0)
             {
                 ::CloseHandle(handle);
@@ -626,8 +631,9 @@ namespace cloakframe
 #endif
         }
 
-        bool copyDescriptor(const int sourceDescriptor, const int destinationDescriptor,
-                            const std::function<bool()> &continueGuard)
+        bool copyDescriptor(const int sourceDescriptor,
+            const int destinationDescriptor,
+            const std::function<bool()> &continueGuard)
         {
             constexpr std::size_t guardInterval = 16U * 1024U * 1024U;
             std::array<unsigned char, 64U * 1024U> buffer{};
@@ -639,8 +645,8 @@ namespace cloakframe
             for (;;)
             {
 #ifdef _WIN32
-                const int count = ::_read(sourceDescriptor, buffer.data(),
-                                          static_cast<unsigned int>(buffer.size()));
+                const int count = ::_read(
+                    sourceDescriptor, buffer.data(), static_cast<unsigned int>(buffer.size()));
 #else
                 const ssize_t count = ::read(sourceDescriptor, buffer.data(), buffer.size());
 #endif
@@ -656,8 +662,8 @@ namespace cloakframe
                 {
                     return !continueGuard || continueGuard();
                 }
-                if (!writeAll(destinationDescriptor, buffer.data(),
-                              static_cast<std::size_t>(count)))
+                if (!writeAll(
+                        destinationDescriptor, buffer.data(), static_cast<std::size_t>(count)))
                 {
                     return false;
                 }
@@ -745,27 +751,29 @@ namespace cloakframe
 
         WindowsHandle openPinnedDirectory(const std::filesystem::path &path)
         {
-            WindowsHandle handle(::CreateFileW(
-                path.c_str(), FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES,
-                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
-                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+            WindowsHandle handle(::CreateFileW(path.c_str(),
+                FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                nullptr,
+                OPEN_EXISTING,
+                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                nullptr));
             if (!handle.valid())
             {
                 return {};
             }
 
             BY_HANDLE_FILE_INFORMATION info{};
-            if (!::GetFileInformationByHandle(handle.get(), &info) ||
-                (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
-                (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+            if (!::GetFileInformationByHandle(handle.get(), &info)
+                || (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0
+                || (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
             {
                 return {};
             }
             return handle;
         }
 
-        std::optional<WindowsParent> openWindowsParent(
-            const std::filesystem::path &outputRoot,
+        std::optional<WindowsParent> openWindowsParent(const std::filesystem::path &outputRoot,
             const std::filesystem::path &relativeDestination)
         {
             if (!validRelativeDestination(relativeDestination))
@@ -790,7 +798,7 @@ namespace cloakframe
             }
             result.directories.push_back(std::move(rootHandle));
 
-            for (const auto &component: canonicalRoot.relative_path())
+            for (const auto &component : canonicalRoot.relative_path())
             {
                 current /= component;
                 auto handle = openPinnedDirectory(current);
@@ -801,11 +809,11 @@ namespace cloakframe
                 result.directories.push_back(std::move(handle));
             }
 
-            for (const auto &component: relativeDestination.parent_path())
+            for (const auto &component : relativeDestination.parent_path())
             {
                 current /= component;
-                if (!::CreateDirectoryW(current.c_str(), nullptr) &&
-                    ::GetLastError() != ERROR_ALREADY_EXISTS)
+                if (!::CreateDirectoryW(current.c_str(), nullptr)
+                    && ::GetLastError() != ERROR_ALREADY_EXISTS)
                 {
                     return std::nullopt;
                 }
@@ -826,19 +834,21 @@ namespace cloakframe
         {
             PSECURITY_DESCRIPTOR descriptor = nullptr;
             if (!::ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                    L"D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;OW)", SDDL_REVISION_1,
-                    &descriptor, nullptr))
+                    L"D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;OW)",
+                    SDDL_REVISION_1,
+                    &descriptor,
+                    nullptr))
             {
                 return nullptr;
             }
             return descriptor;
         }
 
-        template<typename Writer>
+        template <typename Writer>
         bool writeTemporaryAndPublishAtRoot(const std::filesystem::path &outputRoot,
-                                            const std::filesystem::path &relativeDestination,
-                                            Writer &&writer,
-                                            const std::function<bool()> &publishGuard = {})
+            const std::filesystem::path &relativeDestination,
+            Writer &&writer,
+            const std::function<bool()> &publishGuard = {})
         {
             auto parent = openWindowsParent(outputRoot, relativeDestination);
             if (!parent)
@@ -876,10 +886,13 @@ namespace cloakframe
                 }
 
                 const auto payloadPath = stagePath / L"payload";
-                WindowsHandle payload(::CreateFileW(
-                    payloadPath.c_str(), GENERIC_WRITE | DELETE | FILE_READ_ATTRIBUTES,
-                    0, &attributes, CREATE_NEW,
-                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr));
+                WindowsHandle payload(::CreateFileW(payloadPath.c_str(),
+                    GENERIC_WRITE | DELETE | FILE_READ_ATTRIBUTES,
+                    0,
+                    &attributes,
+                    CREATE_NEW,
+                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH,
+                    nullptr));
                 if (!payload.valid())
                 {
                     stageDirectory.reset();
@@ -917,38 +930,37 @@ namespace cloakframe
 
                 const bool synced = wrote && syncDescriptor(fileDescriptor);
                 const bool canPublish = synced && (!publishGuard || publishGuard());
-                const HANDLE publishHandle = reinterpret_cast<HANDLE>(
-                    ::_get_osfhandle(fileDescriptor));
+                const HANDLE publishHandle =
+                    reinterpret_cast<HANDLE>(::_get_osfhandle(fileDescriptor));
                 bool published = false;
                 if (canPublish && publishHandle != INVALID_HANDLE_VALUE)
                 {
-                    const std::wstring destinationName =
-                        (parent->path / parent->filename).native();
+                    const std::wstring destinationName = (parent->path / parent->filename).native();
                     const std::size_t nameBytes = destinationName.size() * sizeof(wchar_t);
                     if (nameBytes <= std::numeric_limits<DWORD>::max())
                     {
                         const std::size_t infoSize = sizeof(FILE_RENAME_INFO) + nameBytes;
                         const std::size_t storageCount =
-                            (infoSize + sizeof(std::max_align_t) - 1) /
-                            sizeof(std::max_align_t);
+                            (infoSize + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t);
                         std::vector<std::max_align_t> storage(storageCount);
-                        std::memset(storage.data(), 0,
-                                    storage.size() * sizeof(std::max_align_t));
+                        std::memset(storage.data(), 0, storage.size() * sizeof(std::max_align_t));
                         auto *renameInfo = reinterpret_cast<FILE_RENAME_INFO *>(storage.data());
                         renameInfo->RootDirectory = nullptr;
                         renameInfo->FileNameLength = static_cast<DWORD>(nameBytes);
                         std::memcpy(renameInfo->FileName, destinationName.data(), nameBytes);
-                        published = ::SetFileInformationByHandle(
-                            publishHandle, FileRenameInfo, renameInfo,
-                            static_cast<DWORD>(infoSize)) != 0;
+                        published = ::SetFileInformationByHandle(publishHandle,
+                                        FileRenameInfo,
+                                        renameInfo,
+                                        static_cast<DWORD>(infoSize))
+                                    != 0;
                     }
                 }
 
                 if (!published && publishHandle != INVALID_HANDLE_VALUE)
                 {
                     FILE_DISPOSITION_INFO disposition{TRUE};
-                    ::SetFileInformationByHandle(publishHandle, FileDispositionInfo,
-                                                 &disposition, sizeof(disposition));
+                    ::SetFileInformationByHandle(
+                        publishHandle, FileDispositionInfo, &disposition, sizeof(disposition));
                 }
                 ::_close(fileDescriptor);
                 if (!published)
@@ -1045,8 +1057,7 @@ namespace cloakframe
             return flags;
         }
 
-        std::optional<PosixParent> openPosixParent(
-            const std::filesystem::path &outputRoot,
+        std::optional<PosixParent> openPosixParent(const std::filesystem::path &outputRoot,
             const std::filesystem::path &relativeDestination)
         {
             if (!validRelativeDestination(relativeDestination))
@@ -1062,17 +1073,17 @@ namespace cloakframe
                 return std::nullopt;
             }
 
-            PosixDescriptor current(::open(canonicalRoot.root_path().c_str(),
-                                           directoryOpenFlags()));
+            PosixDescriptor current(
+                ::open(canonicalRoot.root_path().c_str(), directoryOpenFlags()));
             if (!current.valid())
             {
                 return std::nullopt;
             }
 
-            for (const auto &component: canonicalRoot.relative_path())
+            for (const auto &component : canonicalRoot.relative_path())
             {
-                PosixDescriptor next(::openat(current.get(), component.c_str(),
-                                              directoryOpenFlags()));
+                PosixDescriptor next(
+                    ::openat(current.get(), component.c_str(), directoryOpenFlags()));
                 if (!next.valid())
                 {
                     return std::nullopt;
@@ -1080,14 +1091,14 @@ namespace cloakframe
                 current = std::move(next);
             }
 
-            for (const auto &component: relativeDestination.parent_path())
+            for (const auto &component : relativeDestination.parent_path())
             {
                 if (::mkdirat(current.get(), component.c_str(), 0700) != 0 && errno != EEXIST)
                 {
                     return std::nullopt;
                 }
-                PosixDescriptor next(::openat(current.get(), component.c_str(),
-                                              directoryOpenFlags()));
+                PosixDescriptor next(
+                    ::openat(current.get(), component.c_str(), directoryOpenFlags()));
                 if (!next.valid())
                 {
                     return std::nullopt;
@@ -1095,16 +1106,17 @@ namespace cloakframe
                 current = std::move(next);
             }
 
-            return PosixParent{std::move(current),
-                               relativeDestination.filename().native()};
+            return PosixParent{std::move(current), relativeDestination.filename().native()};
         }
 
-        bool publishPosixNoReplace(const int stageDescriptor, const char *payload,
-                                   const int parentDescriptor, const char *destination)
+        bool publishPosixNoReplace(const int stageDescriptor,
+            const char *payload,
+            const int parentDescriptor,
+            const char *destination)
         {
 #ifdef __APPLE__
-            if (::renameatx_np(stageDescriptor, payload, parentDescriptor, destination,
-                               RENAME_EXCL) == 0)
+            if (::renameatx_np(stageDescriptor, payload, parentDescriptor, destination, RENAME_EXCL)
+                == 0)
             {
                 return true;
             }
@@ -1113,8 +1125,13 @@ namespace cloakframe
                 return false;
             }
 #elif defined(__linux__) && defined(SYS_renameat2)
-            if (::syscall(SYS_renameat2, stageDescriptor, payload, parentDescriptor,
-                          destination, RENAME_NOREPLACE) == 0)
+            if (::syscall(SYS_renameat2,
+                    stageDescriptor,
+                    payload,
+                    parentDescriptor,
+                    destination,
+                    RENAME_NOREPLACE)
+                == 0)
             {
                 return true;
             }
@@ -1132,13 +1149,12 @@ namespace cloakframe
             {
                 return false;
             }
-            if (errno != ENOTSUP && errno != EOPNOTSUPP && errno != EPERM &&
-                errno != ENOSYS)
+            if (errno != ENOTSUP && errno != EOPNOTSUPP && errno != EPERM && errno != ENOSYS)
             {
                 return false;
             }
-            PosixDescriptor source(::openat(stageDescriptor, payload,
-                                            O_RDONLY | O_NOFOLLOW | O_CLOEXEC));
+            PosixDescriptor source(
+                ::openat(stageDescriptor, payload, O_RDONLY | O_NOFOLLOW | O_CLOEXEC));
             if (!source.valid())
             {
                 return false;
@@ -1148,10 +1164,10 @@ namespace cloakframe
             {
                 return false;
             }
-            PosixDescriptor target(::openat(parentDescriptor, destination,
-                                            O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW |
-                                                O_CLOEXEC,
-                                            sourceInfo.st_mode & 07777));
+            PosixDescriptor target(::openat(parentDescriptor,
+                destination,
+                O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+                sourceInfo.st_mode & 07777));
             if (!target.valid())
             {
                 return false;
@@ -1181,8 +1197,8 @@ namespace cloakframe
                 ssize_t remaining = got;
                 while (remaining > 0)
                 {
-                    const ssize_t wrote = ::write(target.get(), cursor,
-                                                  static_cast<std::size_t>(remaining));
+                    const ssize_t wrote =
+                        ::write(target.get(), cursor, static_cast<std::size_t>(remaining));
                     if (wrote < 0)
                     {
                         if (errno == EINTR)
@@ -1203,11 +1219,11 @@ namespace cloakframe
             return true;
         }
 
-        template<typename Writer>
+        template <typename Writer>
         bool writeTemporaryAndPublishAtRoot(const std::filesystem::path &outputRoot,
-                                            const std::filesystem::path &relativeDestination,
-                                            Writer &&writer,
-                                            const std::function<bool()> &publishGuard = {})
+            const std::filesystem::path &relativeDestination,
+            Writer &&writer,
+            const std::function<bool()> &publishGuard = {})
         {
             auto parent = openPosixParent(outputRoot, relativeDestination);
             if (!parent)
@@ -1227,8 +1243,8 @@ namespace cloakframe
                     return false;
                 }
 
-                PosixDescriptor stage(::openat(parent->descriptor.get(), stageName.c_str(),
-                                               directoryOpenFlags()));
+                PosixDescriptor stage(
+                    ::openat(parent->descriptor.get(), stageName.c_str(), directoryOpenFlags()));
                 if (!stage.valid())
                 {
                     ::unlinkat(parent->descriptor.get(), stageName.c_str(), AT_REMOVEDIR);
@@ -1273,9 +1289,10 @@ namespace cloakframe
                     return false;
                 }
 
-                const bool published = (!publishGuard || publishGuard()) &&
-                    publishPosixNoReplace(stage.get(), "payload", parent->descriptor.get(),
-                                          parent->filename.c_str());
+                const bool published =
+                    (!publishGuard || publishGuard())
+                    && publishPosixNoReplace(
+                        stage.get(), "payload", parent->descriptor.get(), parent->filename.c_str());
                 file.reset();
                 ::unlinkat(stage.get(), "payload", 0);
                 stage.reset();
@@ -1303,10 +1320,13 @@ namespace cloakframe
     std::optional<FileIdentity> captureFileIdentity(const std::filesystem::path &path)
     {
 #ifdef _WIN32
-        WindowsHandle handle(::CreateFileW(
-            path.c_str(), FILE_READ_ATTRIBUTES,
+        WindowsHandle handle(::CreateFileW(path.c_str(),
+            FILE_READ_ATTRIBUTES,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr));
         if (!handle.valid())
         {
             return std::nullopt;
@@ -1314,23 +1334,21 @@ namespace cloakframe
 
         BY_HANDLE_FILE_INFORMATION info{};
         FILE_BASIC_INFO basic{};
-        if (!::GetFileInformationByHandle(handle.get(), &info) ||
-            !::GetFileInformationByHandleEx(handle.get(), FileBasicInfo,
-                                             &basic, sizeof(basic)) ||
-            (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        if (!::GetFileInformationByHandle(handle.get(), &info)
+            || !::GetFileInformationByHandleEx(handle.get(), FileBasicInfo, &basic, sizeof(basic))
+            || (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
         {
             return std::nullopt;
         }
 
         FileIdentity identity;
         identity.device = info.dwVolumeSerialNumber;
-        identity.file = (static_cast<std::uint64_t>(info.nFileIndexHigh) << 32U) |
-                        info.nFileIndexLow;
-        identity.size = (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32U) |
-                        info.nFileSizeLow;
+        identity.file =
+            (static_cast<std::uint64_t>(info.nFileIndexHigh) << 32U) | info.nFileIndexLow;
+        identity.size = (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32U) | info.nFileSizeLow;
         identity.modifiedSeconds = static_cast<std::int64_t>(
-            (static_cast<std::uint64_t>(info.ftLastWriteTime.dwHighDateTime) << 32U) |
-            info.ftLastWriteTime.dwLowDateTime);
+            (static_cast<std::uint64_t>(info.ftLastWriteTime.dwHighDateTime) << 32U)
+            | info.ftLastWriteTime.dwLowDateTime);
         identity.changedSeconds = basic.ChangeTime.QuadPart;
         return identity;
 #else
@@ -1397,30 +1415,30 @@ namespace cloakframe
     {
         switch (orientation)
         {
-            case 2:
-                cv::flip(image, image, 1);
-                break;
-            case 3:
-                cv::rotate(image, image, cv::ROTATE_180);
-                break;
-            case 4:
-                cv::flip(image, image, 0);
-                break;
-            case 5:
-                cv::transpose(image, image);
-                break;
-            case 6:
-                cv::rotate(image, image, cv::ROTATE_90_CLOCKWISE);
-                break;
-            case 7:
-                cv::transpose(image, image);
-                cv::rotate(image, image, cv::ROTATE_180);
-                break;
-            case 8:
-                cv::rotate(image, image, cv::ROTATE_90_COUNTERCLOCKWISE);
-                break;
-            default:
-                break;
+        case 2:
+            cv::flip(image, image, 1);
+            break;
+        case 3:
+            cv::rotate(image, image, cv::ROTATE_180);
+            break;
+        case 4:
+            cv::flip(image, image, 0);
+            break;
+        case 5:
+            cv::transpose(image, image);
+            break;
+        case 6:
+            cv::rotate(image, image, cv::ROTATE_90_CLOCKWISE);
+            break;
+        case 7:
+            cv::transpose(image, image);
+            cv::rotate(image, image, cv::ROTATE_180);
+            break;
+        case 8:
+            cv::rotate(image, image, cv::ROTATE_90_COUNTERCLOCKWISE);
+            break;
+        default:
+            break;
         }
     }
 
@@ -1467,8 +1485,8 @@ namespace cloakframe
         {
             return {};
         }
-        std::vector<uchar> buffer((std::istreambuf_iterator<char>(file)),
-                                  std::istreambuf_iterator<char>());
+        std::vector<uchar> buffer(
+            (std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         if (buffer.empty())
         {
             return {};
@@ -1478,8 +1496,8 @@ namespace cloakframe
 
     std::size_t imageFrameCount(const std::filesystem::path &source)
     {
-        std::size_t count = std::max(classicTiffFrameLowerBound(source),
-                                     animatedContainerFrameLowerBound(source));
+        std::size_t count =
+            std::max(classicTiffFrameLowerBound(source), animatedContainerFrameLowerBound(source));
         if (count > 1)
         {
             return count;
@@ -1504,8 +1522,8 @@ namespace cloakframe
     }
 
     bool imwriteUnicodeNoReplace(const std::filesystem::path &destination,
-                                 const cv::Mat &image,
-                                 const std::vector<int> &params)
+        const cv::Mat &image,
+        const std::vector<int> &params)
     {
         std::error_code ec;
         const auto absoluteDestination = std::filesystem::absolute(destination, ec);
@@ -1513,19 +1531,17 @@ namespace cloakframe
         {
             return false;
         }
-        const auto outputRoot = std::filesystem::canonical(
-            absoluteDestination.parent_path(), ec);
+        const auto outputRoot = std::filesystem::canonical(absoluteDestination.parent_path(), ec);
         if (ec)
         {
             return false;
         }
         return imwriteUnicodeNoReplaceAtRoot(
-                   outputRoot, absoluteDestination.filename(),
-                   image, params) != ImageWriteResult::Failed;
+                   outputRoot, absoluteDestination.filename(), image, params)
+               != ImageWriteResult::Failed;
     }
 
-    ImageWriteResult imwriteUnicodeNoReplaceAtRoot(
-        const std::filesystem::path &outputRoot,
+    ImageWriteResult imwriteUnicodeNoReplaceAtRoot(const std::filesystem::path &outputRoot,
         const std::filesystem::path &relativeDestination,
         const cv::Mat &image,
         const std::vector<int> &params,
@@ -1558,22 +1574,20 @@ namespace cloakframe
             if (staging.isValid())
             {
                 const auto stagedPath = pathFromQString(
-                    staging.filePath(QStringLiteral("image") +
-                                     pathToQString(extension)));
+                    staging.filePath(QStringLiteral("image") + pathToQString(extension)));
                 const int stagedDescriptor = openExclusive(stagedPath);
                 if (stagedDescriptor >= 0)
                 {
-                    const bool staged = writeAll(stagedDescriptor, buffer.data(), buffer.size()) &&
-                                        syncDescriptor(stagedDescriptor);
+                    const bool staged = writeAll(stagedDescriptor, buffer.data(), buffer.size())
+                                        && syncDescriptor(stagedDescriptor);
                     closeIgnoringErrors(stagedDescriptor);
-                    if (staged && (!publishGuard || publishGuard()) &&
-                        copyMetadata(metadataSource, stagedPath, true) &&
-                        (!publishGuard || publishGuard()))
+                    if (staged && (!publishGuard || publishGuard())
+                        && copyMetadata(metadataSource, stagedPath, true)
+                        && (!publishGuard || publishGuard()))
                     {
                         std::error_code sizeError;
                         const auto stagedSize = std::filesystem::file_size(stagedPath, sizeError);
-                        constexpr std::uintmax_t metadataGrowthLimit =
-                            80ULL * 1024ULL * 1024ULL;
+                        constexpr std::uintmax_t metadataGrowthLimit = 80ULL * 1024ULL * 1024ULL;
                         const auto maximum = std::numeric_limits<std::uintmax_t>::max();
                         const auto encodedSize = static_cast<std::uintmax_t>(buffer.size());
                         const auto stagedLimit = encodedSize > maximum - metadataGrowthLimit
@@ -1584,13 +1598,14 @@ namespace cloakframe
                         {
                             std::vector<uchar>().swap(buffer);
                             const bool saved = writeTemporaryAndPublishAtRoot(
-                                outputRoot, relativeDestination,
+                                outputRoot,
+                                relativeDestination,
                                 [&input, &publishGuard](const int descriptor)
                                 {
                                     return writeStream(descriptor, input, publishGuard);
-                                }, publishGuard);
-                            return saved ? ImageWriteResult::Saved
-                                         : ImageWriteResult::Failed;
+                                },
+                                publishGuard);
+                            return saved ? ImageWriteResult::Saved : ImageWriteResult::Failed;
                         }
                     }
                 }
@@ -1598,10 +1613,13 @@ namespace cloakframe
         }
 
         const bool saved = writeTemporaryAndPublishAtRoot(
-            outputRoot, relativeDestination, [&buffer](const int descriptor)
+            outputRoot,
+            relativeDestination,
+            [&buffer](const int descriptor)
             {
                 return writeAll(descriptor, buffer.data(), buffer.size());
-            }, publishGuard);
+            },
+            publishGuard);
         if (!saved)
         {
             return ImageWriteResult::Failed;
@@ -1610,8 +1628,8 @@ namespace cloakframe
                                       : ImageWriteResult::SavedWithoutMetadata;
     }
 
-    bool copyFileNoReplace(const std::filesystem::path &source,
-                           const std::filesystem::path &destination)
+    bool copyFileNoReplace(
+        const std::filesystem::path &source, const std::filesystem::path &destination)
     {
         std::error_code ec;
         const auto absoluteDestination = std::filesystem::absolute(destination, ec);
@@ -1619,20 +1637,18 @@ namespace cloakframe
         {
             return false;
         }
-        const auto outputRoot = std::filesystem::canonical(
-            absoluteDestination.parent_path(), ec);
+        const auto outputRoot = std::filesystem::canonical(absoluteDestination.parent_path(), ec);
         if (ec)
         {
             return false;
         }
-        return copyFileNoReplaceAtRoot(source, outputRoot,
-                                       absoluteDestination.filename());
+        return copyFileNoReplaceAtRoot(source, outputRoot, absoluteDestination.filename());
     }
 
     bool copyFileNoReplaceAtRoot(const std::filesystem::path &source,
-                                 const std::filesystem::path &outputRoot,
-                                 const std::filesystem::path &relativeDestination,
-                                 const std::function<bool()> &publishGuard)
+        const std::filesystem::path &outputRoot,
+        const std::filesystem::path &relativeDestination,
+        const std::function<bool()> &publishGuard)
     {
         std::error_code canonicalError;
         const auto canonicalSource = std::filesystem::canonical(source, canonicalError);
@@ -1646,9 +1662,8 @@ namespace cloakframe
             return false;
         }
         FileDescriptor input = openReadOnlyDescriptor(canonicalSource);
-        const auto openedIdentity = input.valid()
-                                        ? descriptorIdentity(input.get())
-                                        : std::optional<FileIdentity>{};
+        const auto openedIdentity =
+            input.valid() ? descriptorIdentity(input.get()) : std::optional<FileIdentity>{};
         if (!openedIdentity || *openedIdentity != *initialIdentity)
         {
             return false;
@@ -1658,20 +1673,22 @@ namespace cloakframe
         {
             const auto pathIdentity = captureFileIdentity(canonicalSource);
             const auto currentOpenedIdentity = descriptorIdentity(input.get());
-            return pathIdentity && *pathIdentity == *initialIdentity &&
-                   currentOpenedIdentity && *currentOpenedIdentity == *initialIdentity &&
-                   (!publishGuard || publishGuard());
+            return pathIdentity && *pathIdentity == *initialIdentity && currentOpenedIdentity
+                   && *currentOpenedIdentity == *initialIdentity
+                   && (!publishGuard || publishGuard());
         };
 
-        return writeTemporaryAndPublishAtRoot(outputRoot, relativeDestination,
-                                               [&input, &sourceIsStable](const int descriptor)
-        {
-            return copyDescriptor(input.get(), descriptor, sourceIsStable);
-        }, sourceIsStable);
+        return writeTemporaryAndPublishAtRoot(
+            outputRoot,
+            relativeDestination,
+            [&input, &sourceIsStable](const int descriptor)
+            {
+                return copyDescriptor(input.get(), descriptor, sourceIsStable);
+            },
+            sourceIsStable);
     }
 
-    FileMoveResult moveFileNoReplaceAtRoot(
-        const std::filesystem::path &source,
+    FileMoveResult moveFileNoReplaceAtRoot(const std::filesystem::path &source,
         const std::filesystem::path &outputRoot,
         const std::filesystem::path &relativeDestination,
         const std::function<bool()> &publishGuard)
@@ -1695,19 +1712,19 @@ namespace cloakframe
             return FileMoveResult::Failed;
         }
 
-        const HANDLE sourceHandle = ::CreateFileW(
-            canonicalSource.c_str(), GENERIC_READ | GENERIC_WRITE | DELETE |
-                                     FILE_READ_ATTRIBUTES | WRITE_DAC,
-            0, nullptr, OPEN_EXISTING,
-            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT |
-                FILE_FLAG_WRITE_THROUGH,
+        const HANDLE sourceHandle = ::CreateFileW(canonicalSource.c_str(),
+            GENERIC_READ | GENERIC_WRITE | DELETE | FILE_READ_ATTRIBUTES | WRITE_DAC,
+            0,
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_WRITE_THROUGH,
             nullptr);
         if (sourceHandle == INVALID_HANDLE_VALUE)
         {
             return FileMoveResult::Failed;
         }
-        const int sourceDescriptor = ::_open_osfhandle(
-            reinterpret_cast<intptr_t>(sourceHandle), _O_BINARY | _O_RDWR);
+        const int sourceDescriptor =
+            ::_open_osfhandle(reinterpret_cast<intptr_t>(sourceHandle), _O_BINARY | _O_RDWR);
         if (sourceDescriptor < 0)
         {
             ::CloseHandle(sourceHandle);
@@ -1716,15 +1733,15 @@ namespace cloakframe
         FileDescriptor input(sourceDescriptor);
         const auto openedIdentity = descriptorIdentity(input.get());
         BY_HANDLE_FILE_INFORMATION openedInfo{};
-        const HANDLE openedHandle = reinterpret_cast<HANDLE>(
-            ::_get_osfhandle(input.get()));
-        if (!openedIdentity || *openedIdentity != *initialIdentity ||
-            openedHandle == INVALID_HANDLE_VALUE ||
-            !::GetFileInformationByHandle(openedHandle, &openedInfo) ||
-            (openedInfo.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY |
-                                            FILE_ATTRIBUTE_REPARSE_POINT)) != 0 ||
-            openedInfo.nNumberOfLinks != 1 || !syncDescriptor(input.get()) ||
-            (publishGuard && !publishGuard()))
+        const HANDLE openedHandle = reinterpret_cast<HANDLE>(::_get_osfhandle(input.get()));
+        if (!openedIdentity || *openedIdentity != *initialIdentity
+            || openedHandle == INVALID_HANDLE_VALUE
+            || !::GetFileInformationByHandle(openedHandle, &openedInfo)
+            || (openedInfo.dwFileAttributes
+                   & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))
+                   != 0
+            || openedInfo.nNumberOfLinks != 1 || !syncDescriptor(input.get())
+            || (publishGuard && !publishGuard()))
         {
             return FileMoveResult::Failed;
         }
@@ -1733,14 +1750,19 @@ namespace cloakframe
         PACL privateDacl = nullptr;
         BOOL daclPresent = FALSE;
         BOOL daclDefaulted = FALSE;
-        const bool privateAclApplied = descriptor != nullptr &&
-            ::GetSecurityDescriptorDacl(descriptor, &daclPresent, &privateDacl,
-                                        &daclDefaulted) != 0 &&
-            daclPresent && privateDacl != nullptr &&
-            ::SetSecurityInfo(openedHandle, SE_FILE_OBJECT,
-                              DACL_SECURITY_INFORMATION |
-                                  PROTECTED_DACL_SECURITY_INFORMATION,
-                              nullptr, nullptr, privateDacl, nullptr) == ERROR_SUCCESS;
+        const bool privateAclApplied =
+            descriptor != nullptr
+            && ::GetSecurityDescriptorDacl(descriptor, &daclPresent, &privateDacl, &daclDefaulted)
+                   != 0
+            && daclPresent && privateDacl != nullptr
+            && ::SetSecurityInfo(openedHandle,
+                   SE_FILE_OBJECT,
+                   DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                   nullptr,
+                   nullptr,
+                   privateDacl,
+                   nullptr)
+                   == ERROR_SUCCESS;
         if (descriptor != nullptr)
         {
             ::LocalFree(descriptor);
@@ -1750,8 +1772,7 @@ namespace cloakframe
             return FileMoveResult::Failed;
         }
 
-        const std::wstring destinationName =
-            (parent->path / parent->filename).native();
+        const std::wstring destinationName = (parent->path / parent->filename).native();
         const std::size_t nameBytes = destinationName.size() * sizeof(wchar_t);
         if (nameBytes > std::numeric_limits<DWORD>::max())
         {
@@ -1765,8 +1786,7 @@ namespace cloakframe
         const std::size_t storageCount =
             (infoSize + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t);
         std::vector<std::max_align_t> storage(storageCount);
-        std::memset(storage.data(), 0,
-                    storage.size() * sizeof(std::max_align_t));
+        std::memset(storage.data(), 0, storage.size() * sizeof(std::max_align_t));
         auto *renameInfo = reinterpret_cast<FILE_RENAME_INFO *>(storage.data());
         renameInfo->RootDirectory = nullptr;
         renameInfo->FileNameLength = static_cast<DWORD>(nameBytes);
@@ -1775,26 +1795,25 @@ namespace cloakframe
         {
             return FileMoveResult::Failed;
         }
-        if (::SetFileInformationByHandle(openedHandle, FileRenameInfo, renameInfo,
-                                         static_cast<DWORD>(infoSize)) != 0)
+        if (::SetFileInformationByHandle(
+                openedHandle, FileRenameInfo, renameInfo, static_cast<DWORD>(infoSize))
+            != 0)
         {
             return FileMoveResult::Moved;
         }
-        return ::GetLastError() == ERROR_NOT_SAME_DEVICE
-                   ? FileMoveResult::CrossDevice
-                   : FileMoveResult::Failed;
+        return ::GetLastError() == ERROR_NOT_SAME_DEVICE ? FileMoveResult::CrossDevice
+                                                         : FileMoveResult::Failed;
 #else
         FileDescriptor input = openReadOnlyDescriptor(canonicalSource);
-        const auto openedIdentity = input.valid()
-                                        ? descriptorIdentity(input.get())
-                                        : std::optional<FileIdentity>{};
+        const auto openedIdentity =
+            input.valid() ? descriptorIdentity(input.get()) : std::optional<FileIdentity>{};
         if (!openedIdentity || *openedIdentity != *initialIdentity)
         {
             return FileMoveResult::Failed;
         }
 
-        PosixDescriptor sourceParent(::open(canonicalSource.parent_path().c_str(),
-                                            directoryOpenFlags()));
+        PosixDescriptor sourceParent(
+            ::open(canonicalSource.parent_path().c_str(), directoryOpenFlags()));
         auto destinationParent = openPosixParent(outputRoot, relativeDestination);
         if (!sourceParent.valid() || !destinationParent)
         {
@@ -1806,21 +1825,22 @@ namespace cloakframe
         struct stat destinationInfo{};
         const auto pathIdentity = captureFileIdentity(canonicalSource);
         const auto currentIdentity = descriptorIdentity(input.get());
-        if (::fstat(input.get(), &openedInfo) != 0 ||
-            ::fstatat(sourceParent.get(), sourceName.c_str(), &namedInfo,
-                      AT_SYMLINK_NOFOLLOW) != 0 ||
-            !pathIdentity || !currentIdentity || *pathIdentity != *initialIdentity ||
-            *currentIdentity != *initialIdentity ||
-            !S_ISREG(namedInfo.st_mode) || namedInfo.st_nlink != 1 ||
-            openedInfo.st_dev != namedInfo.st_dev ||
-            openedInfo.st_ino != namedInfo.st_ino)
+        if (::fstat(input.get(), &openedInfo) != 0
+            || ::fstatat(sourceParent.get(), sourceName.c_str(), &namedInfo, AT_SYMLINK_NOFOLLOW)
+                   != 0
+            || !pathIdentity || !currentIdentity || *pathIdentity != *initialIdentity
+            || *currentIdentity != *initialIdentity || !S_ISREG(namedInfo.st_mode)
+            || namedInfo.st_nlink != 1 || openedInfo.st_dev != namedInfo.st_dev
+            || openedInfo.st_ino != namedInfo.st_ino)
         {
             return FileMoveResult::Failed;
         }
         if (::fstatat(destinationParent->descriptor.get(),
-                      destinationParent->filename.c_str(), &destinationInfo,
-                      AT_SYMLINK_NOFOLLOW) == 0 || errno != ENOENT ||
-            (publishGuard && !publishGuard()))
+                destinationParent->filename.c_str(),
+                &destinationInfo,
+                AT_SYMLINK_NOFOLLOW)
+                == 0
+            || errno != ENOENT || (publishGuard && !publishGuard()))
         {
             return FileMoveResult::Failed;
         }
@@ -1841,9 +1861,10 @@ namespace cloakframe
             return FileMoveResult::Failed;
         }
 
-        if (publishPosixNoReplace(sourceParent.get(), sourceName.c_str(),
-                                  destinationParent->descriptor.get(),
-                                  destinationParent->filename.c_str()))
+        if (publishPosixNoReplace(sourceParent.get(),
+                sourceName.c_str(),
+                destinationParent->descriptor.get(),
+                destinationParent->filename.c_str()))
         {
             ::fsync(destinationParent->descriptor.get());
             ::fsync(sourceParent.get());
@@ -1851,16 +1872,20 @@ namespace cloakframe
         }
         const int publishError = errno;
         ::fchmod(input.get(), originalMode);
-        return publishError == EXDEV ? FileMoveResult::CrossDevice
-                                     : FileMoveResult::Failed;
+        return publishError == EXDEV ? FileMoveResult::CrossDevice : FileMoveResult::Failed;
 #endif
     }
 
     std::vector<int> encodeParamsForExtension(const std::string &extLower)
     {
         std::string ext = extLower;
-        std::transform(ext.begin(), ext.end(), ext.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::transform(ext.begin(),
+            ext.end(),
+            ext.begin(),
+            [](unsigned char c)
+            {
+                return static_cast<char>(std::tolower(c));
+            });
         if (!ext.empty() && ext.front() == '.')
         {
             ext.erase(ext.begin());
@@ -1893,8 +1918,8 @@ namespace cloakframe
     }
 
     bool copyMetadata(const std::filesystem::path &source,
-                      const std::filesystem::path &destination,
-                      bool normalizeOrientation)
+        const std::filesystem::path &destination,
+        bool normalizeOrientation)
     {
 #ifdef CLOAKFRAME_HAVE_EXIV2
         if (!initializeExiv2())
@@ -1919,41 +1944,57 @@ namespace cloakframe
             for (auto it = exif.begin(); it != exif.end();)
             {
                 std::string key = it->key();
-                std::ranges::transform(key, key.begin(), [](const unsigned char value)
-                {
-                    return static_cast<char>(std::tolower(value));
-                });
-                const bool standardGroup = key.starts_with("exif.image.") ||
-                                           key.starts_with("exif.photo.") ||
-                                           key.starts_with("exif.gpsinfo.") ||
-                                           key.starts_with("exif.iop.");
+                std::ranges::transform(key,
+                    key.begin(),
+                    [](const unsigned char value)
+                    {
+                        return static_cast<char>(std::tolower(value));
+                    });
+                const bool standardGroup =
+                    key.starts_with("exif.image.") || key.starts_with("exif.photo.")
+                    || key.starts_with("exif.gpsinfo.") || key.starts_with("exif.iop.");
                 constexpr std::array<std::string_view, 25> blocked = {
-                    "thumbnail", "preview", "makernote", "stripoffset", "stripbyte",
-                    "tileoffset", "tilebyte", "jpeginterchange", "jpgfromraw",
-                    "otherimage", "originalraw", "dngprivate", "opcode", "subifd",
-                    "subimage", "imageoffset", "imagebytecount", "imagewidth",
-                    "imagelength", "pixeldimension", "xmlpacket", "applicationnotes",
-                    "imageresource", "photoshop", "intercolorprofile",
+                    "thumbnail",
+                    "preview",
+                    "makernote",
+                    "stripoffset",
+                    "stripbyte",
+                    "tileoffset",
+                    "tilebyte",
+                    "jpeginterchange",
+                    "jpgfromraw",
+                    "otherimage",
+                    "originalraw",
+                    "dngprivate",
+                    "opcode",
+                    "subifd",
+                    "subimage",
+                    "imageoffset",
+                    "imagebytecount",
+                    "imagewidth",
+                    "imagelength",
+                    "pixeldimension",
+                    "xmlpacket",
+                    "applicationnotes",
+                    "imageresource",
+                    "photoshop",
+                    "intercolorprofile",
                 };
-                const bool unsafe = std::ranges::any_of(blocked, [&](const auto value)
-                {
-                    return key.find(value) != std::string::npos;
-                });
+                const bool unsafe = std::ranges::any_of(blocked,
+                    [&](const auto value)
+                    {
+                        return key.find(value) != std::string::npos;
+                    });
                 const auto bytes = it->size();
                 const auto type = it->typeId();
-                const bool safeType = type == Exiv2::unsignedByte ||
-                                      type == Exiv2::asciiString ||
-                                      type == Exiv2::unsignedShort ||
-                                      type == Exiv2::unsignedLong ||
-                                      type == Exiv2::unsignedRational ||
-                                      type == Exiv2::signedByte ||
-                                      type == Exiv2::signedShort ||
-                                      type == Exiv2::signedLong ||
-                                      type == Exiv2::signedRational ||
-                                      type == Exiv2::tiffFloat ||
-                                      type == Exiv2::tiffDouble;
-                if (!standardGroup || unsafe || !safeType || bytes > metadataEntryLimit ||
-                    exifBytes > metadataTotalLimit - bytes)
+                const bool safeType = type == Exiv2::unsignedByte || type == Exiv2::asciiString
+                                      || type == Exiv2::unsignedShort || type == Exiv2::unsignedLong
+                                      || type == Exiv2::unsignedRational
+                                      || type == Exiv2::signedByte || type == Exiv2::signedShort
+                                      || type == Exiv2::signedLong || type == Exiv2::signedRational
+                                      || type == Exiv2::tiffFloat || type == Exiv2::tiffDouble;
+                if (!standardGroup || unsafe || !safeType || bytes > metadataEntryLimit
+                    || exifBytes > metadataTotalLimit - bytes)
                 {
                     it = exif.erase(it);
                 }
@@ -1981,9 +2022,9 @@ namespace cloakframe
             return false;
         }
 #else
-        (void) source;
-        (void) destination;
-        (void) normalizeOrientation;
+        (void)source;
+        (void)destination;
+        (void)normalizeOrientation;
         return false;
 #endif
     }

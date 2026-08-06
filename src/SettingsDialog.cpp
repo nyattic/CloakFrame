@@ -11,9 +11,14 @@
 
 namespace cloakframe
 {
-    SettingsDialog::SettingsDialog(ThemeMode theme, const QString &language, bool checkForUpdates,
-                                   bool fileLogging, bool gpuAcceleration, int videoQuality,
-                                   int videoCodec, QWidget *parent)
+    SettingsDialog::SettingsDialog(ThemeMode theme,
+        const QString &language,
+        bool checkForUpdates,
+        bool fileLogging,
+        bool gpuAcceleration,
+        int videoQuality,
+        int videoCodec,
+        QWidget *parent)
         : QDialog(parent)
     {
         setModal(true);
@@ -84,34 +89,55 @@ namespace cloakframe
         closeButton_->setCursor(Qt::PointingHandCursor);
         root->addWidget(buttons);
 
-        connect(themeCombo_, &QComboBox::currentIndexChanged, this, [this]
-        {
-            emit themeChanged(static_cast<ThemeMode>(themeCombo_->currentData().toInt()));
-        });
-        connect(languageCombo_, &QComboBox::currentIndexChanged, this, [this]
-        {
-            emit languageChanged(languageCombo_->currentData().toString());
-        });
-        connect(updateCheck_, &QCheckBox::toggled, this, [this](bool enabled)
-        {
-            emit checkForUpdatesChanged(enabled);
-        });
-        connect(logCheck_, &QCheckBox::toggled, this, [this](bool enabled)
-        {
-            emit fileLoggingChanged(enabled);
-        });
-        connect(gpuCheck_, &QCheckBox::toggled, this, [this](bool enabled)
-        {
-            emit gpuAccelerationChanged(enabled);
-        });
-        connect(videoQualityCombo_, &QComboBox::currentIndexChanged, this, [this]
-        {
-            emit videoQualityChanged(videoQualityCombo_->currentData().toInt());
-        });
-        connect(videoCodecCombo_, &QComboBox::currentIndexChanged, this, [this]
-        {
-            emit videoCodecChanged(videoCodecCombo_->currentData().toInt());
-        });
+        connect(themeCombo_,
+            &QComboBox::currentIndexChanged,
+            this,
+            [this]
+            {
+                emit themeChanged(static_cast<ThemeMode>(themeCombo_->currentData().toInt()));
+            });
+        connect(languageCombo_,
+            &QComboBox::currentIndexChanged,
+            this,
+            [this]
+            {
+                emit languageChanged(languageCombo_->currentData().toString());
+            });
+        connect(updateCheck_,
+            &QCheckBox::toggled,
+            this,
+            [this](bool enabled)
+            {
+                emit checkForUpdatesChanged(enabled);
+            });
+        connect(logCheck_,
+            &QCheckBox::toggled,
+            this,
+            [this](bool enabled)
+            {
+                emit fileLoggingChanged(enabled);
+            });
+        connect(gpuCheck_,
+            &QCheckBox::toggled,
+            this,
+            [this](bool enabled)
+            {
+                emit gpuAccelerationChanged(enabled);
+            });
+        connect(videoQualityCombo_,
+            &QComboBox::currentIndexChanged,
+            this,
+            [this]
+            {
+                emit videoQualityChanged(videoQualityCombo_->currentData().toInt());
+            });
+        connect(videoCodecCombo_,
+            &QComboBox::currentIndexChanged,
+            this,
+            [this]
+            {
+                emit videoCodecChanged(videoCodecCombo_->currentData().toInt());
+            });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
         retranslate();

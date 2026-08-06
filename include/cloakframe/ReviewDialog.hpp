@@ -34,13 +34,13 @@ namespace cloakframe
 
     public:
         ReviewDialog(const QImage &image,
-                     const QString &sourceName,
-                     const QVector<QRectF> &detected,
-                     int currentIndex,
-                     int total,
-                     bool preserveMetadata,
-                     const ReviewPreviewSpec &previewSpec,
-                     QWidget *parent = nullptr);
+            const QString &sourceName,
+            const QVector<QRectF> &detected,
+            int currentIndex,
+            int total,
+            bool preserveMetadata,
+            const ReviewPreviewSpec &previewSpec,
+            QWidget *parent = nullptr);
 
         [[nodiscard]] ReviewResult result() const;
 

@@ -5,8 +5,8 @@
 
 namespace cloakframe
 {
-    inline bool isWithinRoot(const std::filesystem::path &candidate,
-                             const std::filesystem::path &root)
+    inline bool isWithinRoot(
+        const std::filesystem::path &candidate, const std::filesystem::path &root)
     {
         std::error_code ec;
         const auto relative = std::filesystem::relative(candidate, root, ec);
@@ -18,8 +18,8 @@ namespace cloakframe
         return first != relative.end() && *first != "..";
     }
 
-    inline bool destinationIsSafe(const std::filesystem::path &destination,
-                                  const std::filesystem::path &safeRoot)
+    inline bool destinationIsSafe(
+        const std::filesystem::path &destination, const std::filesystem::path &safeRoot)
     {
         const auto lexicalDestination = destination.lexically_normal();
         const auto lexicalRoot = safeRoot.lexically_normal();
@@ -42,8 +42,7 @@ namespace cloakframe
             const auto status = std::filesystem::symlink_status(current, ec);
             if (ec)
             {
-                if (ec == std::errc::no_such_file_or_directory ||
-                    ec == std::errc::not_a_directory)
+                if (ec == std::errc::no_such_file_or_directory || ec == std::errc::not_a_directory)
                 {
                     current = current.parent_path();
                     continue;
@@ -59,8 +58,7 @@ namespace cloakframe
             if (std::filesystem::exists(status))
             {
                 const auto resolved = std::filesystem::canonical(current, ec);
-                return !ec &&
-                       (resolved == canonicalRoot || isWithinRoot(resolved, canonicalRoot));
+                return !ec && (resolved == canonicalRoot || isWithinRoot(resolved, canonicalRoot));
             }
             current = current.parent_path();
         }

@@ -1,10 +1,9 @@
 #include "cloakframe/SelfUpdater.hpp"
 
-#include <Velopack.hpp>
-
 #include <QMetaObject>
 #include <QThread>
 
+#include <Velopack.hpp>
 #include <exception>
 #include <memory>
 #include <optional>
@@ -27,7 +26,7 @@ namespace cloakframe
                     if (!manager_)
                     {
                         manager_ = std::make_unique<Velopack::UpdateManager>(
-                                std::make_unique<Velopack::GithubSource>(kRepoUrl));
+                            std::make_unique<Velopack::GithubSource>(kRepoUrl));
                     }
                     update_ = manager_->CheckForUpdates();
                 }
@@ -41,7 +40,7 @@ namespace cloakframe
                     return;
                 }
                 emit updateAvailable(QString::fromStdString(update_->TargetFullRelease.Version),
-                                     QString::fromStdString(update_->TargetFullRelease.NotesMarkdown));
+                    QString::fromStdString(update_->TargetFullRelease.NotesMarkdown));
             }
 
             void download()
@@ -111,21 +110,23 @@ namespace cloakframe
 
         public:
             explicit VelopackSelfUpdater(QObject *parent)
-                : SelfUpdater(parent),
-                  thread_(new QThread),
-                  worker_(new VelopackWorker)
+                : SelfUpdater(parent)
+                , thread_(new QThread)
+                , worker_(new VelopackWorker)
             {
                 worker_->moveToThread(thread_);
                 connect(thread_, &QThread::finished, worker_, &QObject::deleteLater);
                 connect(thread_, &QThread::finished, thread_, &QObject::deleteLater);
-                connect(worker_, &VelopackWorker::updateAvailable,
-                        this, &SelfUpdater::updateAvailable);
+                connect(
+                    worker_, &VelopackWorker::updateAvailable, this, &SelfUpdater::updateAvailable);
                 connect(worker_, &VelopackWorker::checkFailed, this, &SelfUpdater::checkFailed);
                 connect(worker_, &VelopackWorker::progress, this, &SelfUpdater::downloadProgress);
-                connect(worker_, &VelopackWorker::downloadFinished,
-                        this, &SelfUpdater::downloadFinished);
-                connect(worker_, &VelopackWorker::downloadFailed,
-                        this, &SelfUpdater::downloadFailed);
+                connect(worker_,
+                    &VelopackWorker::downloadFinished,
+                    this,
+                    &SelfUpdater::downloadFinished);
+                connect(
+                    worker_, &VelopackWorker::downloadFailed, this, &SelfUpdater::downloadFailed);
                 connect(worker_, &VelopackWorker::applied, this, &SelfUpdater::readyToQuit);
                 thread_->start();
             }

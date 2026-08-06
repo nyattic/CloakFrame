@@ -18,6 +18,8 @@ set(CMAKE_AUTOUIC ON)
 
 option(CLOAKFRAME_SELF_UPDATE
     "Enable in-app self-update (Velopack on Windows and Linux, Sparkle on macOS)" ON)
+option(CLOAKFRAME_WARNINGS_AS_ERRORS
+    "Treat compiler warnings as errors" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CloakFrameHarden)
@@ -103,3 +105,5 @@ add_subdirectory(tools)
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
+
+include(CloakFrameTools)

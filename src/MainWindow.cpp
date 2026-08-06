@@ -1,5 +1,6 @@
 #include "cloakframe/MainWindow.hpp"
 
+#include "cloakframe/Detector.hpp"
 #include "cloakframe/ImageIo.hpp"
 #include "cloakframe/ImageScanner.hpp"
 #include "cloakframe/ModelCatalog.hpp"
@@ -9,69 +10,66 @@
 #include "cloakframe/PlateDetector.hpp"
 #include "cloakframe/ProcessorWorker.hpp"
 #include "cloakframe/ReviewDialog.hpp"
-#include "cloakframe/Detector.hpp"
 #include "cloakframe/SelfUpdater.hpp"
 #include "cloakframe/SettingsDialog.hpp"
 #include "cloakframe/Theme.hpp"
 #include "cloakframe/UpdateChecker.hpp"
-#include "cloakframe/VideoReviewDialog.hpp"
 #include "cloakframe/VideoIo.hpp"
+#include "cloakframe/VideoReviewDialog.hpp"
 
 #include <QApplication>
 #include <QCheckBox>
+#include <QCloseEvent>
 #include <QComboBox>
 #include <QContextMenuEvent>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QDir>
 #include <QEvent>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QImageReader>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLibraryInfo>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QLocale>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QPaintEvent>
+#include <QPainter>
 #include <QPlainTextEdit>
 #include <QPointer>
-#include <QCloseEvent>
+#include <QProcess>
 #include <QProgressBar>
 #include <QProgressDialog>
 #include <QPushButton>
+#include <QScreen>
 #include <QScrollArea>
 #include <QSettings>
 #include <QShortcut>
 #include <QSpinBox>
 #include <QStandardPaths>
 #include <QStatusBar>
-#include <QToolButton>
+#include <QStyle>
+#include <QStyleHints>
 #include <QThread>
+#include <QTimer>
+#include <QToolButton>
 #include <QUrl>
 #include <QWidget>
 
-#include <QDir>
-#include <QEventLoop>
-#include <QImageReader>
-#include <QLibraryInfo>
-#include <QPainter>
-#include <QPaintEvent>
-#include <QProcess>
-#include <QProgressDialog>
-#include <QScreen>
-#include <QStyle>
-#include <QStyleHints>
-#include <QTimer>
+#include <opencv2/imgproc.hpp>
 
 #include <spdlog/spdlog.h>
-
-#include <opencv2/imgproc.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -100,54 +98,69 @@ namespace cloakframe
             const QFileInfo info(path);
             if (!info.exists() || !info.isFile())
             {
-                return {{}, {}, QCoreApplication::translate(
-                    "cloakframe::MainWindow", "Choose an existing image file.")};
+                return {{},
+                    {},
+                    QCoreApplication::translate(
+                        "cloakframe::MainWindow", "Choose an existing image file.")};
             }
             QFile file(info.absoluteFilePath());
             if (!file.open(QIODevice::ReadOnly))
             {
-                return {{}, {}, QCoreApplication::translate(
-                    "cloakframe::MainWindow", "Choose an existing image file.")};
+                return {{},
+                    {},
+                    QCoreApplication::translate(
+                        "cloakframe::MainWindow", "Choose an existing image file.")};
             }
             if (file.size() <= 0 || file.size() > kMaxCustomImageBytes)
             {
-                return {{}, {}, QCoreApplication::translate(
-                    "cloakframe::MainWindow", "The selected image must be no larger than 64 MB.")};
+                return {{},
+                    {},
+                    QCoreApplication::translate("cloakframe::MainWindow",
+                        "The selected image must be no larger than 64 MB.")};
             }
 
             QImageReader reader(&file);
             reader.setAutoTransform(true);
             if (!reader.canRead())
             {
-                return {{}, {}, QCoreApplication::translate(
-                    "cloakframe::MainWindow", "The selected file is not a supported image.")};
+                return {{},
+                    {},
+                    QCoreApplication::translate(
+                        "cloakframe::MainWindow", "The selected file is not a supported image.")};
             }
 
             const QSize sourceSize = reader.size();
             if (!sourceSize.isValid() || sourceSize.width() <= 0 || sourceSize.height() <= 0)
             {
-                return {{}, {}, QCoreApplication::translate(
-                    "cloakframe::MainWindow", "The selected image has invalid dimensions.")};
+                return {{},
+                    {},
+                    QCoreApplication::translate(
+                        "cloakframe::MainWindow", "The selected image has invalid dimensions.")};
             }
 
             QSize decodedSize = sourceSize;
             if (std::max(decodedSize.width(), decodedSize.height()) > kMaxCustomImageLongEdge)
             {
-                decodedSize.scale(kMaxCustomImageLongEdge, kMaxCustomImageLongEdge,
-                                  Qt::KeepAspectRatio);
+                decodedSize.scale(
+                    kMaxCustomImageLongEdge, kMaxCustomImageLongEdge, Qt::KeepAspectRatio);
                 reader.setScaledSize(decodedSize);
             }
 
             QImage decoded = reader.read();
             if (decoded.isNull())
             {
-                return {{}, {}, QCoreApplication::translate(
-                            "cloakframe::MainWindow", "The selected image could not be decoded: %1")
-                            .arg(reader.errorString())};
+                return {{},
+                    {},
+                    QCoreApplication::translate(
+                        "cloakframe::MainWindow", "The selected image could not be decoded: %1")
+                        .arg(reader.errorString())};
             }
             decoded = decoded.convertToFormat(QImage::Format_RGBA8888);
-            cv::Mat rgba(decoded.height(), decoded.width(), CV_8UC4, decoded.bits(),
-                         static_cast<std::size_t>(decoded.bytesPerLine()));
+            cv::Mat rgba(decoded.height(),
+                decoded.width(),
+                CV_8UC4,
+                decoded.bits(),
+                static_cast<std::size_t>(decoded.bytesPerLine()));
             cv::Mat bgra;
             cv::cvtColor(rgba, bgra, cv::COLOR_RGBA2BGRA);
 
@@ -166,7 +179,8 @@ namespace cloakframe
 
         QString defaultOutputDirectory()
         {
-            const auto pictures = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+            const auto pictures =
+                QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
             if (!pictures.isEmpty())
             {
                 return pictures + "/CloakFrame";
@@ -205,9 +219,21 @@ namespace cloakframe
             }
             QProcess process;
             process.start(tools->ffmpegPath,
-                          {"-v", "error", "-ss", "0", "-i", path,
-                           "-frames:v", "1", "-vf", "scale=80:-2",
-                           "-f", "image2pipe", "-c:v", "png", "-"});
+                {"-v",
+                    "error",
+                    "-ss",
+                    "0",
+                    "-i",
+                    path,
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "scale=80:-2",
+                    "-f",
+                    "image2pipe",
+                    "-c:v",
+                    "png",
+                    "-"});
             if (!process.waitForStarted(3000) || !process.waitForFinished(3000))
             {
                 process.kill();
@@ -233,12 +259,15 @@ namespace cloakframe
             return card;
         }
 
-        QPixmap anonymizationSamplePixmap(AnonymizationMethod method, MaskShape shape,
-                                          int blockSize, float padding, bool softEdges,
-                                          const cv::Mat &customImage)
+        QPixmap anonymizationSamplePixmap(AnonymizationMethod method,
+            MaskShape shape,
+            int blockSize,
+            float padding,
+            bool softEdges,
+            const cv::Mat &customImage)
         {
             qreal dpr = 1.0;
-            for (const QScreen *screen: QGuiApplication::screens())
+            for (const QScreen *screen : QGuiApplication::screens())
             {
                 dpr = std::max(dpr, screen->devicePixelRatio());
             }
@@ -253,21 +282,29 @@ namespace cloakframe
                 {
                     const bool checker = ((x / cell) + (y / cell)) % 2 == 0;
                     const int base = checker ? 205 : 150;
-                    sample.at<cv::Vec3b>(y, x) = cv::Vec3b(
-                        static_cast<uchar>(std::clamp(base - (y * 60) / h, 0, 255)),
-                        static_cast<uchar>(std::clamp(base - 40 + (x * 70) / w, 0, 255)),
-                        static_cast<uchar>(std::clamp(base + (y * 40) / h - 20, 0, 255)));
+                    sample.at<cv::Vec3b>(y, x) =
+                        cv::Vec3b(static_cast<uchar>(std::clamp(base - (y * 60) / h, 0, 255)),
+                            static_cast<uchar>(std::clamp(base - 40 + (x * 70) / w, 0, 255)),
+                            static_cast<uchar>(std::clamp(base + (y * 40) / h - 20, 0, 255)));
                 }
             }
 
             FaceDetections detections;
             detections.push_back({cv::Rect2f(w * 0.3F, h * 0.2F, w * 0.4F, h * 0.6F), 1.0F});
-            applyAnonymization(sample, detections, method,
-                               std::max(2, static_cast<int>(std::lround(blockSize * dpr))),
-                               padding, shape, softEdges, customImage);
+            applyAnonymization(sample,
+                detections,
+                method,
+                std::max(2, static_cast<int>(std::lround(blockSize * dpr))),
+                padding,
+                shape,
+                softEdges,
+                customImage);
 
-            const QImage image(sample.data, sample.cols, sample.rows,
-                               static_cast<int>(sample.step), QImage::Format_BGR888);
+            const QImage image(sample.data,
+                sample.cols,
+                sample.rows,
+                static_cast<int>(sample.step),
+                QImage::Format_BGR888);
             QPixmap pixmap = QPixmap::fromImage(image.copy());
             pixmap.setDevicePixelRatio(dpr);
             return pixmap;
@@ -287,7 +324,7 @@ namespace cloakframe
             void removeSelectedItems()
             {
                 const auto items = selectedItems();
-                for (auto *item: items)
+                for (auto *item : items)
                 {
                     delete item;
                 }
@@ -304,7 +341,8 @@ namespace cloakframe
                 QPainter painter(viewport());
                 painter.setPen(palette().placeholderText().color());
                 painter.drawText(viewport()->rect().adjusted(24, 0, -24, 0),
-                                 Qt::AlignCenter | Qt::TextWordWrap, placeholder_);
+                    Qt::AlignCenter | Qt::TextWordWrap,
+                    placeholder_);
             }
 
             void keyPressEvent(QKeyEvent *event) override
@@ -342,7 +380,8 @@ namespace cloakframe
         };
     }
 
-    MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
+    MainWindow::MainWindow(QWidget *parent)
+        : QMainWindow(parent)
     {
         qRegisterMetaType<VideoReviewRequest>();
         qRegisterMetaType<VideoReviewResult>();
@@ -383,16 +422,18 @@ namespace cloakframe
         settingsButton_->setFixedSize(36, 36);
         settingsButton_->setCursor(Qt::PointingHandCursor);
         updateSettingsIcon();
-        addRetranslation([this]
-                         {
-                             settingsButton_->setToolTip(tr("Settings"));
-                             settingsButton_->setAccessibleName(tr("Settings"));
-                         });
+        addRetranslation(
+            [this]
+            {
+                settingsButton_->setToolTip(tr("Settings"));
+                settingsButton_->setAccessibleName(tr("Settings"));
+            });
         connect(settingsButton_, &QToolButton::clicked, this, &MainWindow::openSettings);
         settingsShortcut_ = new QShortcut(QKeySequence::Preferences, this);
         connect(settingsShortcut_, &QShortcut::activated, this, &MainWindow::openSettings);
 
-        auto *versionLabel = new QLabel(QString("v%1").arg(QCoreApplication::applicationVersion()), header);
+        auto *versionLabel =
+            new QLabel(QString("v%1").arg(QCoreApplication::applicationVersion()), header);
         versionLabel->setObjectName("subtitleLabel");
 
         updateLabel_ = new QLabel(header);
@@ -415,7 +456,12 @@ namespace cloakframe
 
         auto *subtitle = new QLabel(header);
         subtitle->setObjectName("subtitleLabel");
-        addRetranslation([subtitle]{ subtitle->setText(tr("Local, private redaction of faces and license plates in photos and videos")); });
+        addRetranslation(
+            [subtitle]
+            {
+                subtitle->setText(tr(
+                    "Local, private redaction of faces and license plates in photos and videos"));
+            });
         headerLayout->addLayout(titleRow);
         headerLayout->addWidget(subtitle);
         root->addWidget(header);
@@ -428,60 +474,87 @@ namespace cloakframe
 
             auto *modelTitle = makeSectionTitle(card);
             cardLayout->addWidget(modelTitle);
-            addRetranslation([modelTitle]{ modelTitle->setText(tr("Model")); });
+            addRetranslation(
+                [modelTitle]
+                {
+                    modelTitle->setText(tr("Model"));
+                });
 
             auto *modelHint = makeSectionHint(card);
             cardLayout->addWidget(modelHint);
-            addRetranslation([modelHint]
-                             { modelHint->setText(tr("Choose speed vs. accuracy, or load a custom SCRFD ONNX file.")); });
+            addRetranslation(
+                [modelHint]
+                {
+                    modelHint->setText(
+                        tr("Choose speed vs. accuracy, or load a custom SCRFD ONNX file."));
+                });
 
             detectCombo_ = new QComboBox(card);
             detectCombo_->setMinimumHeight(34);
             detectCombo_->addItem(QString(), "faces");
             detectCombo_->addItem(QString(), "plates");
             detectCombo_->addItem(QString(), "both");
-            addRetranslation([this]
-                             {
-                                 detectCombo_->setItemText(0, tr("Faces"));
-                                 detectCombo_->setItemText(1, tr("License plates"));
-                                 detectCombo_->setItemText(2, tr("Faces + license plates"));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    detectCombo_->setItemText(0, tr("Faces"));
+                    detectCombo_->setItemText(1, tr("License plates"));
+                    detectCombo_->setItemText(2, tr("Faces + license plates"));
+                });
             cardLayout->addWidget(detectCombo_);
 
             modelCombo_ = new QComboBox(card);
             modelCombo_->setMinimumHeight(34);
             cardLayout->addWidget(modelCombo_);
-            connect(detectCombo_, &QComboBox::currentIndexChanged, this, [this]
-            {
-                const bool facesNeeded = detectCombo_->currentData().toString() != "plates";
-                modelCombo_->setEnabled(!processing_ && facesNeeded);
-                modelPathEdit_->setEnabled(!processing_ && facesNeeded);
-                modelBrowseButton_->setEnabled(!processing_ && facesNeeded);
-                downloadButton_->setEnabled(!processing_ && facesNeeded);
-            });
+            connect(detectCombo_,
+                &QComboBox::currentIndexChanged,
+                this,
+                [this]
+                {
+                    const bool facesNeeded = detectCombo_->currentData().toString() != "plates";
+                    modelCombo_->setEnabled(!processing_ && facesNeeded);
+                    modelPathEdit_->setEnabled(!processing_ && facesNeeded);
+                    modelBrowseButton_->setEnabled(!processing_ && facesNeeded);
+                    downloadButton_->setEnabled(!processing_ && facesNeeded);
+                });
 
             auto *pathRow = new QHBoxLayout();
             pathRow->setSpacing(8);
             modelPathEdit_ = new QLineEdit(card);
             modelPathEdit_->setReadOnly(true);
-            addRetranslation([this]{ modelPathEdit_->setPlaceholderText(tr("Face model path")); });
+            addRetranslation(
+                [this]
+                {
+                    modelPathEdit_->setPlaceholderText(tr("Face model path"));
+                });
             downloadButton_ = new QPushButton(card);
             downloadButton_->setObjectName("primaryButton");
-            addRetranslation([this]{ downloadButton_->setText(tr("Download")); });
+            addRetranslation(
+                [this]
+                {
+                    downloadButton_->setText(tr("Download"));
+                });
             downloadButton_->setCursor(Qt::PointingHandCursor);
             downloadButton_->setVisible(false);
             modelBrowseButton_ = new QPushButton(card);
-            addRetranslation([this]{ modelBrowseButton_->setText(tr("Browse…")); });
+            addRetranslation(
+                [this]
+                {
+                    modelBrowseButton_->setText(tr("Browse…"));
+                });
             modelBrowseButton_->setCursor(Qt::PointingHandCursor);
             pathRow->addWidget(modelPathEdit_, 1);
             pathRow->addWidget(downloadButton_);
             pathRow->addWidget(modelBrowseButton_);
             cardLayout->addLayout(pathRow);
 
-            connect(downloadButton_, &QPushButton::clicked, this, &MainWindow::downloadSelectedModel);
+            connect(
+                downloadButton_, &QPushButton::clicked, this, &MainWindow::downloadSelectedModel);
             connect(modelBrowseButton_, &QPushButton::clicked, this, &MainWindow::chooseModel);
-            connect(modelCombo_, &QComboBox::currentIndexChanged,
-                    this, &MainWindow::updateModelPathFromSelection);
+            connect(modelCombo_,
+                &QComboBox::currentIndexChanged,
+                this,
+                &MainWindow::updateModelPathFromSelection);
 
             root->addWidget(card);
         }
@@ -494,12 +567,20 @@ namespace cloakframe
 
             auto *inputsTitle = makeSectionTitle(card);
             cardLayout->addWidget(inputsTitle);
-            addRetranslation([inputsTitle]{ inputsTitle->setText(tr("Inputs")); });
+            addRetranslation(
+                [inputsTitle]
+                {
+                    inputsTitle->setText(tr("Inputs"));
+                });
 
             auto *inputsHint = makeSectionHint(card);
             cardLayout->addWidget(inputsHint);
-            addRetranslation([inputsHint]
-                             { inputsHint->setText(tr("Drag images, videos, or folders here, or use the buttons below.")); });
+            addRetranslation(
+                [inputsHint]
+                {
+                    inputsHint->setText(
+                        tr("Drag images, videos, or folders here, or use the buttons below."));
+                });
 
             auto *dropList = new DropListWidget(card);
             inputList_ = dropList;
@@ -507,39 +588,62 @@ namespace cloakframe
             inputList_->setMinimumHeight(140);
             inputList_->setAlternatingRowColors(false);
             inputList_->setIconSize(QSize(40, 40));
-            addRetranslation([this, dropList]
-                             {
-                                 dropList->setPlaceholderText(tr("Drop images, videos, or folders here"));
-                                 inputList_->setAccessibleName(tr("Input images and folders"));
-                                 inputList_->setToolTip(tr("Right-click for options · Delete removes selected items"));
-                             });
+            addRetranslation(
+                [this, dropList]
+                {
+                    dropList->setPlaceholderText(tr("Drop images, videos, or folders here"));
+                    inputList_->setAccessibleName(tr("Input images and folders"));
+                    inputList_->setToolTip(
+                        tr("Right-click for options · Delete removes selected items"));
+                });
             cardLayout->addWidget(inputList_);
 
             auto *buttonRow = new QHBoxLayout();
             buttonRow->setSpacing(8);
             addFilesButton_ = new QPushButton(card);
-            addRetranslation([this]{ addFilesButton_->setText(tr("Add Files")); });
+            addRetranslation(
+                [this]
+                {
+                    addFilesButton_->setText(tr("Add Files"));
+                });
             addFolderButton_ = new QPushButton(card);
-            addRetranslation([this]{ addFolderButton_->setText(tr("Add Folder")); });
+            addRetranslation(
+                [this]
+                {
+                    addFolderButton_->setText(tr("Add Folder"));
+                });
             clearInputsButton_ = new QPushButton(card);
-            addRetranslation([this]{ clearInputsButton_->setText(tr("Clear")); });
+            addRetranslation(
+                [this]
+                {
+                    clearInputsButton_->setText(tr("Clear"));
+                });
             addFilesButton_->setCursor(Qt::PointingHandCursor);
             addFolderButton_->setCursor(Qt::PointingHandCursor);
             clearInputsButton_->setCursor(Qt::PointingHandCursor);
             recursiveCheck_ = new QCheckBox(card);
-            addRetranslation([this]{ recursiveCheck_->setText(tr("Include subfolders")); });
+            addRetranslation(
+                [this]
+                {
+                    recursiveCheck_->setText(tr("Include subfolders"));
+                });
             recursiveCheck_->setChecked(true);
             reviewCheck_ = new QCheckBox(card);
-            addRetranslation([this]{ reviewCheck_->setText(tr("Review before saving")); });
+            addRetranslation(
+                [this]
+                {
+                    reviewCheck_->setText(tr("Review before saving"));
+                });
             reviewCheck_->setChecked(false);
-            addRetranslation([this]
-                             {
-                                 reviewCheck_->setToolTip(tr(
-                                     "Review detections before output:\n"
-                                     "  • Images: exclude boxes or add missed regions\n"
-                                     "  • Videos: scrub the timeline, exclude false tracks, or add "
-                                     "missed tracks with keyframes"));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    reviewCheck_->setToolTip(
+                        tr("Review detections before output:\n"
+                           "  • Images: exclude boxes or add missed regions\n"
+                           "  • Videos: scrub the timeline, exclude false tracks, or add "
+                           "missed tracks with keyframes"));
+                });
 
             connect(addFilesButton_, &QPushButton::clicked, this, &MainWindow::chooseFiles);
             connect(addFolderButton_, &QPushButton::clicked, this, &MainWindow::chooseFolder);
@@ -564,45 +668,67 @@ namespace cloakframe
 
             auto *outputTitle = makeSectionTitle(card);
             cardLayout->addWidget(outputTitle);
-            addRetranslation([outputTitle]{ outputTitle->setText(tr("Output")); });
+            addRetranslation(
+                [outputTitle]
+                {
+                    outputTitle->setText(tr("Output"));
+                });
 
             auto *outputHint = makeSectionHint(card);
             cardLayout->addWidget(outputHint);
-            addRetranslation([outputHint]
-                             { outputHint->setText(tr("Anonymized copies are written here, preserving folder structure.")); });
+            addRetranslation(
+                [outputHint]
+                {
+                    outputHint->setText(
+                        tr("Anonymized copies are written here, preserving folder structure."));
+                });
 
             auto *outputRow = new QHBoxLayout();
             outputRow->setSpacing(8);
             outputDirEdit_ = new QLineEdit(defaultOutputDirectory(), card);
             outputBrowseButton_ = new QPushButton(card);
-            addRetranslation([this]{ outputBrowseButton_->setText(tr("Choose…")); });
+            addRetranslation(
+                [this]
+                {
+                    outputBrowseButton_->setText(tr("Choose…"));
+                });
             outputBrowseButton_->setCursor(Qt::PointingHandCursor);
             outputRow->addWidget(outputDirEdit_, 1);
             outputRow->addWidget(outputBrowseButton_);
             cardLayout->addLayout(outputRow);
-            connect(outputBrowseButton_, &QPushButton::clicked,
-                    this, &MainWindow::chooseOutputDirectory);
+            connect(outputBrowseButton_,
+                &QPushButton::clicked,
+                this,
+                &MainWindow::chooseOutputDirectory);
 
             preserveMetaCheck_ = new QCheckBox(card);
-            addRetranslation([this]
-                             { preserveMetaCheck_->setText(tr("Preserve selected EXIF metadata")); });
+            addRetranslation(
+                [this]
+                {
+                    preserveMetaCheck_->setText(tr("Preserve selected EXIF metadata"));
+                });
             preserveMetaCheck_->setChecked(false);
-            addRetranslation([this]
-                             {
-                                 if (metadataSupportAvailable())
-                                 {
-                                     preserveMetaCheck_->setToolTip(tr(
-                                         "Off (default): output carries no metadata — GPS, camera, and timestamps are removed.\n"
-                                         "On: copies selected EXIF fields such as camera, timestamps, and location. Embedded "
-                                         "previews, IPTC, XMP, comments, and color profiles are removed. Format and bit depth "
-                                         "are preserved at maximum quality."));
-                                 }
-                                 else
-                                 {
-                                     preserveMetaCheck_->setToolTip(tr(
-                                         "Metadata preservation is unavailable in this build. Output metadata will be removed."));
-                                 }
-                             });
+            addRetranslation(
+                [this]
+                {
+                    if (metadataSupportAvailable())
+                    {
+                        preserveMetaCheck_->setToolTip(
+                            tr("Off (default): output carries no metadata — GPS, camera, and "
+                               "timestamps are removed.\n"
+                               "On: copies selected EXIF fields such as camera, timestamps, and "
+                               "location. Embedded "
+                               "previews, IPTC, XMP, comments, and color profiles are removed. "
+                               "Format and bit depth "
+                               "are preserved at maximum quality."));
+                    }
+                    else
+                    {
+                        preserveMetaCheck_->setToolTip(
+                            tr("Metadata preservation is unavailable in this build. Output "
+                               "metadata will be removed."));
+                    }
+                });
             preserveMetaCheck_->setEnabled(metadataSupportAvailable());
             cardLayout->addWidget(preserveMetaCheck_);
 
@@ -621,7 +747,11 @@ namespace cloakframe
 
             advancedToggle_ = new QToolButton(card);
             advancedToggle_->setObjectName("advancedToggle");
-            addRetranslation([this]{ advancedToggle_->setText(tr("Advanced Options")); });
+            addRetranslation(
+                [this]
+                {
+                    advancedToggle_->setText(tr("Advanced Options"));
+                });
             advancedToggle_->setCheckable(true);
             advancedToggle_->setChecked(false);
             advancedToggle_->setArrowType(Qt::RightArrow);
@@ -629,7 +759,11 @@ namespace cloakframe
             advancedToggle_->setCursor(Qt::PointingHandCursor);
 
             resetAdvancedButton_ = new QPushButton(card);
-            addRetranslation([this]{ resetAdvancedButton_->setText(tr("Reset to defaults")); });
+            addRetranslation(
+                [this]
+                {
+                    resetAdvancedButton_->setText(tr("Reset to defaults"));
+                });
             resetAdvancedButton_->setCursor(Qt::PointingHandCursor);
 
             headerRow->addWidget(advancedToggle_);
@@ -644,31 +778,37 @@ namespace cloakframe
 
             auto *advancedHint = makeSectionHint(advancedBody_);
             bodyLayout->addWidget(advancedHint);
-            addRetranslation([advancedHint]
-                             { advancedHint->setText(tr("Tweak detection and anonymization behavior. Defaults work for most photos.")); });
+            addRetranslation(
+                [advancedHint]
+                {
+                    advancedHint->setText(tr("Tweak detection and anonymization behavior. Defaults "
+                                             "work for most photos."));
+                });
 
             methodCombo_ = new QComboBox(advancedBody_);
             methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Mosaic));
             methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Blur));
             methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Fill));
             methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::CustomImage));
-            addRetranslation([this]
-                             {
-                                 methodCombo_->setItemText(0, tr("Mosaic (pixelate)"));
-                                 methodCombo_->setItemText(1, tr("Gaussian blur"));
-                                 methodCombo_->setItemText(2, tr("Solid fill (blackout)"));
-                                 methodCombo_->setItemText(3, tr("Custom image"));
-                             });
-            addRetranslation([this]
-                             {
-                                 methodCombo_->setToolTip(tr(
-                                     "How detected faces are obscured.\n"
-                                     "Mosaic = pixelation (block size below).\n"
-                                     "Gaussian blur = strong smoothing scaled to face size.\n"
-                                     "Solid fill = opaque black box, irreversible.\n"
-                                     "Custom image = place your selected image over every detected region. "
-                                     "Default: Mosaic"));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    methodCombo_->setItemText(0, tr("Mosaic (pixelate)"));
+                    methodCombo_->setItemText(1, tr("Gaussian blur"));
+                    methodCombo_->setItemText(2, tr("Solid fill (blackout)"));
+                    methodCombo_->setItemText(3, tr("Custom image"));
+                });
+            addRetranslation(
+                [this]
+                {
+                    methodCombo_->setToolTip(
+                        tr("How detected faces are obscured.\n"
+                           "Mosaic = pixelation (block size below).\n"
+                           "Gaussian blur = strong smoothing scaled to face size.\n"
+                           "Solid fill = opaque black box, irreversible.\n"
+                           "Custom image = place your selected image over every detected region. "
+                           "Default: Mosaic"));
+                });
 
             customImagePicker_ = new QWidget(advancedBody_);
             auto *customImageLayout = new QHBoxLayout(customImagePicker_);
@@ -680,96 +820,103 @@ namespace cloakframe
             customImageBrowseButton_->setCursor(Qt::PointingHandCursor);
             customImageLayout->addWidget(customImagePathEdit_, 1);
             customImageLayout->addWidget(customImageBrowseButton_);
-            addRetranslation([this]
-                             {
-                                 customImagePathEdit_->setPlaceholderText(
-                                     tr("Choose an image to cover detected faces"));
-                                 customImagePathEdit_->setToolTip(tr(
-                                     "The image keeps its aspect ratio and follows detected face tilt "
-                                     "when available. Transparent pixels reveal a safety mosaic instead "
-                                     "of the original image."));
-                                 customImageBrowseButton_->setText(tr("Browse…"));
-                                 customImageBrowseButton_->setAccessibleName(
-                                     tr("Choose custom image"));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    customImagePathEdit_->setPlaceholderText(
+                        tr("Choose an image to cover detected faces"));
+                    customImagePathEdit_->setToolTip(
+                        tr("The image keeps its aspect ratio and follows detected face tilt "
+                           "when available. Transparent pixels reveal a safety mosaic instead "
+                           "of the original image."));
+                    customImageBrowseButton_->setText(tr("Browse…"));
+                    customImageBrowseButton_->setAccessibleName(tr("Choose custom image"));
+                });
 
             shapeCombo_ = new QComboBox(advancedBody_);
             shapeCombo_->addItem(QString(), static_cast<int>(MaskShape::Rectangle));
             shapeCombo_->addItem(QString(), static_cast<int>(MaskShape::Ellipse));
-            addRetranslation([this]
-                             {
-                                 shapeCombo_->setItemText(0, tr("Rectangle"));
-                                 shapeCombo_->setItemText(1, tr("Rounded (ellipse)"));
-                             });
-            addRetranslation([this]
-                             {
-                                 shapeCombo_->setToolTip(tr(
-                                     "Shape of the obscured region.\n"
-                                     "Rectangle = full padded box.\n"
-                                     "Rounded = elliptical mask that follows the face and leaves corners untouched. "
-                                     "Default: Rectangle"));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    shapeCombo_->setItemText(0, tr("Rectangle"));
+                    shapeCombo_->setItemText(1, tr("Rounded (ellipse)"));
+                });
+            addRetranslation(
+                [this]
+                {
+                    shapeCombo_->setToolTip(tr("Shape of the obscured region.\n"
+                                               "Rectangle = full padded box.\n"
+                                               "Rounded = elliptical mask that follows the face "
+                                               "and leaves corners untouched. "
+                                               "Default: Rectangle"));
+                });
 
             softEdgeCheck_ = new QCheckBox(advancedBody_);
-            addRetranslation([this]
-                             {
-                                 softEdgeCheck_->setAccessibleName(tr("Soft edges"));
-                                 softEdgeCheck_->setToolTip(tr(
-                                     "Fades the edge of the obscured region into the photo "
-                                     "instead of a hard cutoff.\n"
-                                     "The fade only extends outward, so the detected area "
-                                     "stays fully covered. Default: off"));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    softEdgeCheck_->setAccessibleName(tr("Soft edges"));
+                    softEdgeCheck_->setToolTip(
+                        tr("Fades the edge of the obscured region into the photo "
+                           "instead of a hard cutoff.\n"
+                           "The fade only extends outward, so the detected area "
+                           "stays fully covered. Default: off"));
+                });
 
             scoreThresholdSpin_ = new QDoubleSpinBox(advancedBody_);
             scoreThresholdSpin_->setRange(0.05, 0.99);
             scoreThresholdSpin_->setSingleStep(0.05);
             scoreThresholdSpin_->setDecimals(2);
             scoreThresholdSpin_->setValue(kDefaultScoreThreshold);
-            addRetranslation([this]
-                             {
-                                 scoreThresholdSpin_->setToolTip(tr(
-                                     "Minimum confidence to accept a face.\n"
-                                     "Higher = fewer false positives but may miss small or side-profile faces.\n"
-                                     "Lower = catches more faces but may blur non-face regions. Default: 0.50"));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    scoreThresholdSpin_->setToolTip(tr(
+                        "Minimum confidence to accept a face.\n"
+                        "Higher = fewer false positives but may miss small or side-profile faces.\n"
+                        "Lower = catches more faces but may blur non-face regions. Default: 0.50"));
+                });
 
             nmsThresholdSpin_ = new QDoubleSpinBox(advancedBody_);
             nmsThresholdSpin_->setRange(0.05, 0.95);
             nmsThresholdSpin_->setSingleStep(0.05);
             nmsThresholdSpin_->setDecimals(2);
             nmsThresholdSpin_->setValue(kDefaultNmsThreshold);
-            addRetranslation([this]
-                             {
-                                 nmsThresholdSpin_->setToolTip(tr(
-                                     "Non-Maximum Suppression overlap threshold for duplicate boxes.\n"
-                                     "Lower = more aggressively removes overlapping detections.\n"
-                                     "Higher = allows more overlap. Default: 0.40"));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    nmsThresholdSpin_->setToolTip(
+                        tr("Non-Maximum Suppression overlap threshold for duplicate boxes.\n"
+                           "Lower = more aggressively removes overlapping detections.\n"
+                           "Higher = allows more overlap. Default: 0.40"));
+                });
 
             blockSizeSpin_ = new QSpinBox(advancedBody_);
             blockSizeSpin_->setRange(2, 200);
             blockSizeSpin_->setValue(kDefaultBlockSize);
-            addRetranslation([this]
-                             {
-                                 blockSizeSpin_->setToolTip(tr(
-                                     "Mosaic block size in pixels.\n"
-                                     "Larger = coarser blocks, harder to un-blur.\n"
-                                     "Smaller = finer mosaic, higher recovery risk. Default: 14"));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    blockSizeSpin_->setToolTip(
+                        tr("Mosaic block size in pixels.\n"
+                           "Larger = coarser blocks, harder to un-blur.\n"
+                           "Smaller = finer mosaic, higher recovery risk. Default: 14"));
+                });
 
             paddingSpin_ = new QDoubleSpinBox(advancedBody_);
             paddingSpin_->setRange(0.0, 1.0);
             paddingSpin_->setSingleStep(0.05);
             paddingSpin_->setDecimals(2);
             paddingSpin_->setValue(kDefaultPadding);
-            addRetranslation([this]
-                             {
-                                 paddingSpin_->setToolTip(tr(
-                                     "Extra margin around each detected face, as a fraction of its size.\n"
-                                     "Covers ears, hairline, and chin that the detector may miss.\n"
-                                     "0.00 = exact box, 0.18 = ~18% larger. Default: 0.18"));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    paddingSpin_->setToolTip(
+                        tr("Extra margin around each detected face, as a fraction of its size.\n"
+                           "Covers ears, hairline, and chin that the detector may miss.\n"
+                           "0.00 = exact box, 0.18 = ~18% larger. Default: 0.18"));
+                });
 
             auto *grid = new QFormLayout();
             grid->setLabelAlignment(Qt::AlignLeft);
@@ -777,40 +924,77 @@ namespace cloakframe
             grid->setHorizontalSpacing(18);
             grid->setVerticalSpacing(10);
             auto *methodLabel = makeFieldLabel(advancedBody_);
-            addRetranslation([methodLabel]{ methodLabel->setText(tr("Anonymization")); });
+            addRetranslation(
+                [methodLabel]
+                {
+                    methodLabel->setText(tr("Anonymization"));
+                });
             grid->addRow(methodLabel, methodCombo_);
             customImageLabel_ = makeFieldLabel(advancedBody_);
-            addRetranslation([this]{ customImageLabel_->setText(tr("Custom image")); });
+            addRetranslation(
+                [this]
+                {
+                    customImageLabel_->setText(tr("Custom image"));
+                });
             grid->addRow(customImageLabel_, customImagePicker_);
             auto *shapeLabel = makeFieldLabel(advancedBody_);
-            addRetranslation([shapeLabel]{ shapeLabel->setText(tr("Shape")); });
+            addRetranslation(
+                [shapeLabel]
+                {
+                    shapeLabel->setText(tr("Shape"));
+                });
             grid->addRow(shapeLabel, shapeCombo_);
             auto *softEdgeLabel = makeFieldLabel(advancedBody_);
-            addRetranslation([softEdgeLabel]{ softEdgeLabel->setText(tr("Soft edges")); });
+            addRetranslation(
+                [softEdgeLabel]
+                {
+                    softEdgeLabel->setText(tr("Soft edges"));
+                });
             grid->addRow(softEdgeLabel, softEdgeCheck_);
             auto *scoreLabel = makeFieldLabel(advancedBody_);
-            addRetranslation([scoreLabel]{ scoreLabel->setText(tr("Score threshold")); });
+            addRetranslation(
+                [scoreLabel]
+                {
+                    scoreLabel->setText(tr("Score threshold"));
+                });
             grid->addRow(scoreLabel, scoreThresholdSpin_);
             auto *nmsLabel = makeFieldLabel(advancedBody_);
-            addRetranslation([nmsLabel]{ nmsLabel->setText(tr("NMS threshold")); });
+            addRetranslation(
+                [nmsLabel]
+                {
+                    nmsLabel->setText(tr("NMS threshold"));
+                });
             grid->addRow(nmsLabel, nmsThresholdSpin_);
             auto *blockLabel = makeFieldLabel(advancedBody_);
-            addRetranslation([blockLabel]{ blockLabel->setText(tr("Mosaic block size")); });
+            addRetranslation(
+                [blockLabel]
+                {
+                    blockLabel->setText(tr("Mosaic block size"));
+                });
             grid->addRow(blockLabel, blockSizeSpin_);
             auto *paddingLabel = makeFieldLabel(advancedBody_);
-            addRetranslation([paddingLabel]{ paddingLabel->setText(tr("Face padding")); });
+            addRetranslation(
+                [paddingLabel]
+                {
+                    paddingLabel->setText(tr("Face padding"));
+                });
             grid->addRow(paddingLabel, paddingSpin_);
 
             samplePreview_ = new QLabel(advancedBody_);
             samplePreview_->setFixedSize(152, 96);
-            addRetranslation([this]
-                             {
-                                 samplePreview_->setAccessibleName(tr("Anonymization style preview"));
-                                 samplePreview_->setToolTip(tr(
-                                     "Sample of the current anonymization style and block size."));
-                             });
+            addRetranslation(
+                [this]
+                {
+                    samplePreview_->setAccessibleName(tr("Anonymization style preview"));
+                    samplePreview_->setToolTip(
+                        tr("Sample of the current anonymization style and block size."));
+                });
             auto *sampleLabel = makeFieldLabel(advancedBody_);
-            addRetranslation([sampleLabel]{ sampleLabel->setText(tr("Preview")); });
+            addRetranslation(
+                [sampleLabel]
+                {
+                    sampleLabel->setText(tr("Preview"));
+                });
             grid->addRow(sampleLabel, samplePreview_);
             bodyLayout->addLayout(grid);
 
@@ -818,24 +1002,50 @@ namespace cloakframe
             cardLayout->addWidget(advancedBody_);
 
             connect(advancedToggle_, &QToolButton::toggled, this, &MainWindow::toggleAdvanced);
-            connect(resetAdvancedButton_, &QPushButton::clicked,
-                    this, &MainWindow::resetAdvancedDefaults);
-            connect(methodCombo_, &QComboBox::currentIndexChanged, this,
-                    [this]
-                    {
-                        updateAnonymizationControls();
-                        updateAnonymizationSample();
-                    });
-            connect(customImageBrowseButton_, &QPushButton::clicked,
-                    this, &MainWindow::chooseCustomImage);
-            connect(shapeCombo_, &QComboBox::currentIndexChanged, this,
-                    [this]{ updateAnonymizationSample(); });
-            connect(softEdgeCheck_, &QCheckBox::toggled, this,
-                    [this]{ updateAnonymizationSample(); });
-            connect(blockSizeSpin_, &QSpinBox::valueChanged, this,
-                    [this]{ updateAnonymizationSample(); });
-            connect(paddingSpin_, &QDoubleSpinBox::valueChanged, this,
-                    [this]{ updateAnonymizationSample(); });
+            connect(resetAdvancedButton_,
+                &QPushButton::clicked,
+                this,
+                &MainWindow::resetAdvancedDefaults);
+            connect(methodCombo_,
+                &QComboBox::currentIndexChanged,
+                this,
+                [this]
+                {
+                    updateAnonymizationControls();
+                    updateAnonymizationSample();
+                });
+            connect(customImageBrowseButton_,
+                &QPushButton::clicked,
+                this,
+                &MainWindow::chooseCustomImage);
+            connect(shapeCombo_,
+                &QComboBox::currentIndexChanged,
+                this,
+                [this]
+                {
+                    updateAnonymizationSample();
+                });
+            connect(softEdgeCheck_,
+                &QCheckBox::toggled,
+                this,
+                [this]
+                {
+                    updateAnonymizationSample();
+                });
+            connect(blockSizeSpin_,
+                &QSpinBox::valueChanged,
+                this,
+                [this]
+                {
+                    updateAnonymizationSample();
+                });
+            connect(paddingSpin_,
+                &QDoubleSpinBox::valueChanged,
+                this,
+                [this]
+                {
+                    updateAnonymizationSample();
+                });
             updateAnonymizationControls();
             updateAnonymizationSample();
 
@@ -850,7 +1060,11 @@ namespace cloakframe
 
             auto *activityTitle = makeSectionTitle(card);
             cardLayout->addWidget(activityTitle);
-            addRetranslation([activityTitle]{ activityTitle->setText(tr("Activity")); });
+            addRetranslation(
+                [activityTitle]
+                {
+                    activityTitle->setText(tr("Activity"));
+                });
             logEdit_ = new QPlainTextEdit(card);
             logEdit_->setReadOnly(true);
             logEdit_->setMinimumHeight(140);
@@ -872,37 +1086,60 @@ namespace cloakframe
 
         statusLabel_ = new QLabel(bottomBar);
         statusLabel_->setObjectName("statusLabel");
-        addRetranslation([this]{ statusLabel_->setText(tr("Ready")); });
+        addRetranslation(
+            [this]
+            {
+                statusLabel_->setText(tr("Ready"));
+            });
 
         progressBar_ = new QProgressBar(bottomBar);
         progressBar_->setRange(0, 100);
         progressBar_->setValue(0);
         progressBar_->setTextVisible(false);
         progressBar_->setFixedHeight(6);
-        addRetranslation([this]{ progressBar_->setAccessibleName(tr("Processing progress")); });
+        addRetranslation(
+            [this]
+            {
+                progressBar_->setAccessibleName(tr("Processing progress"));
+            });
 
         openOutputButton_ = new QPushButton(bottomBar);
-        addRetranslation([this]{ openOutputButton_->setText(tr("Open Output Folder")); });
+        addRetranslation(
+            [this]
+            {
+                openOutputButton_->setText(tr("Open Output Folder"));
+            });
         openOutputButton_->setCursor(Qt::PointingHandCursor);
         openOutputButton_->setVisible(false);
-        connect(openOutputButton_, &QPushButton::clicked, this, [this]
-        {
-            const QString dir = outputDirEdit_->text();
-            if (!dir.isEmpty() && QFileInfo::exists(dir))
+        connect(openOutputButton_,
+            &QPushButton::clicked,
+            this,
+            [this]
             {
-                QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
-            }
-        });
+                const QString dir = outputDirEdit_->text();
+                if (!dir.isEmpty() && QFileInfo::exists(dir))
+                {
+                    QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+                }
+            });
 
         stopButton_ = new QPushButton(bottomBar);
         stopButton_->setObjectName("dangerButton");
-        addRetranslation([this]{ stopButton_->setText(tr("Stop")); });
+        addRetranslation(
+            [this]
+            {
+                stopButton_->setText(tr("Stop"));
+            });
         stopButton_->setCursor(Qt::PointingHandCursor);
         stopButton_->setEnabled(false);
 
         startButton_ = new QPushButton(bottomBar);
         startButton_->setObjectName("primaryButton");
-        addRetranslation([this]{ startButton_->setText(tr("Start")); });
+        addRetranslation(
+            [this]
+            {
+                startButton_->setText(tr("Start"));
+            });
         startButton_->setCursor(Qt::PointingHandCursor);
         startButton_->setDefault(true);
 
@@ -926,14 +1163,17 @@ namespace cloakframe
         appendLog(tr("Ready. Drop images, videos, or folders to begin."));
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-        connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme)
-        {
-            if (themeMode_ == ThemeMode::System)
+        connect(qApp->styleHints(),
+            &QStyleHints::colorSchemeChanged,
+            this,
+            [this](Qt::ColorScheme)
             {
-                applyTheme(*qApp, ThemeMode::System);
-                updateSettingsIcon();
-            }
-        });
+                if (themeMode_ == ThemeMode::System)
+                {
+                    applyTheme(*qApp, ThemeMode::System);
+                    updateSettingsIcon();
+                }
+            });
 #endif
 
         checkForUpdates();
@@ -989,7 +1229,7 @@ namespace cloakframe
             {
                 return false;
             }
-            for (const auto &url: mime->urls())
+            for (const auto &url : mime->urls())
             {
                 if (!url.isLocalFile())
                 {
@@ -1010,7 +1250,8 @@ namespace cloakframe
         {
             setDropHighlight(true);
             event->acceptProposedAction();
-        } else
+        }
+        else
         {
             event->ignore();
         }
@@ -1031,7 +1272,7 @@ namespace cloakframe
             return;
         }
         int unsupportedCount = 0;
-        for (const auto &url: event->mimeData()->urls())
+        for (const auto &url : event->mimeData()->urls())
         {
             if (!url.isLocalFile())
             {
@@ -1060,8 +1301,8 @@ namespace cloakframe
         {
             return;
         }
-        const auto path = QFileDialog::getOpenFileName(this, tr("Select SCRFD ONNX Model"), QDir::currentPath(),
-                                                       tr("ONNX Models (*.onnx)"));
+        const auto path = QFileDialog::getOpenFileName(
+            this, tr("Select SCRFD ONNX Model"), QDir::currentPath(), tr("ONNX Models (*.onnx)"));
         if (!path.isEmpty())
         {
             if (!customModelFileIsAllowed(this, path) || !confirmTrustedCustomModel(this, path))
@@ -1082,12 +1323,13 @@ namespace cloakframe
         {
             return;
         }
-        const QString initialDirectory = customImagePathEdit_->text().isEmpty()
-                                             ? QStandardPaths::writableLocation(
-                                                   QStandardPaths::PicturesLocation)
-                                             : QFileInfo(customImagePathEdit_->text()).absolutePath();
-        const QString path = QFileDialog::getOpenFileName(
-            this, tr("Select Custom Image"), initialDirectory,
+        const QString initialDirectory =
+            customImagePathEdit_->text().isEmpty()
+                ? QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)
+                : QFileInfo(customImagePathEdit_->text()).absolutePath();
+        const QString path = QFileDialog::getOpenFileName(this,
+            tr("Select Custom Image"),
+            initialDirectory,
             tr("Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)"));
         if (path.isEmpty())
         {
@@ -1112,11 +1354,10 @@ namespace cloakframe
             return;
         }
         const auto files = QFileDialog::getOpenFileNames(this,
-                                                         tr("Select Images or Videos"),
-                                                         QStandardPaths::writableLocation(
-                                                             QStandardPaths::PicturesLocation),
-                                                         tr("Images & Videos (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp *.mp4 *.mov *.m4v)"));
-        for (const auto &file: files)
+            tr("Select Images or Videos"),
+            QStandardPaths::writableLocation(QStandardPaths::PicturesLocation),
+            tr("Images & Videos (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp *.mp4 *.mov *.m4v)"));
+        for (const auto &file : files)
         {
             addInputPath(file);
         }
@@ -1128,9 +1369,9 @@ namespace cloakframe
         {
             return;
         }
-        const auto folder = QFileDialog::getExistingDirectory(this, tr("Select Folder"),
-                                                              QStandardPaths::writableLocation(
-                                                                  QStandardPaths::PicturesLocation));
+        const auto folder = QFileDialog::getExistingDirectory(this,
+            tr("Select Folder"),
+            QStandardPaths::writableLocation(QStandardPaths::PicturesLocation));
         if (!folder.isEmpty())
         {
             addInputPath(folder);
@@ -1143,7 +1384,8 @@ namespace cloakframe
         {
             return;
         }
-        const auto folder = QFileDialog::getExistingDirectory(this, tr("Select Output Folder"), outputDirEdit_->text());
+        const auto folder = QFileDialog::getExistingDirectory(
+            this, tr("Select Output Folder"), outputDirEdit_->text());
         if (!folder.isEmpty())
         {
             outputDirEdit_->setText(folder);
@@ -1169,8 +1411,8 @@ namespace cloakframe
         key.canonicalModelPath = canonicalPath;
         key.gpuAcceleration = gpuAcceleration;
         key.faceModelKind = faceModelKind;
-        if (info.exists() && info.isFile() && info.size() > 0 &&
-            info.size() <= kMaxCustomModelBytes)
+        if (info.exists() && info.isFile() && info.size() > 0
+            && info.size() <= kMaxCustomModelBytes)
         {
             key.modelSize = info.size();
             key.modelLastModifiedMs = info.lastModified().toMSecsSinceEpoch();
@@ -1208,12 +1450,12 @@ namespace cloakframe
         {
             return;
         }
-        const QString detectTarget = detectCombo_ ? detectCombo_->currentData().toString()
-                                                   : QStringLiteral("faces");
+        const QString detectTarget =
+            detectCombo_ ? detectCombo_->currentData().toString() : QStringLiteral("faces");
         const bool detectFaces = detectTarget != "plates";
         const bool detectPlates = detectTarget != "faces";
-        const auto selectedMethod = static_cast<AnonymizationMethod>(
-            methodCombo_->currentData().toInt());
+        const auto selectedMethod =
+            static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt());
         cv::Mat runCustomImage;
         if (selectedMethod == AnonymizationMethod::CustomImage)
         {
@@ -1296,38 +1538,37 @@ namespace cloakframe
 
         const QString rawOutput = outputDirEdit_->text();
         const QFileInfo outputInfo(rawOutput);
-        const QString canonicalOutput = outputInfo.exists()
-                                            ? outputInfo.canonicalFilePath()
-                                            : QDir::cleanPath(rawOutput);
-        for (const auto &input: inputPaths())
+        const QString canonicalOutput =
+            outputInfo.exists() ? outputInfo.canonicalFilePath() : QDir::cleanPath(rawOutput);
+        for (const auto &input : inputPaths())
         {
             const QFileInfo inputInfo(input);
-            const QString canonicalInput = inputInfo.exists()
-                                               ? inputInfo.canonicalFilePath()
-                                               : QDir::cleanPath(input);
+            const QString canonicalInput =
+                inputInfo.exists() ? inputInfo.canonicalFilePath() : QDir::cleanPath(input);
             if (canonicalInput.isEmpty() || canonicalOutput.isEmpty())
             {
                 continue;
             }
 
             const bool isSame = canonicalInput.compare(canonicalOutput, Qt::CaseInsensitive) == 0;
-            const QString withSep = canonicalInput.endsWith('/') ? canonicalInput : canonicalInput + '/';
+            const QString withSep =
+                canonicalInput.endsWith('/') ? canonicalInput : canonicalInput + '/';
             const bool isUnder = canonicalOutput.startsWith(withSep, Qt::CaseInsensitive);
             if (isSame || isUnder)
             {
-                reportValidationIssue(tr("Refusing to run: output folder is inside input '%1'. "
-                                         "Pick a different output folder so originals aren't overwritten.")
-                                          .arg(input),
-                                      outputDirEdit_);
+                reportValidationIssue(
+                    tr("Refusing to run: output folder is inside input '%1'. "
+                       "Pick a different output folder so originals aren't overwritten.")
+                        .arg(input),
+                    outputDirEdit_);
                 return;
             }
         }
 
         ProcessingRequest request;
         request.modelPath = modelPath;
-        request.faceModelKind = selectedBuiltin != nullptr
-                                    ? selectedBuiltin->faceKind
-                                    : FaceModelKind::Scrfd;
+        request.faceModelKind =
+            selectedBuiltin != nullptr ? selectedBuiltin->faceKind : FaceModelKind::Scrfd;
         request.inputs = inputPaths();
         request.outputDirectory = outputDirEdit_->text();
         request.plateModelPath = plateModelPath;
@@ -1350,17 +1591,15 @@ namespace cloakframe
         request.videoCodec = static_cast<VideoCodec>(videoCodec_);
 
         ActiveRunState runState;
-        runState.faceKey = detectFaces
-                               ? makeDetectorCacheKey(modelPath, request.gpuAcceleration,
-                                                      request.faceModelKind)
-                               : DetectorCacheKey{};
+        runState.faceKey =
+            detectFaces
+                ? makeDetectorCacheKey(modelPath, request.gpuAcceleration, request.faceModelKind)
+                : DetectorCacheKey{};
         runState.plateKey = detectPlates
                                 ? makeDetectorCacheKey(plateModelPath, request.gpuAcceleration)
                                 : DetectorCacheKey{};
-        const auto verifyOrRecoverBuiltin = [&](const BuiltinModel &model,
-                                                QString &path,
-                                                DetectorCacheKey &key,
-                                                const bool plate)
+        const auto verifyOrRecoverBuiltin =
+            [&](const BuiltinModel &model, QString &path, DetectorCacheKey &key, const bool plate)
         {
             if (key.isValid() && modelDigestMatches(model, key.modelSha256))
             {
@@ -1370,9 +1609,8 @@ namespace cloakframe
             appendLog(tr("Built-in model integrity check failed: %1").arg(model.fileName));
             const QString recoveryPath = modelCacheDir() + "/" + model.fileName;
             appendLog(tr("Downloading %1…").arg(model.fileName));
-            const bool recovered = plate
-                                       ? ensurePlateModelAvailable(this, recoveryPath)
-                                       : ensureBuiltinModelAvailable(this, model, recoveryPath);
+            const bool recovered = plate ? ensurePlateModelAvailable(this, recoveryPath)
+                                         : ensureBuiltinModelAvailable(this, model, recoveryPath);
             if (!recovered)
             {
                 appendLog(tr("Model download was cancelled or failed."));
@@ -1380,9 +1618,9 @@ namespace cloakframe
             }
 
             path = recoveryPath;
-            key = makeDetectorCacheKey(path, request.gpuAcceleration,
-                                       plate ? FaceModelKind::Scrfd
-                                             : request.faceModelKind);
+            key = makeDetectorCacheKey(path,
+                request.gpuAcceleration,
+                plate ? FaceModelKind::Scrfd : request.faceModelKind);
             if (!key.isValid() || !modelDigestMatches(model, key.modelSha256))
             {
                 appendLog(tr("Built-in model integrity check failed: %1").arg(model.fileName));
@@ -1392,18 +1630,18 @@ namespace cloakframe
             return true;
         };
 
-        if (detectFaces && selectedBuiltin != nullptr &&
-            !verifyOrRecoverBuiltin(*selectedBuiltin, modelPath, runState.faceKey, false))
+        if (detectFaces && selectedBuiltin != nullptr
+            && !verifyOrRecoverBuiltin(*selectedBuiltin, modelPath, runState.faceKey, false))
         {
             return;
         }
-        if (detectPlates &&
-            !verifyOrRecoverBuiltin(plateModel(), plateModelPath, runState.plateKey, true))
+        if (detectPlates
+            && !verifyOrRecoverBuiltin(plateModel(), plateModelPath, runState.plateKey, true))
         {
             return;
         }
-        if ((detectFaces && !runState.faceKey.isValid()) ||
-            (detectPlates && !runState.plateKey.isValid()))
+        if ((detectFaces && !runState.faceKey.isValid())
+            || (detectPlates && !runState.plateKey.isValid()))
         {
             reportValidationIssue(tr("Choose a valid face ONNX model first."), modelCombo_);
             return;
@@ -1433,9 +1671,8 @@ namespace cloakframe
         runState.detectFaces = request.detectFaces;
         runState.detectPlates = request.detectPlates;
 
-        auto detectorForRun = detectFaces && cachedDetectorKey_ == runState.faceKey
-                                  ? cachedDetector_
-                                  : nullptr;
+        auto detectorForRun =
+            detectFaces && cachedDetectorKey_ == runState.faceKey ? cachedDetector_ : nullptr;
         auto videoDetectorForRun = detectFaces && cachedVideoDetectorKey_ == runState.faceKey
                                        ? cachedVideoDetector_
                                        : nullptr;
@@ -1462,21 +1699,31 @@ namespace cloakframe
         worker_->moveToThread(workerThread_);
         connect(workerThread_, &QThread::started, worker_, &ProcessorWorker::process);
         connect(worker_, &ProcessorWorker::logMessage, this, &MainWindow::appendLog);
-        connect(worker_, &ProcessorWorker::summaryAvailable, this,
-                [this](const RunSummary summary) { lastRunSummary_ = summary; });
-        connect(worker_, &ProcessorWorker::progressChanged, this, [this](int completed, int total)
-        {
-            progressBar_->setRange(0, std::max(total, 1));
-            progressBar_->setValue(completed);
-        });
-        connect(worker_, &ProcessorWorker::stageChanged, this,
-                [this](int index, int total, const QString &stage, const QString &fileName)
-                {
-                    const QString elided = statusLabel_->fontMetrics().elidedText(
-                        fileName, Qt::ElideMiddle, 320);
-                    statusLabel_->setText(QString("%1/%2  ·  %3  ·  %4")
-                        .arg(index).arg(total).arg(stage, elided));
-                });
+        connect(worker_,
+            &ProcessorWorker::summaryAvailable,
+            this,
+            [this](const RunSummary summary)
+            {
+                lastRunSummary_ = summary;
+            });
+        connect(worker_,
+            &ProcessorWorker::progressChanged,
+            this,
+            [this](int completed, int total)
+            {
+                progressBar_->setRange(0, std::max(total, 1));
+                progressBar_->setValue(completed);
+            });
+        connect(worker_,
+            &ProcessorWorker::stageChanged,
+            this,
+            [this](int index, int total, const QString &stage, const QString &fileName)
+            {
+                const QString elided =
+                    statusLabel_->fontMetrics().elidedText(fileName, Qt::ElideMiddle, 320);
+                statusLabel_->setText(
+                    QString("%1/%2  ·  %3  ·  %4").arg(index).arg(total).arg(stage, elided));
+            });
 
         connect(worker_, &ProcessorWorker::finished, this, &MainWindow::onWorkerFinished);
         connect(workerThread_, &QThread::finished, worker_, &QObject::deleteLater);
@@ -1504,31 +1751,31 @@ namespace cloakframe
         }
 
         const auto completedRun = activeRunState_;
-        const bool cacheRunResult = outcome == RunOutcome::Completed ||
-                                    (outcome == RunOutcome::CompletedWithWarnings &&
-                                     lastRunSummary_.failed == 0);
+        const bool cacheRunResult =
+            outcome == RunOutcome::Completed
+            || (outcome == RunOutcome::CompletedWithWarnings && lastRunSummary_.failed == 0);
 
         if (worker_ != nullptr)
         {
             auto detector = worker_->takeDetector();
-            if (detector && completedRun.has_value() && completedRun->detectFaces &&
-                completedRun->faceKey.isValid() && cacheRunResult)
+            if (detector && completedRun.has_value() && completedRun->detectFaces
+                && completedRun->faceKey.isValid() && cacheRunResult)
             {
                 cachedDetector_ = std::move(detector);
                 cachedDetectorKey_ = completedRun->faceKey;
             }
 
             auto videoDetector = worker_->takeVideoDetector();
-            if (videoDetector && completedRun.has_value() && completedRun->detectFaces &&
-                completedRun->faceKey.isValid() && cacheRunResult)
+            if (videoDetector && completedRun.has_value() && completedRun->detectFaces
+                && completedRun->faceKey.isValid() && cacheRunResult)
             {
                 cachedVideoDetector_ = std::move(videoDetector);
                 cachedVideoDetectorKey_ = completedRun->faceKey;
             }
 
             auto plate = worker_->takePlateDetector();
-            if (plate && completedRun.has_value() && completedRun->detectPlates &&
-                completedRun->plateKey.isValid() && cacheRunResult)
+            if (plate && completedRun.has_value() && completedRun->detectPlates
+                && completedRun->plateKey.isValid() && cacheRunResult)
             {
                 cachedPlateDetector_ = std::move(plate);
                 cachedPlateDetectorKey_ = completedRun->plateKey;
@@ -1552,47 +1799,45 @@ namespace cloakframe
                                     : QStringLiteral("%1s").arg(seconds);
         switch (outcome)
         {
-            case RunOutcome::Completed:
-                appendLog(tr("Finished."));
-                statusLabel_->setText(tr("Done") + QStringLiteral("  ·  ") + elapsed);
-                openOutputButton_->setVisible(true);
-                break;
-            case RunOutcome::CompletedWithWarnings:
-                appendLog(tr("Completed with warnings — review the results before sharing."));
-                statusLabel_->setProperty("state", "warning");
-                statusLabel_->style()->unpolish(statusLabel_);
-                statusLabel_->style()->polish(statusLabel_);
-                statusLabel_->setText(QStringLiteral("⚠  ") + tr("Review required") +
-                                      QStringLiteral("  ·  ") + elapsed);
-                openOutputButton_->setVisible(true);
-                QMessageBox::warning(
-                    this,
-                    tr("Review Required"),
-                    tr("Processing finished, but some results need attention.\n\n"
-                       "Total: %1\nRedacted: %2\nSaved without redaction: %3\nCopied: %4\n"
-                       "Skipped: %5\nFailed: %6\n\n"
-                       "Check these results before sharing them.")
-                        .arg(lastRunSummary_.total)
-                        .arg(lastRunSummary_.redacted)
-                        .arg(lastRunSummary_.unredacted)
-                        .arg(lastRunSummary_.copied)
-                        .arg(lastRunSummary_.skipped)
-                        .arg(lastRunSummary_.failed));
-                break;
-            case RunOutcome::Cancelled:
-                appendLog(tr("Cancelled."));
-                statusLabel_->setText(tr("Cancelled") + QStringLiteral("  ·  ") + elapsed);
-                openOutputButton_->setVisible(true);
-                break;
-            case RunOutcome::Failed:
-                appendLog(tr("Failed — check the log for details."));
-                statusLabel_->setProperty("state", "warning");
-                statusLabel_->style()->unpolish(statusLabel_);
-                statusLabel_->style()->polish(statusLabel_);
-                statusLabel_->setText(QStringLiteral("⚠  ") + tr("Failed — check the log"));
-                break;
+        case RunOutcome::Completed:
+            appendLog(tr("Finished."));
+            statusLabel_->setText(tr("Done") + QStringLiteral("  ·  ") + elapsed);
+            openOutputButton_->setVisible(true);
+            break;
+        case RunOutcome::CompletedWithWarnings:
+            appendLog(tr("Completed with warnings — review the results before sharing."));
+            statusLabel_->setProperty("state", "warning");
+            statusLabel_->style()->unpolish(statusLabel_);
+            statusLabel_->style()->polish(statusLabel_);
+            statusLabel_->setText(
+                QStringLiteral("⚠  ") + tr("Review required") + QStringLiteral("  ·  ") + elapsed);
+            openOutputButton_->setVisible(true);
+            QMessageBox::warning(this,
+                tr("Review Required"),
+                tr("Processing finished, but some results need attention.\n\n"
+                   "Total: %1\nRedacted: %2\nSaved without redaction: %3\nCopied: %4\n"
+                   "Skipped: %5\nFailed: %6\n\n"
+                   "Check these results before sharing them.")
+                    .arg(lastRunSummary_.total)
+                    .arg(lastRunSummary_.redacted)
+                    .arg(lastRunSummary_.unredacted)
+                    .arg(lastRunSummary_.copied)
+                    .arg(lastRunSummary_.skipped)
+                    .arg(lastRunSummary_.failed));
+            break;
+        case RunOutcome::Cancelled:
+            appendLog(tr("Cancelled."));
+            statusLabel_->setText(tr("Cancelled") + QStringLiteral("  ·  ") + elapsed);
+            openOutputButton_->setVisible(true);
+            break;
+        case RunOutcome::Failed:
+            appendLog(tr("Failed — check the log for details."));
+            statusLabel_->setProperty("state", "warning");
+            statusLabel_->style()->unpolish(statusLabel_);
+            statusLabel_->style()->polish(statusLabel_);
+            statusLabel_->setText(QStringLiteral("⚠  ") + tr("Failed — check the log"));
+            break;
         }
-
     }
 
     void MainWindow::toggleAdvanced(bool expanded) const
@@ -1658,7 +1903,8 @@ namespace cloakframe
         {
             savedModelIndex = settings.value("modelIndex").toInt() == 0 ? 1 : 0;
         }
-        if (modelCombo_ != nullptr && savedModelIndex >= 0 && savedModelIndex < modelCombo_->count())
+        if (modelCombo_ != nullptr && savedModelIndex >= 0
+            && savedModelIndex < modelCombo_->count())
         {
             modelCombo_->setCurrentIndex(savedModelIndex);
         }
@@ -1682,8 +1928,10 @@ namespace cloakframe
         preserveMetaCheck_->setChecked(
             metadataSupportAvailable() && settings.value("preserveMetadata", false).toBool());
 
-        scoreThresholdSpin_->setValue(settings.value("scoreThreshold", kDefaultScoreThreshold).toDouble());
-        nmsThresholdSpin_->setValue(settings.value("nmsThreshold", kDefaultNmsThreshold).toDouble());
+        scoreThresholdSpin_->setValue(
+            settings.value("scoreThreshold", kDefaultScoreThreshold).toDouble());
+        nmsThresholdSpin_->setValue(
+            settings.value("nmsThreshold", kDefaultNmsThreshold).toDouble());
         blockSizeSpin_->setValue(settings.value("blockSize", kDefaultBlockSize).toInt());
         paddingSpin_->setValue(settings.value("padding", kDefaultPadding).toDouble());
 
@@ -1750,12 +1998,13 @@ namespace cloakframe
             case QLocale::Chinese:
             {
                 const QLocale locale = QLocale::system();
-                if (locale.script() == QLocale::SimplifiedHanScript ||
-                    locale.territory() == QLocale::China ||
-                    locale.territory() == QLocale::Singapore)
+                if (locale.script() == QLocale::SimplifiedHanScript
+                    || locale.territory() == QLocale::China
+                    || locale.territory() == QLocale::Singapore)
                 {
                     language = QStringLiteral("zh_CN");
-                } else
+                }
+                else
                 {
                     language = QStringLiteral("en");
                 }
@@ -1797,7 +2046,8 @@ namespace cloakframe
         if (!currentModel.isEmpty() && builtin == nullptr)
         {
             settings.setValue("customModelPath", currentModel);
-        } else
+        }
+        else
         {
             settings.remove("customModelPath");
         }
@@ -1811,12 +2061,13 @@ namespace cloakframe
         settings.setValue("blockSize", blockSizeSpin_->value());
         settings.setValue("padding", paddingSpin_->value());
         settings.setValue("method", methodCombo_ ? methodCombo_->currentIndex() : 0);
-        settings.setValue("customImagePath",
-                          customImagePathEdit_ ? customImagePathEdit_->text() : QString());
+        settings.setValue(
+            "customImagePath", customImagePathEdit_ ? customImagePathEdit_->text() : QString());
         settings.setValue("shape", shapeCombo_ ? shapeCombo_->currentIndex() : 0);
         settings.setValue("softEdges", softEdgeCheck_ != nullptr && softEdgeCheck_->isChecked());
         settings.setValue("detectTarget", detectCombo_ ? detectCombo_->currentIndex() : 0);
-        settings.setValue("advancedExpanded", advancedToggle_ ? advancedToggle_->isChecked() : false);
+        settings.setValue(
+            "advancedExpanded", advancedToggle_ ? advancedToggle_->isChecked() : false);
         settings.endGroup();
 
         settings.setValue("theme", themeModeToString(themeMode_));
@@ -1847,38 +2098,46 @@ namespace cloakframe
             updater->checkForUpdates();
             return;
         }
-        connect(updater, &SelfUpdater::checkFailed, this, [this, updater](const QString &error)
-        {
-            spdlog::info("self-update unavailable, falling back to update notification: {}",
-                         error.toStdString());
-            updater->deleteLater();
-            startLegacyUpdateCheck();
-        });
-        connect(updater, &SelfUpdater::updateAvailable, this,
-                [this, updater](const QString &version, const QString &releaseNotes)
+        connect(updater,
+            &SelfUpdater::checkFailed,
+            this,
+            [this, updater](const QString &error)
+            {
+                spdlog::info("self-update unavailable, falling back to update notification: {}",
+                    error.toStdString());
+                updater->deleteLater();
+                startLegacyUpdateCheck();
+            });
+        connect(updater,
+            &SelfUpdater::updateAvailable,
+            this,
+            [this, updater](const QString &version, const QString &releaseNotes)
+            {
+                showUpdateBanner(version, UpdateChecker::releasesPageUrl());
+                if (askToUpdate(version, releaseNotes))
                 {
-                    showUpdateBanner(version, UpdateChecker::releasesPageUrl());
-                    if (askToUpdate(version, releaseNotes))
-                    {
-                        downloadUpdateWithProgress(updater, version);
-                    }
-                });
+                    downloadUpdateWithProgress(updater, version);
+                }
+            });
         updater->checkForUpdates();
     }
 
     void MainWindow::startLegacyUpdateCheck()
     {
         auto *checker = new UpdateChecker(QCoreApplication::applicationVersion(), this);
-        connect(checker, &UpdateChecker::updateAvailable, this,
-                [this](const QString &latestVersion, const QString &releaseUrl,
-                       const QString &releaseNotes)
+        connect(checker,
+            &UpdateChecker::updateAvailable,
+            this,
+            [this](const QString &latestVersion,
+                const QString &releaseUrl,
+                const QString &releaseNotes)
+            {
+                showUpdateBanner(latestVersion, releaseUrl);
+                if (askToUpdate(latestVersion, releaseNotes))
                 {
-                    showUpdateBanner(latestVersion, releaseUrl);
-                    if (askToUpdate(latestVersion, releaseNotes))
-                    {
-                        QDesktopServices::openUrl(QUrl(releaseUrl));
-                    }
-                });
+                    QDesktopServices::openUrl(QUrl(releaseUrl));
+                }
+            });
         checker->check();
     }
 
@@ -1890,7 +2149,7 @@ namespace cloakframe
         }
         const QString text = tr("Update available: %1").arg(latestVersion);
         updateLabel_->setText(QStringLiteral("<a href=\"%1\">%2</a>")
-            .arg(releaseUrl.toHtmlEscaped(), text.toHtmlEscaped()));
+                .arg(releaseUrl.toHtmlEscaped(), text.toHtmlEscaped()));
         updateLabel_->setVisible(true);
     }
 
@@ -1900,13 +2159,11 @@ namespace cloakframe
         message.setWindowTitle(tr("Update Available"));
         message.setIcon(QMessageBox::Information);
         message.setTextFormat(Qt::PlainText);
-        message.setText(tr("CloakFrame %1 is available. What's new:")
-                            .arg(latestVersion));
+        message.setText(tr("CloakFrame %1 is available. What's new:").arg(latestVersion));
         const QString localizedNotes = releaseNotesSection(releaseNotes);
-        message.setInformativeText(
-            localizedNotes.isEmpty()
-                ? tr("No release notes were provided for this update.")
-                : localizedNotes);
+        message.setInformativeText(localizedNotes.isEmpty()
+                                       ? tr("No release notes were provided for this update.")
+                                       : localizedNotes);
 
         auto *updateButton = message.addButton(tr("Update"), QMessageBox::AcceptRole);
         auto *laterButton = message.addButton(tr("Later"), QMessageBox::RejectRole);
@@ -1919,79 +2176,83 @@ namespace cloakframe
 
     void MainWindow::downloadUpdateWithProgress(SelfUpdater *updater, const QString &version)
     {
-        QPointer<QProgressDialog> progress =
-                new QProgressDialog(tr("Downloading CloakFrame %1…").arg(version),
-                                    QString(), 0, 100, this);
+        QPointer<QProgressDialog> progress = new QProgressDialog(
+            tr("Downloading CloakFrame %1…").arg(version), QString(), 0, 100, this);
         progress->setWindowModality(Qt::WindowModal);
         progress->setCancelButton(nullptr);
         progress->setMinimumDuration(0);
         progress->setAutoClose(false);
         progress->setAutoReset(false);
-        connect(updater, &SelfUpdater::downloadProgress,
-                progress, &QProgressDialog::setValue);
-        connect(updater, &SelfUpdater::downloadFailed, this,
-                [this, updater, progress](const QString &error)
+        connect(updater, &SelfUpdater::downloadProgress, progress, &QProgressDialog::setValue);
+        connect(updater,
+            &SelfUpdater::downloadFailed,
+            this,
+            [this, updater, progress](const QString &error)
+            {
+                if (progress)
                 {
-                    if (progress)
-                    {
-                        progress->close();
-                        progress->deleteLater();
-                    }
+                    progress->close();
+                    progress->deleteLater();
+                }
 
-                    QMessageBox message(this);
-                    message.setWindowTitle(tr("Update Failed"));
-                    message.setIcon(QMessageBox::Warning);
-                    message.setTextFormat(Qt::PlainText);
-                    message.setText(tr("The update could not be installed: %1").arg(error));
-                    auto *openButton = message.addButton(tr("Open Download Page"),
-                                                         QMessageBox::AcceptRole);
-                    message.addButton(QMessageBox::Close);
-                    message.exec();
-                    if (message.clickedButton() == openButton)
-                    {
-                        QDesktopServices::openUrl(QUrl(UpdateChecker::releasesPageUrl()));
-                    }
-                    updater->deleteLater();
-                });
-        connect(updater, &SelfUpdater::downloadFinished, this,
-                [this, updater, progress, version]
+                QMessageBox message(this);
+                message.setWindowTitle(tr("Update Failed"));
+                message.setIcon(QMessageBox::Warning);
+                message.setTextFormat(Qt::PlainText);
+                message.setText(tr("The update could not be installed: %1").arg(error));
+                auto *openButton =
+                    message.addButton(tr("Open Download Page"), QMessageBox::AcceptRole);
+                message.addButton(QMessageBox::Close);
+                message.exec();
+                if (message.clickedButton() == openButton)
                 {
-                    if (progress)
-                    {
-                        progress->close();
-                        progress->deleteLater();
-                    }
+                    QDesktopServices::openUrl(QUrl(UpdateChecker::releasesPageUrl()));
+                }
+                updater->deleteLater();
+            });
+        connect(updater,
+            &SelfUpdater::downloadFinished,
+            this,
+            [this, updater, progress, version]
+            {
+                if (progress)
+                {
+                    progress->close();
+                    progress->deleteLater();
+                }
 
-                    if (processing_)
-                    {
-                        QMessageBox::information(
-                            this, tr("Update Ready"),
-                            tr("CloakFrame %1 will finish installing the next time the app starts.")
-                                .arg(version));
-                        return;
-                    }
-
-                    QMessageBox message(this);
-                    message.setWindowTitle(tr("Update Ready"));
-                    message.setIcon(QMessageBox::Information);
-                    message.setTextFormat(Qt::PlainText);
-                    message.setText(
-                        tr("CloakFrame %1 has been downloaded. Restart now to finish installing?")
+                if (processing_)
+                {
+                    QMessageBox::information(this,
+                        tr("Update Ready"),
+                        tr("CloakFrame %1 will finish installing the next time the app starts.")
                             .arg(version));
-                    auto *restartButton = message.addButton(tr("Restart Now"),
-                                                            QMessageBox::AcceptRole);
-                    auto *laterButton = message.addButton(tr("Later"), QMessageBox::RejectRole);
-                    message.setDefaultButton(restartButton);
-                    message.setEscapeButton(laterButton);
-                    message.exec();
+                    return;
+                }
 
-                    if (message.clickedButton() == restartButton)
-                    {
-                        connect(updater, &SelfUpdater::readyToQuit,
-                                qApp, &QCoreApplication::quit, Qt::QueuedConnection);
-                        updater->restartToApply();
-                    }
-                });
+                QMessageBox message(this);
+                message.setWindowTitle(tr("Update Ready"));
+                message.setIcon(QMessageBox::Information);
+                message.setTextFormat(Qt::PlainText);
+                message.setText(
+                    tr("CloakFrame %1 has been downloaded. Restart now to finish installing?")
+                        .arg(version));
+                auto *restartButton = message.addButton(tr("Restart Now"), QMessageBox::AcceptRole);
+                auto *laterButton = message.addButton(tr("Later"), QMessageBox::RejectRole);
+                message.setDefaultButton(restartButton);
+                message.setEscapeButton(laterButton);
+                message.exec();
+
+                if (message.clickedButton() == restartButton)
+                {
+                    connect(updater,
+                        &SelfUpdater::readyToQuit,
+                        qApp,
+                        &QCoreApplication::quit,
+                        Qt::QueuedConnection);
+                    updater->restartToApply();
+                }
+            });
         updater->downloadUpdate();
     }
 
@@ -2001,58 +2262,85 @@ namespace cloakframe
         {
             return;
         }
-        SettingsDialog dialog(themeMode_, language_, checkForUpdatesOnStartup_, fileLogging_,
-                              gpuAcceleration_, videoQuality_, videoCodec_, this);
+        SettingsDialog dialog(themeMode_,
+            language_,
+            checkForUpdatesOnStartup_,
+            fileLogging_,
+            gpuAcceleration_,
+            videoQuality_,
+            videoCodec_,
+            this);
 
-        connect(&dialog, &SettingsDialog::themeChanged, this, [this](ThemeMode mode)
-        {
-            themeMode_ = mode;
-            applyTheme(*qApp, mode);
-            updateSettingsIcon();
-            saveSettings();
-        });
-        connect(&dialog, &SettingsDialog::languageChanged, this, [this](const QString &language)
-        {
-            if (language != language_)
+        connect(&dialog,
+            &SettingsDialog::themeChanged,
+            this,
+            [this](ThemeMode mode)
             {
-                applyLanguage(language);
+                themeMode_ = mode;
+                applyTheme(*qApp, mode);
+                updateSettingsIcon();
                 saveSettings();
-            }
-        });
-        connect(&dialog, &SettingsDialog::checkForUpdatesChanged, this, [this](bool enabled)
-        {
-            checkForUpdatesOnStartup_ = enabled;
-            saveSettings();
-        });
-        connect(&dialog, &SettingsDialog::fileLoggingChanged, this, [this](bool enabled)
-        {
-            fileLogging_ = enabled;
-            saveSettings();
-        });
-        connect(&dialog, &SettingsDialog::videoQualityChanged, this, [this](int quality)
-        {
-            videoQuality_ = std::clamp(quality, 0, 2);
-            saveSettings();
-        });
-        connect(&dialog, &SettingsDialog::videoCodecChanged, this, [this](int codec)
-        {
-            videoCodec_ = std::clamp(codec, 0, 1);
-            saveSettings();
-        });
-        connect(&dialog, &SettingsDialog::gpuAccelerationChanged, this, [this](bool enabled)
-        {
-            if (gpuAcceleration_ != enabled)
+            });
+        connect(&dialog,
+            &SettingsDialog::languageChanged,
+            this,
+            [this](const QString &language)
             {
-                gpuAcceleration_ = enabled;
-                cachedDetector_.reset();
-                cachedVideoDetector_.reset();
-                cachedDetectorKey_ = {};
-                cachedVideoDetectorKey_ = {};
-                cachedPlateDetector_.reset();
-                cachedPlateDetectorKey_ = {};
+                if (language != language_)
+                {
+                    applyLanguage(language);
+                    saveSettings();
+                }
+            });
+        connect(&dialog,
+            &SettingsDialog::checkForUpdatesChanged,
+            this,
+            [this](bool enabled)
+            {
+                checkForUpdatesOnStartup_ = enabled;
                 saveSettings();
-            }
-        });
+            });
+        connect(&dialog,
+            &SettingsDialog::fileLoggingChanged,
+            this,
+            [this](bool enabled)
+            {
+                fileLogging_ = enabled;
+                saveSettings();
+            });
+        connect(&dialog,
+            &SettingsDialog::videoQualityChanged,
+            this,
+            [this](int quality)
+            {
+                videoQuality_ = std::clamp(quality, 0, 2);
+                saveSettings();
+            });
+        connect(&dialog,
+            &SettingsDialog::videoCodecChanged,
+            this,
+            [this](int codec)
+            {
+                videoCodec_ = std::clamp(codec, 0, 1);
+                saveSettings();
+            });
+        connect(&dialog,
+            &SettingsDialog::gpuAccelerationChanged,
+            this,
+            [this](bool enabled)
+            {
+                if (gpuAcceleration_ != enabled)
+                {
+                    gpuAcceleration_ = enabled;
+                    cachedDetector_.reset();
+                    cachedVideoDetector_.reset();
+                    cachedDetectorKey_ = {};
+                    cachedVideoDetectorKey_ = {};
+                    cachedPlateDetector_.reset();
+                    cachedPlateDetectorKey_ = {};
+                    saveSettings();
+                }
+            });
 
         dialog.exec();
     }
@@ -2068,7 +2356,8 @@ namespace cloakframe
             static_cast<MaskShape>(shapeCombo_->currentData().toInt()),
             blockSizeSpin_->value(),
             static_cast<float>(paddingSpin_->value()),
-            softEdgeCheck_->isChecked(), customImage_));
+            softEdgeCheck_->isChecked(),
+            customImage_));
     }
 
     void MainWindow::updateAnonymizationControls() const
@@ -2077,8 +2366,7 @@ namespace cloakframe
         {
             return;
         }
-        const auto method = static_cast<AnonymizationMethod>(
-            methodCombo_->currentData().toInt());
+        const auto method = static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt());
         const bool customImage = method == AnonymizationMethod::CustomImage;
         const bool editable = !processing_;
         if (customImageLabel_ != nullptr)
@@ -2162,9 +2450,8 @@ namespace cloakframe
         else if (isSupportedVideo(pathFromQString(path)))
         {
             const QIcon thumbnail = videoThumbnailIcon(path);
-            item->setIcon(thumbnail.isNull()
-                              ? style()->standardIcon(QStyle::SP_FileIcon)
-                              : thumbnail);
+            item->setIcon(
+                thumbnail.isNull() ? style()->standardIcon(QStyle::SP_FileIcon) : thumbnail);
         }
         else
         {
@@ -2177,9 +2464,8 @@ namespace cloakframe
                 reader.setScaledSize(thumbSize);
             }
             const QImage thumb = reader.read();
-            item->setIcon(thumb.isNull()
-                              ? style()->standardIcon(QStyle::SP_FileIcon)
-                              : QIcon(QPixmap::fromImage(thumb)));
+            item->setIcon(thumb.isNull() ? style()->standardIcon(QStyle::SP_FileIcon)
+                                         : QIcon(QPixmap::fromImage(thumb)));
         }
         inputList_->addItem(item);
     }
@@ -2264,20 +2550,22 @@ namespace cloakframe
         {
             const auto &model = builtinModels()[index];
             const auto existing = firstExistingModelPath(model.fileName);
-            const auto path = existing.isEmpty() ? modelCacheDir() + "/" + model.fileName : existing;
+            const auto path =
+                existing.isEmpty() ? modelCacheDir() + "/" + model.fileName : existing;
             modelCombo_->addItem(QString(), path);
-            modelCombo_->setItemData(modelCombo_->count() - 1,
-                                     static_cast<int>(index), kModelCatalogIndexRole);
+            modelCombo_->setItemData(
+                modelCombo_->count() - 1, static_cast<int>(index), kModelCatalogIndexRole);
         }
 
-        addRetranslation([this]
-                         {
-                             if (modelCombo_->count() >= 2)
-                             {
-                                 modelCombo_->setItemText(0, tr("Accurate  ·  YOLO5Face-n"));
-                                 modelCombo_->setItemText(1, tr("Fast  ·  YuNet"));
-                             }
-                         });
+        addRetranslation(
+            [this]
+            {
+                if (modelCombo_->count() >= 2)
+                {
+                    modelCombo_->setItemText(0, tr("Accurate  ·  YOLO5Face-n"));
+                    modelCombo_->setItemText(1, tr("Fast  ·  YuNet"));
+                }
+            });
 
         modelCombo_->setCurrentIndex(0);
         updateModelPathFromSelection();
@@ -2371,7 +2659,7 @@ namespace cloakframe
 
     void MainWindow::retranslateUi()
     {
-        for (const auto &apply: retranslators_)
+        for (const auto &apply : retranslators_)
         {
             apply();
         }
@@ -2387,8 +2675,8 @@ namespace cloakframe
             {
                 qApp->installTranslator(&translator_);
             }
-            if (qtTranslator_.load("qtbase_" + language,
-                                   QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
+            if (qtTranslator_.load(
+                    "qtbase_" + language, QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
             {
                 qApp->installTranslator(&qtTranslator_);
             }
@@ -2425,22 +2713,24 @@ namespace cloakframe
             field->setProperty("invalid", true);
             field->style()->unpolish(field);
             field->style()->polish(field);
-            QTimer::singleShot(2200, field, [field]
-            {
-                field->setProperty("invalid", QVariant());
-                field->style()->unpolish(field);
-                field->style()->polish(field);
-            });
+            QTimer::singleShot(2200,
+                field,
+                [field]
+                {
+                    field->setProperty("invalid", QVariant());
+                    field->style()->unpolish(field);
+                    field->style()->polish(field);
+                });
             field->setFocus(Qt::OtherFocusReason);
         }
     }
 
     ReviewResult MainWindow::requestReview(const QImage &image,
-                                           const QString &sourceName,
-                                           const QVector<QRectF> &detected,
-                                           int currentIndex,
-                                           int total,
-                                           double previewScale)
+        const QString &sourceName,
+        const QVector<QRectF> &detected,
+        int currentIndex,
+        int total,
+        double previewScale)
     {
         if (shuttingDown_)
         {
@@ -2471,8 +2761,8 @@ namespace cloakframe
             preserveMetadata = preserveMetaCheck_ != nullptr && preserveMetaCheck_->isChecked();
         }
         spec.previewScale = previewScale;
-        ReviewDialog dialog(image, sourceName, detected, currentIndex, total,
-                            preserveMetadata, spec, this);
+        ReviewDialog dialog(
+            image, sourceName, detected, currentIndex, total, preserveMetadata, spec, this);
         dialog.exec();
         return dialog.result();
     }

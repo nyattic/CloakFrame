@@ -13,11 +13,11 @@ namespace cloakframe
 {
     template <typename Result, typename Produce, typename Consume>
     void processOrdered(std::size_t itemCount,
-                        unsigned threadCount,
-                        std::size_t maxInFlight,
-                        const std::atomic<bool> &cancelled,
-                        Produce produce,
-                        Consume consume)
+        unsigned threadCount,
+        std::size_t maxInFlight,
+        const std::atomic<bool> &cancelled,
+        Produce produce,
+        Consume consume)
     {
         if (itemCount == 0)
         {
@@ -41,11 +41,12 @@ namespace cloakframe
                 std::size_t index = 0;
                 {
                     std::unique_lock lock(mutex);
-                    produceCv.wait(lock, [&]
-                    {
-                        return stopped || nextIndex >= itemCount ||
-                               nextIndex < consumedCount + maxInFlight;
-                    });
+                    produceCv.wait(lock,
+                        [&]
+                        {
+                            return stopped || nextIndex >= itemCount
+                                   || nextIndex < consumedCount + maxInFlight;
+                        });
                     if (stopped || nextIndex >= itemCount)
                     {
                         return;
@@ -80,10 +81,11 @@ namespace cloakframe
             std::unique_lock lock(mutex);
             while (consumedCount < itemCount)
             {
-                consumeCv.wait(lock, [&]
-                {
-                    return stopped || ready.contains(consumedCount);
-                });
+                consumeCv.wait(lock,
+                    [&]
+                    {
+                        return stopped || ready.contains(consumedCount);
+                    });
                 const auto it = ready.find(consumedCount);
                 if (it == ready.end())
                 {
@@ -100,7 +102,7 @@ namespace cloakframe
             produceCv.notify_all();
         }
 
-        for (auto &thread: workers)
+        for (auto &thread : workers)
         {
             thread.join();
         }

@@ -5,8 +5,8 @@
 #include "cloakframe/Mosaic.hpp"
 #include "cloakframe/VideoIo.hpp"
 
-#include <QObject>
 #include <QByteArray>
+#include <QObject>
 #include <QPointer>
 #include <QString>
 #include <QStringList>
@@ -111,16 +111,16 @@ namespace cloakframe
         struct ItemOutcome;
 
         ItemOutcome processItem(const ScanResult &item,
-                                const std::filesystem::path &safeRoot,
-                                int index,
-                                int total,
-                                bool allowReview);
+            const std::filesystem::path &safeRoot,
+            int index,
+            int total,
+            bool allowReview);
 
         ItemOutcome processVideoItem(const ScanResult &item,
-                                     const std::filesystem::path &safeRoot,
-                                     const std::filesystem::path &destination,
-                                     int index,
-                                     int total);
+            const std::filesystem::path &safeRoot,
+            const std::filesystem::path &destination,
+            int index,
+            int total);
 
         QString modelPath_;
         QByteArray modelSha256_;

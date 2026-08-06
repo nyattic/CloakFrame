@@ -1,22 +1,22 @@
 #include "cloakframe/ProcessorWorker.hpp"
 
+#include "cloakframe/DetectionGeometry.hpp"
 #include "cloakframe/ImageIo.hpp"
 #include "cloakframe/ImageScanner.hpp"
-#include "cloakframe/DetectionGeometry.hpp"
 #include "cloakframe/MemoryBudget.hpp"
+#include "cloakframe/Mosaic.hpp"
 #include "cloakframe/OrderedParallel.hpp"
 #include "cloakframe/OutputPlan.hpp"
 #include "cloakframe/PathSafety.hpp"
 #include "cloakframe/PathUtil.hpp"
 #include "cloakframe/PlateDetector.hpp"
-#include "cloakframe/Mosaic.hpp"
 #include "cloakframe/ReviewTypes.hpp"
 #include "cloakframe/ScrfdFaceDetector.hpp"
-#include "cloakframe/Yolo5FaceDetector.hpp"
-#include "cloakframe/YuNetFaceDetector.hpp"
 #include "cloakframe/VideoIo.hpp"
 #include "cloakframe/VideoProcessor.hpp"
 #include "cloakframe/VideoReviewTypes.hpp"
+#include "cloakframe/Yolo5FaceDetector.hpp"
+#include "cloakframe/YuNetFaceDetector.hpp"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -53,10 +53,10 @@ namespace cloakframe
         constexpr int kReviewMaxLongEdge = 1600;
 
         std::shared_ptr<Detector> makeFaceDetector(const FaceModelKind kind,
-                                                   const QString &modelPath,
-                                                   const int scrfdInputSize,
-                                                   const bool enableAcceleration,
-                                                   const QByteArray &expectedSha256)
+            const QString &modelPath,
+            const int scrfdInputSize,
+            const bool enableAcceleration,
+            const QByteArray &expectedSha256)
         {
             const auto path = pathToUtf8(pathFromQString(modelPath));
             switch (kind)
@@ -75,8 +75,7 @@ namespace cloakframe
 
         std::uint64_t imageMemoryBudget()
         {
-            return adaptiveMemoryBudget(kImageMinimumMemoryBudget,
-                                        kImageMaximumMemoryBudget, 4);
+            return adaptiveMemoryBudget(kImageMinimumMemoryBudget, kImageMaximumMemoryBudget, 4);
         }
 
         struct ImageDimensionCheck
@@ -90,28 +89,29 @@ namespace cloakframe
         long long imagePixelLimit(const QByteArray &format)
         {
             const QByteArray normalized = format.toLower();
-            return normalized == "jpeg" || normalized == "jpg"
-                       ? kMaxJpegPixelCount
-                       : kMaxPixelCount;
+            return normalized == "jpeg" || normalized == "jpg" ? kMaxJpegPixelCount
+                                                               : kMaxPixelCount;
         }
 
         class ImageMemoryReservation
         {
         public:
             ImageMemoryReservation(std::mutex &mutex,
-                                   std::condition_variable &condition,
-                                   std::uint64_t &available,
-                                   const std::uint64_t requested,
-                                   const std::atomic<bool> &cancelled)
-                : mutex_(mutex), condition_(condition), available_(available),
-                  amount_(requested)
+                std::condition_variable &condition,
+                std::uint64_t &available,
+                const std::uint64_t requested,
+                const std::atomic<bool> &cancelled)
+                : mutex_(mutex)
+                , condition_(condition)
+                , available_(available)
+                , amount_(requested)
             {
                 std::unique_lock lock(mutex_);
-                condition_.wait(lock, [&]
-                {
-                    return cancelled.load(std::memory_order_acquire) ||
-                           available_ >= amount_;
-                });
+                condition_.wait(lock,
+                    [&]
+                    {
+                        return cancelled.load(std::memory_order_acquire) || available_ >= amount_;
+                    });
                 if (!cancelled.load(std::memory_order_acquire))
                 {
                     available_ -= amount_;
@@ -157,67 +157,63 @@ namespace cloakframe
             const long long pixelLimit = imagePixelLimit(reader.format());
             if (!size.isValid() || size.width() <= 0 || size.height() <= 0)
             {
-                return {
-                    false,
+                return {false,
                     QCoreApplication::translate(
-                        "cloakframe::ProcessorWorker",
-                        "cannot inspect image dimensions"),
-                    {}
-                };
+                        "cloakframe::ProcessorWorker", "cannot inspect image dimensions"),
+                    {}};
             }
 
             const long long pixelCount =
-                    static_cast<long long>(size.width()) * static_cast<long long>(size.height());
+                static_cast<long long>(size.width()) * static_cast<long long>(size.height());
             if (pixelCount > pixelLimit)
             {
-                return {
-                    false,
-                    QCoreApplication::translate("cloakframe::ProcessorWorker", "image too large, %1 x %2")
-                        .arg(size.width()).arg(size.height()),
+                return {false,
+                    QCoreApplication::translate(
+                        "cloakframe::ProcessorWorker", "image too large, %1 x %2")
+                        .arg(size.width())
+                        .arg(size.height()),
                     size,
-                    pixelLimit
-                };
+                    pixelLimit};
             }
 
             return {true, {}, size, pixelLimit};
         }
 
-        unsigned imageParallelism(const std::vector<ScanResult> &items,
-                                  const std::vector<std::size_t> &indexes)
+        unsigned imageParallelism(
+            const std::vector<ScanResult> &items, const std::vector<std::size_t> &indexes)
         {
             std::uint64_t largestEstimate = 1;
-            for (const auto index: indexes)
+            for (const auto index : indexes)
             {
                 const auto dimensions = inspectImageDimensions(items[index].sourcePath);
                 if (!dimensions.size.isValid())
                 {
                     continue;
                 }
-                const auto pixels = static_cast<std::uint64_t>(dimensions.size.width()) *
-                                    static_cast<std::uint64_t>(dimensions.size.height());
+                const auto pixels = static_cast<std::uint64_t>(dimensions.size.width())
+                                    * static_cast<std::uint64_t>(dimensions.size.height());
                 std::error_code sizeError;
-                const auto fileSize = std::filesystem::file_size(items[index].sourcePath,
-                                                                  sizeError);
+                const auto fileSize =
+                    std::filesystem::file_size(items[index].sourcePath, sizeError);
                 const auto encodedBytes = sizeError ? 0 : static_cast<std::uint64_t>(fileSize);
                 const auto maximum = std::numeric_limits<std::uint64_t>::max();
-                const auto estimate = pixels > (maximum - encodedBytes) /
-                                               kEstimatedImageBytesPerPixel
-                                          ? maximum
-                                          : pixels * kEstimatedImageBytesPerPixel + encodedBytes;
-                largestEstimate = std::max(
-                    largestEstimate,
-                    estimate);
+                const auto estimate =
+                    pixels > (maximum - encodedBytes) / kEstimatedImageBytesPerPixel
+                        ? maximum
+                        : pixels * kEstimatedImageBytesPerPixel + encodedBytes;
+                largestEstimate = std::max(largestEstimate, estimate);
             }
 
-            const auto memoryLimit = static_cast<unsigned>(std::clamp<std::uint64_t>(
-                imageMemoryBudget() / largestEstimate, 1, 8));
+            const auto memoryLimit = static_cast<unsigned>(
+                std::clamp<std::uint64_t>(imageMemoryBudget() / largestEstimate, 1, 8));
             const unsigned hardware = std::max(1U, std::thread::hardware_concurrency());
             return std::min(memoryLimit, hardware);
         }
 
         QImage matToQImage(const cv::Mat &bgr)
         {
-            QImage image(bgr.data, bgr.cols, bgr.rows, static_cast<int>(bgr.step), QImage::Format_BGR888);
+            QImage image(
+                bgr.data, bgr.cols, bgr.rows, static_cast<int>(bgr.step), QImage::Format_BGR888);
             return image.copy();
         }
 
@@ -244,32 +240,32 @@ namespace cloakframe
             }
             QVector<QRectF> scaled;
             scaled.reserve(rects.size());
-            for (const auto &rect: rects)
+            for (const auto &rect : rects)
             {
                 scaled.push_back(QRectF(rect.x() * factor,
-                                        rect.y() * factor,
-                                        rect.width() * factor,
-                                        rect.height() * factor));
+                    rect.y() * factor,
+                    rect.width() * factor,
+                    rect.height() * factor));
             }
             return scaled;
         }
 
-        FaceDetections toDetections(const QVector<QRectF> &boxes,
-                                    const FaceDetections &references = {})
+        FaceDetections toDetections(
+            const QVector<QRectF> &boxes, const FaceDetections &references = {})
         {
             FaceDetections result;
             result.reserve(boxes.size());
-            for (const auto &rect: boxes)
+            for (const auto &rect : boxes)
             {
                 FaceDetection det;
                 det.box = cv::Rect2f(static_cast<float>(rect.x()),
-                                     static_cast<float>(rect.y()),
-                                     static_cast<float>(rect.width()),
-                                     static_cast<float>(rect.height()));
+                    static_cast<float>(rect.y()),
+                    static_cast<float>(rect.width()),
+                    static_cast<float>(rect.height()));
                 det.score = 1.0F;
                 const FaceDetection *bestReference = nullptr;
                 float bestIou = 0.0F;
-                for (const auto &reference: references)
+                for (const auto &reference : references)
                 {
                     const float iou = intersectionOverUnion(det.box, reference.box);
                     if (iou > bestIou)
@@ -279,8 +275,8 @@ namespace cloakframe
                     }
                 }
                 constexpr float kPoseTransferIou = 0.6F;
-                if (bestReference != nullptr && bestIou >= kPoseTransferIou &&
-                    hasValidFacePose(*bestReference))
+                if (bestReference != nullptr && bestIou >= kPoseTransferIou
+                    && hasValidFacePose(*bestReference))
                 {
                     det.rollRadians = bestReference->rollRadians;
                     det.hasPose = true;
@@ -294,7 +290,7 @@ namespace cloakframe
         {
             QVector<QRectF> result;
             result.reserve(static_cast<int>(faces.size()));
-            for (const auto &face: faces)
+            for (const auto &face : faces)
             {
                 result.push_back(QRectF(face.box.x, face.box.y, face.box.width, face.box.height));
             }
@@ -315,34 +311,34 @@ namespace cloakframe
     };
 
     ProcessorWorker::ProcessorWorker(ProcessingRequest request, DetectorCache cache)
-        : modelPath_(std::move(request.modelPath)),
-          modelSha256_(std::move(request.modelSha256)),
-          faceModelKind_(request.faceModelKind),
-          inputs_(std::move(request.inputs)),
-          outputDirectory_(std::move(request.outputDirectory)),
-          recursive_(request.recursive),
-          scoreThreshold_(request.scoreThreshold),
-          nmsThreshold_(request.nmsThreshold),
-          mosaicBlockSize_(request.mosaicBlockSize),
-          paddingRatio_(request.paddingRatio),
-          method_(request.method),
-          customImage_(std::move(request.customImage)),
-          shape_(request.shape),
-          softEdges_(request.softEdges),
-          preserveMetadata_(request.preserveMetadata),
-          reviewEnabled_(request.reviewEnabled),
-          reviewReceiver_(request.reviewReceiver),
-          detectFaces_(request.detectFaces),
-          detectPlates_(request.detectPlates),
-          plateModelPath_(std::move(request.plateModelPath)),
-          plateModelSha256_(std::move(request.plateModelSha256)),
-          gpuAcceleration_(request.gpuAcceleration),
-          videoCrf_(request.videoCrf),
-          videoCodec_(request.videoCodec),
-          imageMemoryAvailable_(imageMemoryBudget()),
-          detector_(std::move(cache.face)),
-          plateDetector_(std::move(cache.plate)),
-          videoDetector_(std::move(cache.videoFace))
+        : modelPath_(std::move(request.modelPath))
+        , modelSha256_(std::move(request.modelSha256))
+        , faceModelKind_(request.faceModelKind)
+        , inputs_(std::move(request.inputs))
+        , outputDirectory_(std::move(request.outputDirectory))
+        , recursive_(request.recursive)
+        , scoreThreshold_(request.scoreThreshold)
+        , nmsThreshold_(request.nmsThreshold)
+        , mosaicBlockSize_(request.mosaicBlockSize)
+        , paddingRatio_(request.paddingRatio)
+        , method_(request.method)
+        , customImage_(std::move(request.customImage))
+        , shape_(request.shape)
+        , softEdges_(request.softEdges)
+        , preserveMetadata_(request.preserveMetadata)
+        , reviewEnabled_(request.reviewEnabled)
+        , reviewReceiver_(request.reviewReceiver)
+        , detectFaces_(request.detectFaces)
+        , detectPlates_(request.detectPlates)
+        , plateModelPath_(std::move(request.plateModelPath))
+        , plateModelSha256_(std::move(request.plateModelSha256))
+        , gpuAcceleration_(request.gpuAcceleration)
+        , videoCrf_(request.videoCrf)
+        , videoCodec_(request.videoCodec)
+        , imageMemoryAvailable_(imageMemoryBudget())
+        , detector_(std::move(cache.face))
+        , plateDetector_(std::move(cache.plate))
+        , videoDetector_(std::move(cache.videoFace))
     {
     }
 
@@ -376,28 +372,33 @@ namespace cloakframe
                     emit logMessage(tr("Loading face detection model..."));
                     try
                     {
-                        detector_ = makeFaceDetector(faceModelKind_, modelPath_, 640,
-                                                     gpuAcceleration_, modelSha256_);
-                        const cv::Mat warmupFrame(detector_->inputSize(), detector_->inputSize(),
-                                                  CV_8UC3, cv::Scalar(0, 0, 0));
+                        detector_ = makeFaceDetector(
+                            faceModelKind_, modelPath_, 640, gpuAcceleration_, modelSha256_);
+                        const cv::Mat warmupFrame(detector_->inputSize(),
+                            detector_->inputSize(),
+                            CV_8UC3,
+                            cv::Scalar(0, 0, 0));
                         detector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
                     }
                     catch (const Ort::Exception &)
                     {
                         emit logMessage(tr("GPU acceleration can't run the face model; "
                                            "using the CPU instead."));
-                        detector_ = makeFaceDetector(faceModelKind_, modelPath_, 640, false,
-                                                     modelSha256_);
-                        const cv::Mat warmupFrame(detector_->inputSize(), detector_->inputSize(),
-                                                  CV_8UC3, cv::Scalar(0, 0, 0));
+                        detector_ =
+                            makeFaceDetector(faceModelKind_, modelPath_, 640, false, modelSha256_);
+                        const cv::Mat warmupFrame(detector_->inputSize(),
+                            detector_->inputSize(),
+                            CV_8UC3,
+                            cv::Scalar(0, 0, 0));
                         detector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
                     }
-                } else
+                }
+                else
                 {
                     emit logMessage(tr("Reusing loaded face detection model."));
                 }
                 emit logMessage(tr("Face detection backend: %1")
-                                    .arg(QString::fromLatin1(detector_->backendName())));
+                        .arg(QString::fromLatin1(detector_->backendName())));
             }
 
             if (detectPlates_)
@@ -408,7 +409,8 @@ namespace cloakframe
                     try
                     {
                         plateDetector_ = std::make_shared<PlateDetector>(
-                            pathToUtf8(pathFromQString(plateModelPath_)), gpuAcceleration_,
+                            pathToUtf8(pathFromQString(plateModelPath_)),
+                            gpuAcceleration_,
                             plateModelSha256_);
                         const cv::Mat warmupFrame(512, 512, CV_8UC3, cv::Scalar(0, 0, 0));
                         plateDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
@@ -418,17 +420,18 @@ namespace cloakframe
                         emit logMessage(tr("GPU acceleration can't run the license plate model; "
                                            "using the CPU instead."));
                         plateDetector_ = std::make_shared<PlateDetector>(
-                            pathToUtf8(pathFromQString(plateModelPath_)), false,
-                            plateModelSha256_);
+                            pathToUtf8(pathFromQString(plateModelPath_)), false, plateModelSha256_);
                         const cv::Mat warmupFrame(512, 512, CV_8UC3, cv::Scalar(0, 0, 0));
                         plateDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
                     }
-                } else
+                }
+                else
                 {
                     emit logMessage(tr("Reusing loaded license plate detection model."));
                 }
                 emit logMessage(tr("License plate detection backend: %1")
-                                    .arg(QString::fromLatin1(ortAcceleratorName(plateDetector_->accelerator()))));
+                        .arg(QString::fromLatin1(
+                            ortAcceleratorName(plateDetector_->accelerator()))));
             }
 
             emit logMessage(tr("Scanning inputs..."));
@@ -456,34 +459,33 @@ namespace cloakframe
             if (mkdirError)
             {
                 emit logMessage(tr("Cannot create output directory: %1")
-                    .arg(QString::fromStdString(mkdirError.message())));
+                        .arg(QString::fromStdString(mkdirError.message())));
                 emit finished(RunOutcome::Failed);
                 return;
             }
 
             std::error_code canonicalError;
             const auto canonicalRoot = std::filesystem::canonical(outputRoot, canonicalError);
-            const auto safeRoot = canonicalError
-                                      ? outputRoot.lexically_normal()
-                                      : canonicalRoot;
+            const auto safeRoot = canonicalError ? outputRoot.lexically_normal() : canonicalRoot;
 
             const auto outputConflicts = findOutputConflicts(images, safeRoot);
             if (!outputConflicts.empty())
             {
                 emit logMessage(tr("Refusing to run because an output path is already in use."));
-                for (const auto &conflict: outputConflicts)
+                for (const auto &conflict : outputConflicts)
                 {
                     if (conflict.kind == OutputConflict::Kind::DuplicateDestination)
                     {
-                        emit logMessage(tr("Output name collision: '%1' and '%2' would both write to '%3'")
-                            .arg(pathToQString(conflict.otherSource),
-                                 pathToQString(conflict.source),
-                                 pathToQString(conflict.destination)));
+                        emit logMessage(
+                            tr("Output name collision: '%1' and '%2' would both write to '%3'")
+                                .arg(pathToQString(conflict.otherSource),
+                                    pathToQString(conflict.source),
+                                    pathToQString(conflict.destination)));
                     }
                     else
                     {
                         emit logMessage(tr("Existing output would be overwritten: '%1'")
-                            .arg(pathToQString(conflict.destination)));
+                                .arg(pathToQString(conflict.destination)));
                     }
                 }
                 if (outputConflicts.size() >= 10)
@@ -503,7 +505,7 @@ namespace cloakframe
 
             const auto applyOutcome = [&](ItemOutcome &&outcome)
             {
-                for (const auto &message: outcome.logs)
+                for (const auto &message : outcome.logs)
                 {
                     emit logMessage(message);
                 }
@@ -522,7 +524,7 @@ namespace cloakframe
             if (reviewEnabled_ && reviewReceiver_)
             {
                 int index = 0;
-                for (const auto &item: images)
+                for (const auto &item : images)
                 {
                     ++index;
                     if (cancelled_.load(std::memory_order_acquire))
@@ -545,31 +547,34 @@ namespace cloakframe
                 for (std::size_t i = 0; i < images.size(); ++i)
                 {
                     (isSupportedVideo(images[i].sourcePath) ? videoIndexes : imageIndexes)
-                            .push_back(i);
+                        .push_back(i);
                 }
 
                 const unsigned threadCount = imageParallelism(images, imageIndexes);
                 processOrdered<ItemOutcome>(
-                    imageIndexes.size(), threadCount, threadCount, cancelled_,
+                    imageIndexes.size(),
+                    threadCount,
+                    threadCount,
+                    cancelled_,
                     [&](std::size_t k)
                     {
                         const auto i = imageIndexes[k];
-                        return processItem(images[i], safeRoot,
-                                           static_cast<int>(i) + 1, total, false);
+                        return processItem(
+                            images[i], safeRoot, static_cast<int>(i) + 1, total, false);
                     },
                     [&](std::size_t, ItemOutcome &&outcome)
                     {
                         applyOutcome(std::move(outcome));
                     });
 
-                for (const auto i: videoIndexes)
+                for (const auto i : videoIndexes)
                 {
                     if (cancelled_.load(std::memory_order_acquire))
                     {
                         break;
                     }
-                    auto outcome = processItem(images[i], safeRoot,
-                                               static_cast<int>(i) + 1, total, false);
+                    auto outcome =
+                        processItem(images[i], safeRoot, static_cast<int>(i) + 1, total, false);
                     const bool stop = outcome.cancelled;
                     applyOutcome(std::move(outcome));
                     if (stop)
@@ -579,10 +584,14 @@ namespace cloakframe
                 }
             }
 
-            emit logMessage(
-                tr("Summary: %1 redacted, %2 saved without redaction, %3 copied, %4 skipped, %5 failed (of %6).")
-                    .arg(redactedCount).arg(unredactedCount).arg(copiedCount).arg(skippedCount)
-                    .arg(failedCount).arg(total));
+            emit logMessage(tr("Summary: %1 redacted, %2 saved without redaction, %3 copied, %4 "
+                               "skipped, %5 failed (of %6).")
+                    .arg(redactedCount)
+                    .arg(unredactedCount)
+                    .arg(copiedCount)
+                    .arg(skippedCount)
+                    .arg(failedCount)
+                    .arg(total));
 
             RunSummary summary;
             summary.total = total;
@@ -595,9 +604,10 @@ namespace cloakframe
 
             if (unredactedCount > 0)
             {
-                emit logMessage(
-                    tr("Warning: %n image(s) were saved with no regions redacted. Check them before sharing.",
-                       nullptr, unredactedCount));
+                emit logMessage(tr("Warning: %n image(s) were saved with no regions redacted. "
+                                   "Check them before sharing.",
+                    nullptr,
+                    unredactedCount));
             }
 
             if (cancelled_.load(std::memory_order_acquire))
@@ -606,8 +616,8 @@ namespace cloakframe
                 return;
             }
 
-            if (failedCount > 0 || skippedCount > 0 || unredactedCount > 0 ||
-                copiedCount > 0 || warningCount > 0)
+            if (failedCount > 0 || skippedCount > 0 || unredactedCount > 0 || copiedCount > 0
+                || warningCount > 0)
             {
                 emit logMessage(tr("Completed with warnings. Review the summary before sharing."));
                 emit finished(RunOutcome::CompletedWithWarnings);
@@ -617,26 +627,26 @@ namespace cloakframe
                 emit logMessage(tr("Done."));
                 emit finished(RunOutcome::Completed);
             }
-        } catch (const std::exception &exception)
+        }
+        catch (const std::exception &exception)
         {
             emit logMessage(tr("Error: %1").arg(exception.what()));
-            emit finished(cancelled_.load(std::memory_order_acquire)
-                              ? RunOutcome::Cancelled
-                              : RunOutcome::Failed);
-        } catch (...)
+            emit finished(cancelled_.load(std::memory_order_acquire) ? RunOutcome::Cancelled
+                                                                     : RunOutcome::Failed);
+        }
+        catch (...)
         {
             emit logMessage(tr("Unexpected error — processing stopped."));
-            emit finished(cancelled_.load(std::memory_order_acquire)
-                              ? RunOutcome::Cancelled
-                              : RunOutcome::Failed);
+            emit finished(cancelled_.load(std::memory_order_acquire) ? RunOutcome::Cancelled
+                                                                     : RunOutcome::Failed);
         }
     }
 
     ProcessorWorker::ItemOutcome ProcessorWorker::processItem(const ScanResult &item,
-                                                              const std::filesystem::path &safeRoot,
-                                                              const int index,
-                                                              const int total,
-                                                              const bool allowReview)
+        const std::filesystem::path &safeRoot,
+        const int index,
+        const int total,
+        const bool allowReview)
     {
         ItemOutcome outcome;
         try
@@ -653,12 +663,11 @@ namespace cloakframe
             }
 
             std::error_code sameFileError;
-            if (std::filesystem::exists(destination, sameFileError) &&
-                std::filesystem::equivalent(source, destination, sameFileError))
+            if (std::filesystem::exists(destination, sameFileError)
+                && std::filesystem::equivalent(source, destination, sameFileError))
             {
-                outcome.logs.push_back(
-                    tr("Skipped (source and destination are the same file): %1")
-                    .arg(pathToQString(source.filename())));
+                outcome.logs.push_back(tr("Skipped (source and destination are the same file): %1")
+                        .arg(pathToQString(source.filename())));
                 outcome.skipped = 1;
                 return outcome;
             }
@@ -683,8 +692,7 @@ namespace cloakframe
             };
             const auto recordChangedSource = [&]
             {
-                outcome.logs.push_back(
-                    tr("Source file changed during processing: %1")
+                outcome.logs.push_back(tr("Source file changed during processing: %1")
                         .arg(pathToQString(source.filename())));
                 outcome.failed = 1;
             };
@@ -692,10 +700,9 @@ namespace cloakframe
             const auto fileSize = sourceIdentity->size;
             if (fileSize > kMaxInputFileBytes)
             {
-                outcome.logs.push_back(
-                    tr("Skipped (file too large, %1 MB): %2")
-                    .arg(static_cast<qulonglong>(fileSize >> 20))
-                    .arg(pathToQString(source.filename())));
+                outcome.logs.push_back(tr("Skipped (file too large, %1 MB): %2")
+                        .arg(static_cast<qulonglong>(fileSize >> 20))
+                        .arg(pathToQString(source.filename())));
                 outcome.skipped = 1;
                 return outcome;
             }
@@ -704,23 +711,22 @@ namespace cloakframe
             QTemporaryDir sourceStaging;
             if (!sourceStaging.isValid())
             {
-                outcome.logs.push_back(tr("Failed to create a private source snapshot: %1")
-                                           .arg(fileName));
+                outcome.logs.push_back(
+                    tr("Failed to create a private source snapshot: %1").arg(fileName));
                 outcome.failed = 1;
                 return outcome;
             }
             std::error_code snapshotError;
-            const auto snapshotRoot = std::filesystem::canonical(
-                pathFromQString(sourceStaging.path()), snapshotError);
+            const auto snapshotRoot =
+                std::filesystem::canonical(pathFromQString(sourceStaging.path()), snapshotError);
             std::filesystem::path snapshotRelative = "source";
             snapshotRelative += source.extension();
             const auto canCopySource = [&]
             {
-                return !cancelled_.load(std::memory_order_acquire) &&
-                       originalIsUnchanged();
+                return !cancelled_.load(std::memory_order_acquire) && originalIsUnchanged();
             };
-            if (snapshotError || !copyFileNoReplaceAtRoot(
-                    source, snapshotRoot, snapshotRelative, canCopySource))
+            if (snapshotError
+                || !copyFileNoReplaceAtRoot(source, snapshotRoot, snapshotRelative, canCopySource))
             {
                 if (cancelled_.load(std::memory_order_acquire))
                 {
@@ -732,8 +738,8 @@ namespace cloakframe
                 }
                 else
                 {
-                    outcome.logs.push_back(tr("Failed to create a private source snapshot: %1")
-                                               .arg(fileName));
+                    outcome.logs.push_back(
+                        tr("Failed to create a private source snapshot: %1").arg(fileName));
                     outcome.failed = 1;
                 }
                 return outcome;
@@ -742,21 +748,19 @@ namespace cloakframe
             const auto processingIdentity = captureFileIdentity(processingSource);
             if (!processingIdentity)
             {
-                outcome.logs.push_back(tr("Failed to create a private source snapshot: %1")
-                                           .arg(fileName));
+                outcome.logs.push_back(
+                    tr("Failed to create a private source snapshot: %1").arg(fileName));
                 outcome.failed = 1;
                 return outcome;
             }
-            const auto sourceIsUnchanged = [processingSource,
-                                            expected = *processingIdentity]
+            const auto sourceIsUnchanged = [processingSource, expected = *processingIdentity]
             {
                 const auto current = captureFileIdentity(processingSource);
                 return current && *current == expected;
             };
             const auto canPublish = [&]
             {
-                return !cancelled_.load(std::memory_order_acquire) &&
-                       sourceIsUnchanged();
+                return !cancelled_.load(std::memory_order_acquire) && sourceIsUnchanged();
             };
             emit stageChanged(index, total, tr("Loading"), fileName);
 
@@ -788,20 +792,19 @@ namespace cloakframe
                 return outcome;
             }
 
-            const auto pixels = static_cast<std::uint64_t>(dimensions.size.width()) *
-                                static_cast<std::uint64_t>(dimensions.size.height());
+            const auto pixels = static_cast<std::uint64_t>(dimensions.size.width())
+                                * static_cast<std::uint64_t>(dimensions.size.height());
             const auto maximum = std::numeric_limits<std::uint64_t>::max();
-            const auto estimatedMemory = pixels >
-                                         (maximum - fileSize) /
-                                         kEstimatedImageBytesPerPixel
-                                             ? imageMemoryBudget()
-                                             : std::min<std::uint64_t>(
-                                                   imageMemoryBudget(),
-                                                   pixels * kEstimatedImageBytesPerPixel +
-                                                   fileSize);
-            ImageMemoryReservation memoryReservation(
-                imageMemoryMutex_, imageMemoryCv_, imageMemoryAvailable_,
-                std::max<std::uint64_t>(1, estimatedMemory), cancelled_);
+            const auto estimatedMemory =
+                pixels > (maximum - fileSize) / kEstimatedImageBytesPerPixel
+                    ? imageMemoryBudget()
+                    : std::min<std::uint64_t>(
+                          imageMemoryBudget(), pixels * kEstimatedImageBytesPerPixel + fileSize);
+            ImageMemoryReservation memoryReservation(imageMemoryMutex_,
+                imageMemoryCv_,
+                imageMemoryAvailable_,
+                std::max<std::uint64_t>(1, estimatedMemory),
+                cancelled_);
             if (!memoryReservation.acquired())
             {
                 outcome.cancelled = true;
@@ -842,13 +845,13 @@ namespace cloakframe
             }
 
             const long long pixelCount =
-                    static_cast<long long>(image.cols) * static_cast<long long>(image.rows);
+                static_cast<long long>(image.cols) * static_cast<long long>(image.rows);
             if (pixelCount > dimensions.pixelLimit)
             {
-                outcome.logs.push_back(
-                    tr("Skipped (image too large, %1 × %2): %3")
-                    .arg(image.cols).arg(image.rows)
-                    .arg(fileName));
+                outcome.logs.push_back(tr("Skipped (image too large, %1 × %2): %3")
+                        .arg(image.cols)
+                        .arg(image.rows)
+                        .arg(fileName));
                 outcome.skipped = 1;
                 return outcome;
             }
@@ -865,7 +868,8 @@ namespace cloakframe
                 }
                 if (detectPlates_ && plateDetector_)
                 {
-                    const auto plates = plateDetector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
+                    const auto plates =
+                        plateDetector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
                     detected.insert(detected.end(), plates.begin(), plates.end());
                 }
             }
@@ -886,8 +890,7 @@ namespace cloakframe
                 const QVector<QRectF> detectedRects = scaleRects(toQRects(detected), previewScale);
 
                 ReviewResult reviewResult;
-                const bool invoked = QMetaObject::invokeMethod(
-                    reviewReceiver_.data(),
+                const bool invoked = QMetaObject::invokeMethod(reviewReceiver_.data(),
                     "requestReview",
                     Qt::BlockingQueuedConnection,
                     Q_RETURN_ARG(cloakframe::ReviewResult, reviewResult),
@@ -901,26 +904,27 @@ namespace cloakframe
                 if (!invoked)
                 {
                     outcome.logs.push_back(tr("Review bridge unavailable; saved without review."));
-                } else
+                }
+                else
                 {
                     switch (reviewResult.decision)
                     {
-                        case ReviewDecision::CancelAll:
-                            cancelled_.store(true, std::memory_order_release);
-                            break;
-                        case ReviewDecision::DoNotSave:
-                            doNotSaveThisImage = true;
-                            break;
-                        case ReviewDecision::CopyOriginal:
-                            copyOriginalThisImage = true;
-                            break;
-                        case ReviewDecision::Save:
+                    case ReviewDecision::CancelAll:
+                        cancelled_.store(true, std::memory_order_release);
+                        break;
+                    case ReviewDecision::DoNotSave:
+                        doNotSaveThisImage = true;
+                        break;
+                    case ReviewDecision::CopyOriginal:
+                        copyOriginalThisImage = true;
+                        break;
+                    case ReviewDecision::Save:
 
-                            finalFaces = toDetections(
-                                scaleRects(reviewResult.finalBoxes,
-                                           previewScale != 0.0 ? 1.0 / previewScale : 1.0),
+                        finalFaces =
+                            toDetections(scaleRects(reviewResult.finalBoxes,
+                                             previewScale != 0.0 ? 1.0 / previewScale : 1.0),
                                 detected);
-                            break;
+                        break;
                     }
                 }
             }
@@ -957,10 +961,10 @@ namespace cloakframe
                 }
                 else
                 {
-                    copied = imwriteUnicodeNoReplaceAtRoot(
-                                 safeRoot, outputRelativePath(item), image,
-                                 encodeParams, {}, canPublish) !=
-                             ImageWriteResult::Failed;
+                    copied =
+                        imwriteUnicodeNoReplaceAtRoot(
+                            safeRoot, outputRelativePath(item), image, encodeParams, {}, canPublish)
+                        != ImageWriteResult::Failed;
                 }
 
                 if (!copied)
@@ -975,11 +979,12 @@ namespace cloakframe
                     }
                     else
                     {
-                        outcome.logs.push_back(tr("Failed to copy: %1").arg(
-                            pathToQString(destination)));
+                        outcome.logs.push_back(
+                            tr("Failed to copy: %1").arg(pathToQString(destination)));
                         outcome.failed = 1;
                     }
-                } else
+                }
+                else
                 {
                     outcome.logs.push_back(tr("Skipped (original copied): %1").arg(fileName));
                     outcome.copied = 1;
@@ -988,8 +993,14 @@ namespace cloakframe
             }
 
             emit stageChanged(index, total, tr("Applying anonymization"), fileName);
-            applyAnonymization(image, finalFaces, method_, mosaicBlockSize_, paddingRatio_,
-                               shape_, softEdges_, customImage_);
+            applyAnonymization(image,
+                finalFaces,
+                method_,
+                mosaicBlockSize_,
+                paddingRatio_,
+                shape_,
+                softEdges_,
+                customImage_);
 
             if (cancelled_.load(std::memory_order_acquire))
             {
@@ -998,9 +1009,12 @@ namespace cloakframe
             }
 
             emit stageChanged(index, total, tr("Saving"), fileName);
-            const auto writeResult = imwriteUnicodeNoReplaceAtRoot(
-                safeRoot, outputRelativePath(item), image, encodeParams,
-                preserveMetadata_ ? processingSource : std::filesystem::path{}, canPublish);
+            const auto writeResult = imwriteUnicodeNoReplaceAtRoot(safeRoot,
+                outputRelativePath(item),
+                image,
+                encodeParams,
+                preserveMetadata_ ? processingSource : std::filesystem::path{},
+                canPublish);
             if (writeResult == ImageWriteResult::Failed)
             {
                 if (cancelled_.load(std::memory_order_acquire))
@@ -1013,49 +1027,54 @@ namespace cloakframe
                 }
                 else
                 {
-                    outcome.logs.push_back(tr("Failed to save: %1").arg(pathToQString(destination)));
+                    outcome.logs.push_back(
+                        tr("Failed to save: %1").arg(pathToQString(destination)));
                     outcome.failed = 1;
                 }
-            } else
+            }
+            else
             {
                 if (writeResult == ImageWriteResult::SavedWithoutMetadata)
                 {
-                    outcome.logs.push_back(tr("Saved, but could not copy metadata: %1").arg(fileName));
+                    outcome.logs.push_back(
+                        tr("Saved, but could not copy metadata: %1").arg(fileName));
                     outcome.warnings = 1;
                 }
                 if (finalFaces.empty())
                 {
                     outcome.logs.push_back(tr("Saved with no regions redacted: %1").arg(fileName));
                     outcome.unredacted = 1;
-                } else
+                }
+                else
                 {
-                    outcome.logs.push_back(
-                        tr("Redacted %n region(s): %1", nullptr,
-                           static_cast<int>(finalFaces.size()))
+                    outcome.logs.push_back(tr(
+                        "Redacted %n region(s): %1", nullptr, static_cast<int>(finalFaces.size()))
                             .arg(fileName));
                     outcome.redacted = 1;
                 }
             }
-        } catch (const std::exception &exception)
+        }
+        catch (const std::exception &exception)
         {
             outcome.logs.push_back(tr("Error processing %1: %2")
-                .arg(pathToQString(item.sourcePath.filename()),
-                     QString::fromUtf8(exception.what())));
+                    .arg(pathToQString(item.sourcePath.filename()),
+                        QString::fromUtf8(exception.what())));
             outcome.failed = 1;
-        } catch (...)
+        }
+        catch (...)
         {
-            outcome.logs.push_back(tr("Error processing %1")
-                .arg(pathToQString(item.sourcePath.filename())));
+            outcome.logs.push_back(
+                tr("Error processing %1").arg(pathToQString(item.sourcePath.filename())));
             outcome.failed = 1;
         }
         return outcome;
     }
 
     ProcessorWorker::ItemOutcome ProcessorWorker::processVideoItem(const ScanResult &item,
-                                                                   const std::filesystem::path &safeRoot,
-                                                                   const std::filesystem::path &destination,
-                                                                   const int index,
-                                                                   const int total)
+        const std::filesystem::path &safeRoot,
+        const std::filesystem::path &destination,
+        const int index,
+        const int total)
     {
         ItemOutcome outcome;
         const QString fileName = pathToQString(item.sourcePath.filename());
@@ -1119,37 +1138,38 @@ namespace cloakframe
         if (detectFaces_ && detector_ && !videoDetector_)
         {
             emit logMessage(tr("Loading face detection model for video..."));
-            const int videoInputSize = faceModelKind_ == FaceModelKind::Scrfd
-                                           ? kVideoDetectionInputSize
-                                           : 640;
+            const int videoInputSize =
+                faceModelKind_ == FaceModelKind::Scrfd ? kVideoDetectionInputSize : 640;
             try
             {
-                videoDetector_ = makeFaceDetector(faceModelKind_, modelPath_,
-                                                  videoInputSize, gpuAcceleration_,
-                                                  modelSha256_);
-                const cv::Mat warmupFrame(videoDetector_->inputSize(), videoDetector_->inputSize(),
-                                          CV_8UC3, cv::Scalar(0, 0, 0));
+                videoDetector_ = makeFaceDetector(
+                    faceModelKind_, modelPath_, videoInputSize, gpuAcceleration_, modelSha256_);
+                const cv::Mat warmupFrame(videoDetector_->inputSize(),
+                    videoDetector_->inputSize(),
+                    CV_8UC3,
+                    cv::Scalar(0, 0, 0));
                 videoDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
             }
             catch (const Ort::Exception &)
             {
                 emit logMessage(tr("GPU acceleration can't run the video face model at %1 px; "
                                    "using the CPU instead.")
-                                    .arg(videoInputSize));
-                videoDetector_ = makeFaceDetector(faceModelKind_, modelPath_,
-                                                  videoInputSize, false,
-                                                  modelSha256_);
-                const cv::Mat warmupFrame(videoDetector_->inputSize(), videoDetector_->inputSize(),
-                                          CV_8UC3, cv::Scalar(0, 0, 0));
+                        .arg(videoInputSize));
+                videoDetector_ = makeFaceDetector(
+                    faceModelKind_, modelPath_, videoInputSize, false, modelSha256_);
+                const cv::Mat warmupFrame(videoDetector_->inputSize(),
+                    videoDetector_->inputSize(),
+                    CV_8UC3,
+                    cv::Scalar(0, 0, 0));
                 videoDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
             }
             emit logMessage(tr("Video face detection: %1 px · %2")
-                                .arg(videoDetector_->inputSize())
-                                .arg(QString::fromLatin1(videoDetector_->backendName())));
+                    .arg(videoDetector_->inputSize())
+                    .arg(QString::fromLatin1(videoDetector_->backendName())));
         }
 
         const float detectionThreshold =
-                std::min(options.tracker.lowScoreThreshold, scoreThreshold_);
+            std::min(options.tracker.lowScoreThreshold, scoreThreshold_);
         const auto detect = [this, detectionThreshold](const cv::Mat &frame)
         {
             std::lock_guard lock(detectMutex_);
@@ -1161,7 +1181,7 @@ namespace cloakframe
             if (detectPlates_ && plateDetector_)
             {
                 const auto plates =
-                        plateDetector_->detect(frame, detectionThreshold, nmsThreshold_);
+                    plateDetector_->detect(frame, detectionThreshold, nmsThreshold_);
                 detections.insert(detections.end(), plates.begin(), plates.end());
             }
             return detections;
@@ -1180,16 +1200,16 @@ namespace cloakframe
                 lastPass = pass;
                 lastPercent = -1;
             }
-            const int percent = totalFrames > 0
-                                    ? static_cast<int>(std::min<qint64>(100, frame * 100 / totalFrames))
-                                    : 0;
+            const int percent =
+                totalFrames > 0 ? static_cast<int>(std::min<qint64>(100, frame * 100 / totalFrames))
+                                : 0;
             if (percent == lastPercent)
             {
                 return;
             }
             lastPercent = percent;
-            QString stage = pass == 1 ? tr("Analyzing %1%").arg(percent)
-                                      : tr("Encoding %1%").arg(percent);
+            QString stage =
+                pass == 1 ? tr("Analyzing %1%").arg(percent) : tr("Encoding %1%").arg(percent);
             const qint64 elapsedMs = passTimer.elapsed();
             if (frame > 0 && elapsedMs > 2000 && totalFrames > frame)
             {
@@ -1205,9 +1225,10 @@ namespace cloakframe
         VideoTrackReviewFn review;
         if (reviewEnabled_ && reviewReceiver_)
         {
-            review = [this, &tools, &fileName, index, total]
-                     (std::vector<Track> &tracks, qint64 frameCount,
-                      const QString &reviewSourcePath, const VideoInfo &reviewInfo)
+            review = [this, &tools, &fileName, index, total](std::vector<Track> &tracks,
+                         qint64 frameCount,
+                         const QString &reviewSourcePath,
+                         const VideoInfo &reviewInfo)
             {
                 emit stageChanged(index, total, tr("Reviewing video tracks"), fileName);
                 VideoReviewRequest request;
@@ -1218,19 +1239,18 @@ namespace cloakframe
                 request.fps = reviewInfo.fps();
                 request.fpsNum = reviewInfo.fpsNum;
                 request.fpsDen = reviewInfo.fpsDen;
-                request.frameCount = static_cast<int>(std::min<qint64>(
-                    frameCount, std::numeric_limits<int>::max()));
+                request.frameCount =
+                    static_cast<int>(std::min<qint64>(frameCount, std::numeric_limits<int>::max()));
                 request.tracks.reserve(static_cast<qsizetype>(tracks.size()));
-                for (const auto &track: tracks)
+                for (const auto &track : tracks)
                 {
                     VideoReviewTrack reviewTrack;
                     reviewTrack.id = track.id;
                     reviewTrack.lowConfidence = track.lowConfidence;
                     reviewTrack.boxes.reserve(static_cast<qsizetype>(track.boxes.size()));
-                    for (const auto &box: track.boxes)
+                    for (const auto &box : track.boxes)
                     {
-                        reviewTrack.boxes.push_back({
-                            box.frame,
+                        reviewTrack.boxes.push_back({box.frame,
                             QRectF(box.box.x, box.box.y, box.box.width, box.box.height),
                             box.interpolated});
                     }
@@ -1238,8 +1258,7 @@ namespace cloakframe
                 }
 
                 VideoReviewResult reviewResult;
-                const bool invoked = QMetaObject::invokeMethod(
-                    reviewReceiver_.data(),
+                const bool invoked = QMetaObject::invokeMethod(reviewReceiver_.data(),
                     "requestVideoReview",
                     Qt::BlockingQueuedConnection,
                     Q_RETURN_ARG(cloakframe::VideoReviewResult, reviewResult),
@@ -1249,10 +1268,11 @@ namespace cloakframe
                     cancelled_.store(true, std::memory_order_release);
                     return false;
                 }
-                std::erase_if(tracks, [&](const Track &track)
-                {
-                    return reviewResult.excludedTrackIds.contains(track.id);
-                });
+                std::erase_if(tracks,
+                    [&](const Track &track)
+                    {
+                        return reviewResult.excludedTrackIds.contains(track.id);
+                    });
 
                 constexpr qsizetype kMaxManualTracks = 64;
                 constexpr qsizetype kMaxManualKeyframes = 4096;
@@ -1264,7 +1284,7 @@ namespace cloakframe
                 }
                 int nextTrackId = 1;
                 std::uint64_t reviewedTrackBoxes = 0;
-                for (const auto &track: tracks)
+                for (const auto &track : tracks)
                 {
                     if (track.id < std::numeric_limits<int>::max())
                     {
@@ -1277,17 +1297,18 @@ namespace cloakframe
                     }
                     reviewedTrackBoxes += track.boxes.size();
                 }
-                for (const auto &manual: reviewResult.addedTracks)
+                for (const auto &manual : reviewResult.addedTracks)
                 {
-                    const std::uint64_t manualBoxCount = manual.endFrame >= manual.startFrame
-                        ? static_cast<std::uint64_t>(
-                              static_cast<std::int64_t>(manual.endFrame) -
-                              static_cast<std::int64_t>(manual.startFrame)) + 1
-                        : 0;
-                    if (manual.keyframes.size() > kMaxManualKeyframes ||
-                        manualBoxCount == 0 ||
-                        manualBoxCount > kMaxReviewedTrackBoxes - reviewedTrackBoxes ||
-                        nextTrackId == std::numeric_limits<int>::max())
+                    const std::uint64_t manualBoxCount =
+                        manual.endFrame >= manual.startFrame
+                            ? static_cast<std::uint64_t>(
+                                  static_cast<std::int64_t>(manual.endFrame)
+                                  - static_cast<std::int64_t>(manual.startFrame))
+                                  + 1
+                            : 0;
+                    if (manual.keyframes.size() > kMaxManualKeyframes || manualBoxCount == 0
+                        || manualBoxCount > kMaxReviewedTrackBoxes - reviewedTrackBoxes
+                        || nextTrackId == std::numeric_limits<int>::max())
                     {
                         cancelled_.store(true, std::memory_order_release);
                         return false;
@@ -1307,51 +1328,51 @@ namespace cloakframe
         }
 
         const auto result = processVideo(*tools,
-                                         pathToQString(item.sourcePath),
-                                         pathToQString(destination),
-                                         *info, options, detect,
-                                         cancelled_, progress, review);
+            pathToQString(item.sourcePath),
+            pathToQString(destination),
+            *info,
+            options,
+            detect,
+            cancelled_,
+            progress,
+            review);
         switch (result.status)
         {
-            case VideoProcessStatus::Completed:
-                if (result.trackCount == 0)
-                {
-                    outcome.logs.push_back(
-                        tr("Saved with no regions redacted: %1").arg(fileName));
-                    outcome.unredacted = 1;
-                }
-                else
-                {
-                    outcome.logs.push_back(
-                        tr("Redacted %n region(s): %1", nullptr, result.trackCount)
-                            .arg(fileName));
-                    outcome.redacted = 1;
-                }
-                if (const double elapsedSeconds = totalTimer.elapsed() / 1000.0;
-                    elapsedSeconds > 0 && info->fps() > 0)
-                {
-                    const double videoSeconds = static_cast<double>(result.frameCount) / info->fps();
-                    outcome.logs.push_back(
-                        tr("Processed %1 frames in %2s (%3× real time): %4")
-                            .arg(result.frameCount)
-                            .arg(elapsedSeconds, 0, 'f', 1)
-                            .arg(videoSeconds / elapsedSeconds, 0, 'f', 1)
-                            .arg(fileName));
-                }
-                if (!result.encoderName.isEmpty())
-                {
-                    outcome.logs.push_back(
-                        tr("Video encoder: %1").arg(result.encoderName));
-                }
-                break;
-            case VideoProcessStatus::Cancelled:
-                outcome.cancelled = true;
-                break;
-            case VideoProcessStatus::Failed:
+        case VideoProcessStatus::Completed:
+            if (result.trackCount == 0)
+            {
+                outcome.logs.push_back(tr("Saved with no regions redacted: %1").arg(fileName));
+                outcome.unredacted = 1;
+            }
+            else
+            {
                 outcome.logs.push_back(
-                    tr("Failed to process video %1: %2").arg(fileName, result.error));
-                outcome.failed = 1;
-                break;
+                    tr("Redacted %n region(s): %1", nullptr, result.trackCount).arg(fileName));
+                outcome.redacted = 1;
+            }
+            if (const double elapsedSeconds = totalTimer.elapsed() / 1000.0;
+                elapsedSeconds > 0 && info->fps() > 0)
+            {
+                const double videoSeconds = static_cast<double>(result.frameCount) / info->fps();
+                outcome.logs.push_back(tr("Processed %1 frames in %2s (%3× real time): %4")
+                        .arg(result.frameCount)
+                        .arg(elapsedSeconds, 0, 'f', 1)
+                        .arg(videoSeconds / elapsedSeconds, 0, 'f', 1)
+                        .arg(fileName));
+            }
+            if (!result.encoderName.isEmpty())
+            {
+                outcome.logs.push_back(tr("Video encoder: %1").arg(result.encoderName));
+            }
+            break;
+        case VideoProcessStatus::Cancelled:
+            outcome.cancelled = true;
+            break;
+        case VideoProcessStatus::Failed:
+            outcome.logs.push_back(
+                tr("Failed to process video %1: %2").arg(fileName, result.error));
+            outcome.failed = 1;
+            break;
         }
         return outcome;
     }

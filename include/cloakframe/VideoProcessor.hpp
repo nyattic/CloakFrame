@@ -52,9 +52,9 @@ namespace cloakframe
     using VideoProgressFn = std::function<void(int pass, qint64 frame, qint64 totalEstimate)>;
     using VideoDetectFn = std::function<FaceDetections(const cv::Mat &frame)>;
     using VideoTrackReviewFn = std::function<bool(std::vector<Track> &tracks,
-                                                   qint64 frameCount,
-                                                   const QString &sourcePath,
-                                                   const VideoInfo &info)>;
+        qint64 frameCount,
+        const QString &sourcePath,
+        const VideoInfo &info)>;
 
     struct VideoMaskingPlan
     {
@@ -65,17 +65,16 @@ namespace cloakframe
 
     [[nodiscard]] float videoStrongScoreThreshold(float scoreThreshold);
 
-    [[nodiscard]] VideoMaskingPlan videoMaskingPlan(int width, int height,
-                                                    unsigned int hardwareThreads,
-                                                    qint64 memoryBudget = 0);
+    [[nodiscard]] VideoMaskingPlan videoMaskingPlan(
+        int width, int height, unsigned int hardwareThreads, qint64 memoryBudget = 0);
 
     VideoProcessResult processVideo(const FfmpegTools &tools,
-                                    const QString &sourcePath,
-                                    const QString &destinationPath,
-                                    const VideoInfo &info,
-                                    const VideoProcessOptions &options,
-                                    const VideoDetectFn &detect,
-                                    const std::atomic<bool> &cancelled,
-                                    const VideoProgressFn &progress = {},
-                                    const VideoTrackReviewFn &review = {});
+        const QString &sourcePath,
+        const QString &destinationPath,
+        const VideoInfo &info,
+        const VideoProcessOptions &options,
+        const VideoDetectFn &detect,
+        const std::atomic<bool> &cancelled,
+        const VideoProgressFn &progress = {},
+        const VideoTrackReviewFn &review = {});
 }

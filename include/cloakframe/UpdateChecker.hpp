@@ -21,8 +21,8 @@ namespace cloakframe
         void check();
 
     signals:
-        void updateAvailable(const QString &latestVersion, const QString &releaseUrl,
-                             const QString &releaseNotes);
+        void updateAvailable(
+            const QString &latestVersion, const QString &releaseUrl, const QString &releaseNotes);
 
     private:
         QString currentVersion_;

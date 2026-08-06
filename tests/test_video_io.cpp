@@ -1,8 +1,6 @@
 #include "cloakframe/VideoIo.hpp"
 #include "cloakframe/VideoProcessor.hpp"
 
-#include <atomic>
-
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -11,6 +9,7 @@
 
 #include <opencv2/core.hpp>
 
+#include <atomic>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -19,19 +18,35 @@ namespace
 {
     constexpr int kSkipExitCode = 77;
 
-    bool generateSample(const cloakframe::FfmpegTools &tools, const QString &path,
-                        int durationSeconds = 2)
+    bool generateSample(
+        const cloakframe::FfmpegTools &tools, const QString &path, int durationSeconds = 2)
     {
         const QString duration = QString::number(durationSeconds);
         QProcess process;
         process.start(tools.ffmpegPath,
-                      {"-v", "error", "-y",
-                       "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=" + duration,
-                       "-f", "lavfi", "-i", "sine=frequency=440:duration=" + duration,
-                       "-metadata", "title=CloakFrameTestTitle",
-                       "-metadata", "location=+37.5665+126.9780/",
-                       "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                       "-c:a", "aac", "-shortest", path});
+            {"-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=320x240:rate=30:duration=" + duration,
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=" + duration,
+                "-metadata",
+                "title=CloakFrameTestTitle",
+                "-metadata",
+                "location=+37.5665+126.9780/",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-shortest",
+                path});
         if (!process.waitForStarted(15000) || !process.waitForFinished(60000))
         {
             process.kill();
@@ -44,8 +59,7 @@ namespace
     {
         QProcess process;
         process.start(tools.ffprobePath,
-                      {"-v", "error", "-print_format", "json",
-                       "-show_streams", "-show_format", path});
+            {"-v", "error", "-print_format", "json", "-show_streams", "-show_format", path});
         process.waitForStarted(15000);
         process.waitForFinished(60000);
         return QString::fromUtf8(process.readAllStandardOutput());
@@ -140,34 +154,31 @@ namespace
         constexpr qint64 performanceBudget = 1024LL * 1024 * 1024;
         constexpr qint64 headroom = 48LL * 1024 * 1024;
 
-        const auto fullHd = cloakframe::videoMaskingPlan(1920, 1080, 64,
-                                                       constrainedBudget);
+        const auto fullHd = cloakframe::videoMaskingPlan(1920, 1080, 64, constrainedBudget);
         assert(fullHd.workerCount <= 8);
         assert(fullHd.batchFrames <= 16);
         assert(fullHd.batchFrames * fullHd.frameBytes + headroom <= constrainedBudget);
 
-        const auto constrainedFourK = cloakframe::videoMaskingPlan(
-            3840, 2160, 64, constrainedBudget);
+        const auto constrainedFourK =
+            cloakframe::videoMaskingPlan(3840, 2160, 64, constrainedBudget);
         assert(constrainedFourK.workerCount == 3);
         assert(constrainedFourK.batchFrames == 3);
-        assert(constrainedFourK.batchFrames * constrainedFourK.frameBytes + headroom <=
-               constrainedBudget);
+        assert(constrainedFourK.batchFrames * constrainedFourK.frameBytes + headroom
+               <= constrainedBudget);
 
-        const auto performanceFourK = cloakframe::videoMaskingPlan(
-            3840, 2160, 64, performanceBudget);
+        const auto performanceFourK =
+            cloakframe::videoMaskingPlan(3840, 2160, 64, performanceBudget);
         assert(performanceFourK.workerCount == 8);
         assert(performanceFourK.batchFrames == 15);
-        assert(performanceFourK.batchFrames * performanceFourK.frameBytes + headroom <=
-               performanceBudget);
+        assert(performanceFourK.batchFrames * performanceFourK.frameBytes + headroom
+               <= performanceBudget);
 
-        const auto eightK = cloakframe::videoMaskingPlan(7680, 4320, 64,
-                                                       performanceBudget);
+        const auto eightK = cloakframe::videoMaskingPlan(7680, 4320, 64, performanceBudget);
         assert(eightK.workerCount == 3);
         assert(eightK.batchFrames == 3);
         assert(eightK.batchFrames * eightK.frameBytes + headroom <= performanceBudget);
 
-        const auto unknownCpuCount = cloakframe::videoMaskingPlan(
-            320, 240, 0, constrainedBudget);
+        const auto unknownCpuCount = cloakframe::videoMaskingPlan(320, 240, 0, constrainedBudget);
         assert(unknownCpuCount.workerCount == 1);
         assert(unknownCpuCount.batchFrames == 2);
     }
@@ -206,7 +217,7 @@ int main(int argc, char **argv)
     {
         return QDir(dirPath)
             .entryList({QStringLiteral(".cloakframe-*")},
-                       QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot)
+                QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot)
             .size();
     };
 
@@ -231,8 +242,11 @@ int main(int argc, char **argv)
     assert(reader.open(*tools, samplePath, *info));
 
     cloakframe::VideoFrameWriter writer;
-    assert(writer.open(*tools, outputPath, samplePath, *info,
-                       cloakframe::crfForQuality(cloakframe::VideoQuality::HighQuality)));
+    assert(writer.open(*tools,
+        outputPath,
+        samplePath,
+        *info,
+        cloakframe::crfForQuality(cloakframe::VideoQuality::HighQuality)));
 
     int frameCount = 0;
     cv::Mat frame;
@@ -251,16 +265,22 @@ int main(int argc, char **argv)
     {
         const QString guardedPath = tempDir.filePath("out/guarded.mp4");
         cloakframe::VideoFrameWriter guardedWriter;
-        assert(guardedWriter.open(*tools, guardedPath, samplePath, *info,
-                                  cloakframe::crfForQuality(
-                                      cloakframe::VideoQuality::SpaceSaver),
-                                  false));
+        assert(guardedWriter.open(*tools,
+            guardedPath,
+            samplePath,
+            *info,
+            cloakframe::crfForQuality(cloakframe::VideoQuality::SpaceSaver),
+            false));
         cloakframe::VideoFrameReader guardedReader;
         assert(guardedReader.open(*tools, samplePath, *info));
         cv::Mat guardedFrame;
         assert(guardedReader.readFrame(guardedFrame));
         assert(guardedWriter.writeFrame(guardedFrame));
-        assert(!guardedWriter.finish([] { return false; }));
+        assert(!guardedWriter.finish(
+            []
+            {
+                return false;
+            }));
         assert(!QFile::exists(guardedPath));
         assert(stagingLeftovers(tempDir.filePath("out")) == 0);
         std::puts("video publish guard: ok");
@@ -292,15 +312,17 @@ int main(int argc, char **argv)
 
         const QString fourKPath = tempDir.filePath("out/4k60-source.mp4");
         cloakframe::VideoFrameWriter fourKWriter;
-        assert(fourKWriter.open(
-            *tools, fourKPath, samplePath, fourKInfo,
-            cloakframe::crfForQuality(cloakframe::VideoQuality::SpaceSaver), false));
+        assert(fourKWriter.open(*tools,
+            fourKPath,
+            samplePath,
+            fourKInfo,
+            cloakframe::crfForQuality(cloakframe::VideoQuality::SpaceSaver),
+            false));
         cv::Mat fourKFrame(2160, 3840, CV_8UC3);
         for (int frameIndex = 0; frameIndex < 3; ++frameIndex)
         {
-            fourKFrame.setTo(cv::Scalar(20 + frameIndex * 30,
-                                        40 + frameIndex * 20,
-                                        60 + frameIndex * 10));
+            fourKFrame.setTo(
+                cv::Scalar(20 + frameIndex * 30, 40 + frameIndex * 20, 60 + frameIndex * 10));
             assert(fourKWriter.writeFrame(fourKFrame));
         }
         assert(fourKWriter.finish());
@@ -317,12 +339,10 @@ int main(int argc, char **argv)
         fourKOptions.hardwareEncoder = false;
         std::atomic<bool> fourKCancelled{false};
         const auto fourKResult = cloakframe::processVideo(
-            *tools, fourKPath, fourKOutput, *fourKProbe, fourKOptions, {},
-            fourKCancelled);
+            *tools, fourKPath, fourKOutput, *fourKProbe, fourKOptions, {}, fourKCancelled);
         assert(fourKResult.status == cloakframe::VideoProcessStatus::Completed);
         assert(fourKResult.frameCount == 3);
-        const auto processedFourK = cloakframe::probeVideo(
-            *tools, fourKOutput, &probeError);
+        const auto processedFourK = cloakframe::probeVideo(*tools, fourKOutput, &probeError);
         assert(processedFourK.has_value());
         assert(processedFourK->displayWidth() == 3840);
         assert(processedFourK->displayHeight() == 2160);
@@ -342,9 +362,13 @@ int main(int argc, char **argv)
             cloakframe::VideoFrameReader hevcReader;
             assert(hevcReader.open(*tools, samplePath, *info));
             cloakframe::VideoFrameWriter hevcWriter;
-            assert(hevcWriter.open(*tools, hevcPath, samplePath, *info,
-                                   cloakframe::crfForQuality(cloakframe::VideoQuality::Balanced),
-                                   false, cloakframe::VideoCodec::Hevc));
+            assert(hevcWriter.open(*tools,
+                hevcPath,
+                samplePath,
+                *info,
+                cloakframe::crfForQuality(cloakframe::VideoQuality::Balanced),
+                false,
+                cloakframe::VideoCodec::Hevc));
             assert(hevcWriter.encoderName() == "libx265");
             cv::Mat hevcFrame;
             while (hevcReader.readFrame(hevcFrame))
@@ -374,8 +398,8 @@ int main(int argc, char **argv)
         existing.close();
 
         std::atomic<bool> cancelled{false};
-        const auto result = cloakframe::processVideo(
-            *tools, samplePath, existingPath, *info, {}, {}, cancelled);
+        const auto result =
+            cloakframe::processVideo(*tools, samplePath, existingPath, *info, {}, {}, cancelled);
         assert(result.status == cloakframe::VideoProcessStatus::Failed);
         assert(result.error.contains("already exists"));
         assert(existing.open(QIODevice::ReadOnly));
@@ -398,8 +422,16 @@ int main(int argc, char **argv)
     const QString rotatedPath = tempDir.filePath("rotated.mp4");
     QProcess remux;
     remux.start(tools->ffmpegPath,
-                {"-v", "error", "-y", "-display_rotation", "90",
-                 "-i", samplePath, "-c", "copy", rotatedPath});
+        {"-v",
+            "error",
+            "-y",
+            "-display_rotation",
+            "90",
+            "-i",
+            samplePath,
+            "-c",
+            "copy",
+            rotatedPath});
     remux.waitForStarted(15000);
     remux.waitForFinished(60000);
     if (remux.exitStatus() == QProcess::NormalExit && remux.exitCode() == 0)
@@ -419,14 +451,16 @@ int main(int argc, char **argv)
         rotatedReader.close();
 
         cloakframe::VideoFrameWriter rotatedWriter;
-        assert(rotatedWriter.open(*tools, tempDir.filePath("rotated-out.mp4"),
-                                  rotatedPath, *rotatedInfo,
-                                  cloakframe::crfForQuality(cloakframe::VideoQuality::SpaceSaver)));
+        assert(rotatedWriter.open(*tools,
+            tempDir.filePath("rotated-out.mp4"),
+            rotatedPath,
+            *rotatedInfo,
+            cloakframe::crfForQuality(cloakframe::VideoQuality::SpaceSaver)));
         assert(rotatedWriter.writeFrame(rotatedFrame));
         assert(rotatedWriter.finish());
 
-        const auto rotatedOut = cloakframe::probeVideo(
-            *tools, tempDir.filePath("rotated-out.mp4"), &probeError);
+        const auto rotatedOut =
+            cloakframe::probeVideo(*tools, tempDir.filePath("rotated-out.mp4"), &probeError);
         assert(rotatedOut.has_value());
         assert(rotatedOut->rotation == 0);
         assert(rotatedOut->width == 240);
@@ -453,8 +487,13 @@ int main(int argc, char **argv)
         const QString processedPath = tempDir.filePath("processed.mp4");
         std::atomic<bool> cancelled{false};
         qint64 lastPass2Frame = 0;
-        const auto result = cloakframe::processVideo(
-            *tools, samplePath, processedPath, *info, {}, {}, cancelled,
+        const auto result = cloakframe::processVideo(*tools,
+            samplePath,
+            processedPath,
+            *info,
+            {},
+            {},
+            cancelled,
             [&](int pass, qint64 frameIndex, qint64)
             {
                 if (pass == 2)
@@ -484,7 +523,11 @@ int main(int argc, char **argv)
         std::atomic<bool> cancelled{false};
         bool reviewCalled = false;
         const auto result = cloakframe::processVideo(
-            *tools, samplePath, scaledPath, *info, options,
+            *tools,
+            samplePath,
+            scaledPath,
+            *info,
+            options,
             [](const cv::Mat &frame)
             {
                 assert(frame.cols == 160 && frame.rows == 120);
@@ -492,9 +535,12 @@ int main(int argc, char **argv)
                 detections.push_back({cv::Rect2f(40.0F, 30.0F, 80.0F, 60.0F), 0.9F});
                 return detections;
             },
-            cancelled, {},
-            [&](std::vector<cloakframe::Track> &tracks, qint64 frameCount,
-                const QString &, const cloakframe::VideoInfo &)
+            cancelled,
+            {},
+            [&](std::vector<cloakframe::Track> &tracks,
+                qint64 frameCount,
+                const QString &,
+                const cloakframe::VideoInfo &)
             {
                 reviewCalled = true;
                 assert(frameCount >= 55 && frameCount <= 65);
@@ -525,14 +571,20 @@ int main(int argc, char **argv)
         std::atomic<bool> cancelled{false};
         bool reviewCalled = false;
         const auto result = cloakframe::processVideo(
-            *tools, samplePath, reviewCancelledPath, *info, {},
+            *tools,
+            samplePath,
+            reviewCancelledPath,
+            *info,
+            {},
             [](const cv::Mat &)
             {
-                return cloakframe::FaceDetections{
-                    {cv::Rect2f(40.0F, 30.0F, 80.0F, 60.0F), 0.9F}};
+                return cloakframe::FaceDetections{{cv::Rect2f(40.0F, 30.0F, 80.0F, 60.0F), 0.9F}};
             },
-            cancelled, {},
-            [&](std::vector<cloakframe::Track> &, qint64, const QString &,
+            cancelled,
+            {},
+            [&](std::vector<cloakframe::Track> &,
+                qint64,
+                const QString &,
                 const cloakframe::VideoInfo &)
             {
                 reviewCalled = true;
@@ -551,16 +603,22 @@ int main(int argc, char **argv)
         const QString changedSourceOutput = tempDir.filePath("snapshotted-source.mp4");
         assert(QFile::copy(samplePath, replaceableSource));
         assert(generateSample(*tools, replacement, 1));
-        const auto replaceableInfo = cloakframe::probeVideo(
-            *tools, replaceableSource, &probeError);
+        const auto replaceableInfo = cloakframe::probeVideo(*tools, replaceableSource, &probeError);
         assert(replaceableInfo.has_value());
 
         std::atomic<bool> cancelled{false};
         bool reviewCalled = false;
-        const auto result = cloakframe::processVideo(
-            *tools, replaceableSource, changedSourceOutput, *replaceableInfo, {}, {},
-            cancelled, {},
-            [&](std::vector<cloakframe::Track> &, qint64, const QString &,
+        const auto result = cloakframe::processVideo(*tools,
+            replaceableSource,
+            changedSourceOutput,
+            *replaceableInfo,
+            {},
+            {},
+            cancelled,
+            {},
+            [&](std::vector<cloakframe::Track> &,
+                qint64,
+                const QString &,
                 const cloakframe::VideoInfo &)
             {
                 reviewCalled = true;
@@ -580,8 +638,7 @@ int main(int argc, char **argv)
     {
         std::atomic<bool> cancelled{true};
         const auto result = cloakframe::processVideo(
-            *tools, samplePath, tempDir.filePath("cancelled.mp4"), *info, {},
-            {}, cancelled);
+            *tools, samplePath, tempDir.filePath("cancelled.mp4"), *info, {}, {}, cancelled);
         assert(result.status == cloakframe::VideoProcessStatus::Cancelled);
         assert(!QFile::exists(tempDir.filePath("cancelled.mp4")));
         std::puts("video processor cancellation: ok");
@@ -590,8 +647,13 @@ int main(int argc, char **argv)
     {
         const QString pass2CancelledPath = tempDir.filePath("pass2-cancelled.mp4");
         std::atomic<bool> cancelled{false};
-        const auto result = cloakframe::processVideo(
-            *tools, samplePath, pass2CancelledPath, *info, {}, {}, cancelled,
+        const auto result = cloakframe::processVideo(*tools,
+            samplePath,
+            pass2CancelledPath,
+            *info,
+            {},
+            {},
+            cancelled,
             [&](int pass, qint64 frame, qint64)
             {
                 if (pass == 2 && frame == 1)

@@ -62,37 +62,37 @@ namespace cloakframe
                 }
                 switch (field.wireType)
                 {
-                    case kWireVarint:
-                        if (!readVarint(field.varint))
-                        {
-                            return std::nullopt;
-                        }
-                        break;
-                    case kWireFixed64:
-                    case kWireFixed32:
+                case kWireVarint:
+                    if (!readVarint(field.varint))
                     {
-                        const std::size_t width = field.wireType == kWireFixed64 ? 8 : 4;
-                        if (size - pos < width)
-                        {
-                            return std::nullopt;
-                        }
-                        field.bytes.assign(data + pos, data + pos + width);
-                        pos += width;
-                        break;
-                    }
-                    case kWireLengthDelimited:
-                    {
-                        std::uint64_t length = 0;
-                        if (!readVarint(length) || length > size - pos)
-                        {
-                            return std::nullopt;
-                        }
-                        field.bytes.assign(data + pos, data + pos + length);
-                        pos += length;
-                        break;
-                    }
-                    default:
                         return std::nullopt;
+                    }
+                    break;
+                case kWireFixed64:
+                case kWireFixed32:
+                {
+                    const std::size_t width = field.wireType == kWireFixed64 ? 8 : 4;
+                    if (size - pos < width)
+                    {
+                        return std::nullopt;
+                    }
+                    field.bytes.assign(data + pos, data + pos + width);
+                    pos += width;
+                    break;
+                }
+                case kWireLengthDelimited:
+                {
+                    std::uint64_t length = 0;
+                    if (!readVarint(length) || length > size - pos)
+                    {
+                        return std::nullopt;
+                    }
+                    field.bytes.assign(data + pos, data + pos + length);
+                    pos += length;
+                    break;
+                }
+                default:
+                    return std::nullopt;
                 }
                 fields.push_back(std::move(field));
             }
@@ -117,7 +117,7 @@ namespace cloakframe
         std::vector<std::uint8_t> serializeMessage(const PbMessage &fields)
         {
             std::vector<std::uint8_t> out;
-            for (const auto &field: fields)
+            for (const auto &field : fields)
             {
                 appendVarint(out, (static_cast<std::uint64_t>(field.number) << 3) | field.wireType);
                 if (field.wireType == kWireVarint)
@@ -157,7 +157,7 @@ namespace cloakframe
 
         PbField *findFirst(PbMessage &fields, std::uint32_t number, std::uint32_t wireType)
         {
-            for (auto &field: fields)
+            for (auto &field : fields)
             {
                 if (field.number == number && field.wireType == wireType)
                 {
@@ -172,8 +172,7 @@ namespace cloakframe
             return {field.bytes.begin(), field.bytes.end()};
         }
 
-        bool rewriteNested(PbField &parent, std::uint32_t number,
-                           const auto &transform)
+        bool rewriteNested(PbField &parent, std::uint32_t number, const auto &transform)
         {
             auto parsed = parseMessage(parent.bytes);
             if (!parsed)
@@ -196,86 +195,98 @@ namespace cloakframe
             {
                 return false;
             }
-            dimension.bytes = serializeMessage(
-                {makeVarintField(1, static_cast<std::uint64_t>(size))});
+            dimension.bytes =
+                serializeMessage({makeVarintField(1, static_cast<std::uint64_t>(size))});
             return true;
         }
 
         bool setInputSpatialDims(PbField &input, int size)
         {
-            return rewriteNested(input, 2, [size](PbField &type)
-            {
-                return rewriteNested(type, 1, [size](PbField &tensor)
+            return rewriteNested(input,
+                2,
+                [size](PbField &type)
                 {
-                    return rewriteNested(tensor, 2, [size](PbField &shape)
-                    {
-                        auto parsed = parseMessage(shape.bytes);
-                        if (!parsed)
+                    return rewriteNested(type,
+                        1,
+                        [size](PbField &tensor)
                         {
-                            return false;
-                        }
-                        std::vector<PbField *> dims;
-                        for (auto &field: *parsed)
-                        {
-                            if (field.number == 1 && field.wireType == kWireLengthDelimited)
-                            {
-                                dims.push_back(&field);
-                            }
-                        }
-                        if (dims.size() != 4)
-                        {
-                            return false;
-                        }
-                        if (!setDimensionValue(*dims[2], size)
-                            || !setDimensionValue(*dims[3], size))
-                        {
-                            return false;
-                        }
-                        shape.bytes = serializeMessage(*parsed);
-                        return true;
-                    });
+                            return rewriteNested(tensor,
+                                2,
+                                [size](PbField &shape)
+                                {
+                                    auto parsed = parseMessage(shape.bytes);
+                                    if (!parsed)
+                                    {
+                                        return false;
+                                    }
+                                    std::vector<PbField *> dims;
+                                    for (auto &field : *parsed)
+                                    {
+                                        if (field.number == 1
+                                            && field.wireType == kWireLengthDelimited)
+                                        {
+                                            dims.push_back(&field);
+                                        }
+                                    }
+                                    if (dims.size() != 4)
+                                    {
+                                        return false;
+                                    }
+                                    if (!setDimensionValue(*dims[2], size)
+                                        || !setDimensionValue(*dims[3], size))
+                                    {
+                                        return false;
+                                    }
+                                    shape.bytes = serializeMessage(*parsed);
+                                    return true;
+                                });
+                        });
                 });
-            });
         }
 
         bool makeOutputShapeUnknown(PbField &output)
         {
-            return rewriteNested(output, 2, [](PbField &type)
-            {
-                return rewriteNested(type, 1, [](PbField &tensor)
+            return rewriteNested(output,
+                2,
+                [](PbField &type)
                 {
-                    auto parsed = parseMessage(tensor.bytes);
-                    if (!parsed)
-                    {
-                        return false;
-                    }
-                    auto *shape = findFirst(*parsed, 2, kWireLengthDelimited);
-                    if (shape == nullptr)
-                    {
-                        return true;
-                    }
-                    auto shapeFields = parseMessage(shape->bytes);
-                    if (!shapeFields)
-                    {
-                        return false;
-                    }
-                    for (auto &dimension: *shapeFields)
-                    {
-                        if (dimension.number == 1 && dimension.wireType == kWireLengthDelimited)
+                    return rewriteNested(type,
+                        1,
+                        [](PbField &tensor)
                         {
-                            dimension.bytes.clear();
-                        }
-                    }
-                    shape->bytes = serializeMessage(*shapeFields);
-                    tensor.bytes = serializeMessage(*parsed);
-                    return true;
+                            auto parsed = parseMessage(tensor.bytes);
+                            if (!parsed)
+                            {
+                                return false;
+                            }
+                            auto *shape = findFirst(*parsed, 2, kWireLengthDelimited);
+                            if (shape == nullptr)
+                            {
+                                return true;
+                            }
+                            auto shapeFields = parseMessage(shape->bytes);
+                            if (!shapeFields)
+                            {
+                                return false;
+                            }
+                            for (auto &dimension : *shapeFields)
+                            {
+                                if (dimension.number == 1
+                                    && dimension.wireType == kWireLengthDelimited)
+                                {
+                                    dimension.bytes.clear();
+                                }
+                            }
+                            shape->bytes = serializeMessage(*shapeFields);
+                            tensor.bytes = serializeMessage(*parsed);
+                            return true;
+                        });
                 });
-            });
         }
 
         bool resizeModeIsSupported(const PbMessage &node)
         {
-            for (const auto &field: node)
+            for (const auto &field : node)
             {
                 if (field.number != 5 || field.wireType != kWireLengthDelimited)
                 {
@@ -288,7 +299,7 @@ namespace cloakframe
                 }
                 std::string name;
                 std::string text;
-                for (const auto &entry: *attribute)
+                for (const auto &entry : *attribute)
                 {
                     if (entry.number == 1 && entry.wireType == kWireLengthDelimited)
                     {
@@ -319,8 +330,8 @@ namespace cloakframe
         };
 
         ResizePatch patchResizeNode(PbField &nodeField,
-                                    const std::set<std::string> &initializerNames,
-                                    std::set<std::string> &detachedInitializers)
+            const std::set<std::string> &initializerNames,
+            std::set<std::string> &detachedInitializers)
         {
             auto node = parseMessage(nodeField.bytes);
             if (!node)
@@ -384,8 +395,8 @@ namespace cloakframe
         }
     }
 
-    std::optional<std::vector<std::uint8_t>>
-    makeOnnxSpatialDimsFixed(const std::vector<std::uint8_t> &modelBytes, int size)
+    std::optional<std::vector<std::uint8_t>> makeOnnxSpatialDimsFixed(
+        const std::vector<std::uint8_t> &modelBytes, int size)
     {
         if (size <= 0)
         {
@@ -408,7 +419,7 @@ namespace cloakframe
         }
 
         std::set<std::string> initializerNames;
-        for (auto &field: *graph)
+        for (auto &field : *graph)
         {
             if (field.number != 5 || field.wireType != kWireLengthDelimited)
             {
@@ -430,7 +441,7 @@ namespace cloakframe
         }
 
         std::vector<PbField *> inputs;
-        for (auto &field: *graph)
+        for (auto &field : *graph)
         {
             if (field.number == 11 && field.wireType == kWireLengthDelimited)
             {
@@ -444,24 +455,24 @@ namespace cloakframe
 
         std::set<std::string> detachedInitializers;
         bool patchedResize = false;
-        for (auto &field: *graph)
+        for (auto &field : *graph)
         {
             if (field.number == 1 && field.wireType == kWireLengthDelimited)
             {
                 switch (patchResizeNode(field, initializerNames, detachedInitializers))
                 {
-                    case ResizePatch::Unsupported:
-                        return std::nullopt;
-                    case ResizePatch::Patched:
-                        patchedResize = true;
-                        break;
-                    case ResizePatch::NotResize:
-                        break;
+                case ResizePatch::Unsupported:
+                    return std::nullopt;
+                case ResizePatch::Patched:
+                    patchedResize = true;
+                    break;
+                case ResizePatch::NotResize:
+                    break;
                 }
             }
         }
 
-        for (auto &field: *graph)
+        for (auto &field : *graph)
         {
             if (field.number == 12 && field.wireType == kWireLengthDelimited)
             {
@@ -472,15 +483,16 @@ namespace cloakframe
             }
         }
 
-        std::erase_if(*graph, [](const PbField &field)
-        {
-            return field.number == 13;
-        });
+        std::erase_if(*graph,
+            [](const PbField &field)
+            {
+                return field.number == 13;
+            });
 
         if (!detachedInitializers.empty())
         {
             std::set<std::string> referencedInputs;
-            for (const auto &field: *graph)
+            for (const auto &field : *graph)
             {
                 if (field.number != 1 || field.wireType != kWireLengthDelimited)
                 {
@@ -491,7 +503,7 @@ namespace cloakframe
                 {
                     continue;
                 }
-                for (const auto &entry: *node)
+                for (const auto &entry : *node)
                 {
                     if (entry.number == 1 && entry.wireType == kWireLengthDelimited)
                     {
@@ -499,25 +511,26 @@ namespace cloakframe
                     }
                 }
             }
-            std::erase_if(*graph, [&](const PbField &field)
-            {
-                if (field.number != 5 || field.wireType != kWireLengthDelimited)
+            std::erase_if(*graph,
+                [&](const PbField &field)
                 {
-                    return false;
-                }
-                auto initializer = parseMessage(field.bytes);
-                if (!initializer)
-                {
-                    return false;
-                }
-                const auto *name = findFirst(*initializer, 8, kWireLengthDelimited);
-                if (name == nullptr)
-                {
-                    return false;
-                }
-                const std::string text = fieldString(*name);
-                return detachedInitializers.contains(text) && !referencedInputs.contains(text);
-            });
+                    if (field.number != 5 || field.wireType != kWireLengthDelimited)
+                    {
+                        return false;
+                    }
+                    auto initializer = parseMessage(field.bytes);
+                    if (!initializer)
+                    {
+                        return false;
+                    }
+                    const auto *name = findFirst(*initializer, 8, kWireLengthDelimited);
+                    if (name == nullptr)
+                    {
+                        return false;
+                    }
+                    const std::string text = fieldString(*name);
+                    return detachedInitializers.contains(text) && !referencedInputs.contains(text);
+                });
         }
 
         if (patchedResize)

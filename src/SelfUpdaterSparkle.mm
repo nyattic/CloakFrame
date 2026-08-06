@@ -10,11 +10,10 @@ namespace cloakframe
         {
         public:
             explicit SparkleSelfUpdater(QObject *parent)
-                : SelfUpdater(parent),
-                  controller_([[SPUStandardUpdaterController alloc]
-                          initWithStartingUpdater:YES
-                                  updaterDelegate:nil
-                               userDriverDelegate:nil])
+                : SelfUpdater(parent)
+                , controller_([[SPUStandardUpdaterController alloc] initWithStartingUpdater:YES
+                                                                            updaterDelegate:nil
+                                                                         userDriverDelegate:nil])
             {
                 controller_.updater.automaticallyChecksForUpdates = YES;
             }

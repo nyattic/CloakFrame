@@ -16,8 +16,8 @@ namespace cloakframe
 
     std::vector<ScanResult> scanImages(const QStringList &inputs, bool recursive);
 
-    std::vector<ScanResult> scanMedia(const QStringList &inputs, bool recursive,
-                                      bool includeVideos);
+    std::vector<ScanResult> scanMedia(
+        const QStringList &inputs, bool recursive, bool includeVideos);
 
     bool isSupportedImage(const std::filesystem::path &path);
 }

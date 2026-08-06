@@ -60,8 +60,9 @@ namespace cloakframe
     public:
         explicit ByteTracker(TrackerConfig config = {}, SceneCuts cuts = {});
 
-        void update(int frame, const FaceDetections &detections,
-                    const TrackingContinueGuard &continueGuard = {});
+        void update(int frame,
+            const FaceDetections &detections,
+            const TrackingContinueGuard &continueGuard = {});
 
         [[nodiscard]] std::vector<Track> finish();
 
@@ -99,9 +100,9 @@ namespace cloakframe
     };
 
     [[nodiscard]] std::vector<Track> buildTracks(const std::vector<FaceDetections> &frameDetections,
-                                                 const TrackerConfig &config = {},
-                                                 const SceneCuts &cuts = {},
-                                                 const TrackingContinueGuard &continueGuard = {});
+        const TrackerConfig &config = {},
+        const SceneCuts &cuts = {},
+        const TrackingContinueGuard &continueGuard = {});
 
     [[nodiscard]] std::vector<Track> buildBidirectionalTracks(
         const std::vector<FaceDetections> &frameDetections,
@@ -110,18 +111,25 @@ namespace cloakframe
         const SceneCuts &cuts = {},
         const TrackingContinueGuard &continueGuard = {});
 
-    void interpolateGaps(Track &track, int maxGap, const SceneCuts &cuts = {},
-                         const TrackingContinueGuard &continueGuard = {});
+    void interpolateGaps(Track &track,
+        int maxGap,
+        const SceneCuts &cuts = {},
+        const TrackingContinueGuard &continueGuard = {});
 
-    void smoothTrack(Track &track, int radius,
-                     const TrackingContinueGuard &continueGuard = {});
+    void smoothTrack(Track &track, int radius, const TrackingContinueGuard &continueGuard = {});
 
-    void extendTrackEnds(Track &track, int frames, int frameCount, const SceneCuts &cuts = {},
-                         const TrackingContinueGuard &continueGuard = {});
+    void extendTrackEnds(Track &track,
+        int frames,
+        int frameCount,
+        const SceneCuts &cuts = {},
+        const TrackingContinueGuard &continueGuard = {});
 
-    void postProcessTracks(std::vector<Track> &tracks, const TrackPostProcessConfig &config,
-                           int frameCount, const SceneCuts &cuts = {},
-                           const TrackingContinueGuard &continueGuard = {});
+    void postProcessTracks(std::vector<Track> &tracks,
+        const TrackPostProcessConfig &config,
+        int frameCount,
+        const SceneCuts &cuts = {},
+        const TrackingContinueGuard &continueGuard = {});
 
-    [[nodiscard]] std::vector<cv::Rect2f> trackRegionsForFrame(const std::vector<Track> &tracks, int frame);
+    [[nodiscard]] std::vector<cv::Rect2f> trackRegionsForFrame(
+        const std::vector<Track> &tracks, int frame);
 }

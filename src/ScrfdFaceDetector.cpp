@@ -2,10 +2,10 @@
 
 #include "cloakframe/OnnxGraphPatch.hpp"
 
-#include <opencv2/imgproc.hpp>
-
-#include <QCryptographicHash>
 #include <QByteArrayView>
+#include <QCryptographicHash>
+
+#include <opencv2/imgproc.hpp>
 
 #include <algorithm>
 #include <array>
@@ -32,8 +32,8 @@ namespace cloakframe
         constexpr int kMaxInputSize = 2048;
         constexpr std::uintmax_t kMaxModelFileBytes = 512ULL << 20;
 
-        std::vector<std::uint8_t> readModelFile(const std::filesystem::path &path,
-                                                const QByteArray &expectedSha256)
+        std::vector<std::uint8_t> readModelFile(
+            const std::filesystem::path &path, const QByteArray &expectedSha256)
         {
             std::error_code sizeError;
             const auto size = std::filesystem::file_size(path, sizeError);
@@ -44,7 +44,7 @@ namespace cloakframe
             std::ifstream stream(path, std::ios::binary);
             std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
             if (!stream.read(reinterpret_cast<char *>(bytes.data()),
-                             static_cast<std::streamsize>(bytes.size())))
+                    static_cast<std::streamsize>(bytes.size())))
             {
                 throw std::runtime_error("Could not read the model file.");
             }
@@ -52,7 +52,7 @@ namespace cloakframe
             {
                 QCryptographicHash hash(QCryptographicHash::Sha256);
                 hash.addData(QByteArrayView(reinterpret_cast<const char *>(bytes.data()),
-                                            static_cast<qsizetype>(bytes.size())));
+                    static_cast<qsizetype>(bytes.size())));
                 if (hash.result() != expectedSha256)
                 {
                     throw std::runtime_error("The model file changed before it was loaded.");
@@ -71,8 +71,7 @@ namespace cloakframe
         }
 
         std::optional<float> faceRollFromLandmarks(
-            const std::array<cv::Point2f, kFaceLandmarkCount> &landmarks,
-            const cv::Rect2f &box)
+            const std::array<cv::Point2f, kFaceLandmarkCount> &landmarks, const cv::Rect2f &box)
         {
             if (box.width <= 0.0F || box.height <= 0.0F)
             {
@@ -80,30 +79,27 @@ namespace cloakframe
             }
             const float marginX = box.width * 0.35F;
             const float marginY = box.height * 0.35F;
-            for (const auto &point: landmarks)
+            for (const auto &point : landmarks)
             {
-                if (!std::isfinite(point.x) || !std::isfinite(point.y) ||
-                    point.x < box.x - marginX || point.x > box.x + box.width + marginX ||
-                    point.y < box.y - marginY || point.y > box.y + box.height + marginY)
+                if (!std::isfinite(point.x) || !std::isfinite(point.y) || point.x < box.x - marginX
+                    || point.x > box.x + box.width + marginX || point.y < box.y - marginY
+                    || point.y > box.y + box.height + marginY)
                 {
                     return std::nullopt;
                 }
             }
 
-            const auto angleFor = [&](const int left, const int right)
-                -> std::optional<float>
+            const auto angleFor = [&](const int left, const int right) -> std::optional<float>
             {
                 const float dx = landmarks[right].x - landmarks[left].x;
                 const float dy = landmarks[right].y - landmarks[left].y;
                 const float distance = std::hypot(dx, dy);
-                if (dx <= 0.0F || distance < box.width * 0.08F ||
-                    distance > box.width * 1.25F)
+                if (dx <= 0.0F || distance < box.width * 0.08F || distance > box.width * 1.25F)
                 {
                     return std::nullopt;
                 }
                 const float angle = std::atan2(dy, dx);
-                return isValidFacePose(angle, true) ? std::optional<float>(angle)
-                                                    : std::nullopt;
+                return isValidFacePose(angle, true) ? std::optional<float>(angle) : std::nullopt;
             };
 
             const auto eyeAngle = angleFor(0, 1);
@@ -117,17 +113,18 @@ namespace cloakframe
                 return eyeAngle;
             }
             return std::atan2(std::sin(*eyeAngle) + std::sin(*mouthAngle),
-                              std::cos(*eyeAngle) + std::cos(*mouthAngle));
+                std::cos(*eyeAngle) + std::cos(*mouthAngle));
         }
     }
 
-    ScrfdFaceDetector::ScrfdFaceDetector(const std::string &modelPath, int inputSize,
-                                         bool enableAcceleration,
-                                         const QByteArray &expectedSha256)
-        : inputSize_(inputSize),
-          env_(ORT_LOGGING_LEVEL_WARNING, "CloakFrame"),
-          sessionOptions_(),
-          session_(nullptr)
+    ScrfdFaceDetector::ScrfdFaceDetector(const std::string &modelPath,
+        int inputSize,
+        bool enableAcceleration,
+        const QByteArray &expectedSha256)
+        : inputSize_(inputSize)
+        , env_(ORT_LOGGING_LEVEL_WARNING, "CloakFrame")
+        , sessionOptions_()
+        , session_(nullptr)
     {
         sessionOptions_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
         accelerator_ = applyOrtAcceleration(sessionOptions_, enableAcceleration);
@@ -243,18 +240,18 @@ namespace cloakframe
 
         inputNamePtrs_.reserve(inputNames_.size());
         outputNamePtrs_.reserve(outputNames_.size());
-        for (const auto &name: inputNames_)
+        for (const auto &name : inputNames_)
         {
             inputNamePtrs_.push_back(name.c_str());
         }
-        for (const auto &name: outputNames_)
+        for (const auto &name : outputNames_)
         {
             outputNamePtrs_.push_back(name.c_str());
         }
     }
 
     void ScrfdFaceDetector::adoptOriginalSessionIfAccelerated(
-            const std::vector<std::uint8_t> &modelBytes)
+        const std::vector<std::uint8_t> &modelBytes)
     {
         if (accelerator_ == OrtAccelerator::None)
         {
@@ -263,41 +260,43 @@ namespace cloakframe
         session_ = Ort::Session(env_, modelBytes.data(), modelBytes.size(), sessionOptions_);
     }
 
-    void ScrfdFaceDetector::adoptFixedInputSession(const std::vector<std::uint8_t> &modelBytes,
-                                                   int fallbackSize)
+    void ScrfdFaceDetector::adoptFixedInputSession(
+        const std::vector<std::uint8_t> &modelBytes, int fallbackSize)
     {
-        const bool patchable = inputSize_ > 0 && inputSize_ <= kMaxInputSize
-                               && inputSize_ % kStrides.back() == 0;
-        const auto patched = patchable ? makeOnnxSpatialDimsFixed(modelBytes, inputSize_)
-                                       : std::nullopt;
+        const bool patchable =
+            inputSize_ > 0 && inputSize_ <= kMaxInputSize && inputSize_ % kStrides.back() == 0;
+        const auto patched =
+            patchable ? makeOnnxSpatialDimsFixed(modelBytes, inputSize_) : std::nullopt;
         if (patched)
         {
             try
             {
-                Ort::Session fixedSession(env_, patched->data(), patched->size(),
-                                          sessionOptions_);
+                Ort::Session fixedSession(env_, patched->data(), patched->size(), sessionOptions_);
 
                 std::vector<float> probe(
-                        static_cast<std::size_t>(kChannels) * inputSize_ * inputSize_, 0.0F);
+                    static_cast<std::size_t>(kChannels) * inputSize_ * inputSize_, 0.0F);
                 const std::array<int64_t, 4> probeShape = {1, kChannels, inputSize_, inputSize_};
                 Ort::MemoryInfo memoryInfo =
-                        Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+                    Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
                 Ort::Value probeTensor = Ort::Value::CreateTensor<float>(
-                        memoryInfo, probe.data(), probe.size(), probeShape.data(),
-                        probeShape.size());
+                    memoryInfo, probe.data(), probe.size(), probeShape.data(), probeShape.size());
 
                 std::vector<const char *> inputPtrs;
                 std::vector<const char *> outputPtrs;
-                for (const auto &name: inputNames_)
+                for (const auto &name : inputNames_)
                 {
                     inputPtrs.push_back(name.c_str());
                 }
-                for (const auto &name: outputNames_)
+                for (const auto &name : outputNames_)
                 {
                     outputPtrs.push_back(name.c_str());
                 }
-                fixedSession.Run(Ort::RunOptions{nullptr}, inputPtrs.data(), &probeTensor, 1,
-                                 outputPtrs.data(), outputPtrs.size());
+                fixedSession.Run(Ort::RunOptions{nullptr},
+                    inputPtrs.data(),
+                    &probeTensor,
+                    1,
+                    outputPtrs.data(),
+                    outputPtrs.size());
 
                 session_ = std::move(fixedSession);
                 return;
@@ -320,7 +319,8 @@ namespace cloakframe
         adoptOriginalSessionIfAccelerated(modelBytes);
     }
 
-    FaceDetections ScrfdFaceDetector::detect(const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold)
+    FaceDetections ScrfdFaceDetector::detect(
+        const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold)
     {
         if (bgrImage.empty())
         {
@@ -330,20 +330,20 @@ namespace cloakframe
         auto prepared = prepare(bgrImage);
         std::array<int64_t, 4> inputShape = {1, kChannels, inputSize_, inputSize_};
 
-        Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-        Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
-            memoryInfo,
+        Ort::MemoryInfo memoryInfo =
+            Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        Ort::Value inputTensor = Ort::Value::CreateTensor<float>(memoryInfo,
             prepared.tensor.data(),
             prepared.tensor.size(),
             inputShape.data(),
             inputShape.size());
 
         auto outputs = session_.Run(Ort::RunOptions{nullptr},
-                                    inputNamePtrs_.data(),
-                                    &inputTensor,
-                                    1,
-                                    outputNamePtrs_.data(),
-                                    outputNamePtrs_.size());
+            inputNamePtrs_.data(),
+            &inputTensor,
+            1,
+            outputNamePtrs_.data(),
+            outputNamePtrs_.size());
 
         return decode(outputs, prepared, scoreThreshold, nmsThreshold);
     }
@@ -354,11 +354,14 @@ namespace cloakframe
         prepared.originalWidth = bgrImage.cols;
         prepared.originalHeight = bgrImage.rows;
 
-        const float scale = std::min(static_cast<float>(inputSize_) / static_cast<float>(bgrImage.cols),
-                                     static_cast<float>(inputSize_) / static_cast<float>(bgrImage.rows));
+        const float scale =
+            std::min(static_cast<float>(inputSize_) / static_cast<float>(bgrImage.cols),
+                static_cast<float>(inputSize_) / static_cast<float>(bgrImage.rows));
         prepared.scale = scale;
-        prepared.resizedWidth = std::max(1, static_cast<int>(std::round(static_cast<float>(bgrImage.cols) * scale)));
-        prepared.resizedHeight = std::max(1, static_cast<int>(std::round(static_cast<float>(bgrImage.rows) * scale)));
+        prepared.resizedWidth =
+            std::max(1, static_cast<int>(std::round(static_cast<float>(bgrImage.cols) * scale)));
+        prepared.resizedHeight =
+            std::max(1, static_cast<int>(std::round(static_cast<float>(bgrImage.rows) * scale)));
 
         cv::Mat resized;
         cv::resize(bgrImage, resized, cv::Size(prepared.resizedWidth, prepared.resizedHeight));
@@ -378,8 +381,10 @@ namespace cloakframe
             {
                 const int offset = y * inputSize_ + x;
                 prepared.tensor[offset] = (static_cast<float>(row[x][0]) - 127.5F) / 128.0F;
-                prepared.tensor[planeSize + offset] = (static_cast<float>(row[x][1]) - 127.5F) / 128.0F;
-                prepared.tensor[2 * planeSize + offset] = (static_cast<float>(row[x][2]) - 127.5F) / 128.0F;
+                prepared.tensor[planeSize + offset] =
+                    (static_cast<float>(row[x][1]) - 127.5F) / 128.0F;
+                prepared.tensor[2 * planeSize + offset] =
+                    (static_cast<float>(row[x][2]) - 127.5F) / 128.0F;
             }
         }
 
@@ -387,9 +392,9 @@ namespace cloakframe
     }
 
     FaceDetections ScrfdFaceDetector::decode(const std::vector<Ort::Value> &outputs,
-                                             const PreparedImage &prepared,
-                                             float scoreThreshold,
-                                             float nmsThreshold) const
+        const PreparedImage &prepared,
+        float scoreThreshold,
+        float nmsThreshold) const
     {
         constexpr auto featureMapCount = kStrides.size();
         if (outputs.size() < featureMapCount * 2U)
@@ -406,7 +411,7 @@ namespace cloakframe
         std::vector<StrideOutput> scoreOutputs;
         std::vector<StrideOutput> bboxOutputs;
         std::vector<StrideOutput> keypointOutputs;
-        for (const auto &output: outputs)
+        for (const auto &output : outputs)
         {
             if (!output.IsTensor())
             {
@@ -423,8 +428,8 @@ namespace cloakframe
                 continue;
             }
             const auto elementCount = info.GetElementCount();
-            if (elementCount == 0 ||
-                elementCount > static_cast<size_t>(std::numeric_limits<int>::max()))
+            if (elementCount == 0
+                || elementCount > static_cast<size_t>(std::numeric_limits<int>::max()))
             {
                 continue;
             }
@@ -458,11 +463,11 @@ namespace cloakframe
             }
 
             const StrideOutput *scoreMatch = nullptr;
-            for (const auto &candidate: scoreOutputs)
+            for (const auto &candidate : scoreOutputs)
             {
-                if (candidate.elementCount == static_cast<size_t>(baseAnchorCount) ||
-                    candidate.elementCount ==
-                        static_cast<size_t>(baseAnchorCount) * kMaxAnchorsPerLocation)
+                if (candidate.elementCount == static_cast<size_t>(baseAnchorCount)
+                    || candidate.elementCount
+                           == static_cast<size_t>(baseAnchorCount) * kMaxAnchorsPerLocation)
                 {
                     scoreMatch = &candidate;
                     break;
@@ -472,7 +477,7 @@ namespace cloakframe
             const StrideOutput *bboxMatch = nullptr;
             if (scoreMatch != nullptr)
             {
-                for (const auto &candidate: bboxOutputs)
+                for (const auto &candidate : bboxOutputs)
                 {
                     if (candidate.elementCount == scoreMatch->elementCount * 4U)
                     {
@@ -485,10 +490,10 @@ namespace cloakframe
             const StrideOutput *keypointMatch = nullptr;
             if (scoreMatch != nullptr)
             {
-                for (const auto &candidate: keypointOutputs)
+                for (const auto &candidate : keypointOutputs)
                 {
-                    if (candidate.elementCount ==
-                        scoreMatch->elementCount * kLandmarkCoordinateCount)
+                    if (candidate.elementCount
+                        == scoreMatch->elementCount * kLandmarkCoordinateCount)
                     {
                         keypointMatch = &candidate;
                         break;
@@ -512,8 +517,9 @@ namespace cloakframe
             {
                 const int repeats = std::max(1, scoreCount / baseAnchorCount);
                 std::vector<cv::Point2f> repeatedAnchors;
-                repeatedAnchors.reserve(static_cast<size_t>(baseAnchorCount) * static_cast<size_t>(repeats));
-                for (const auto &anchor: anchors)
+                repeatedAnchors.reserve(
+                    static_cast<size_t>(baseAnchorCount) * static_cast<size_t>(repeats));
+                for (const auto &anchor : anchors)
                 {
                     for (int repeat = 0; repeat < repeats; ++repeat)
                     {
@@ -525,9 +531,8 @@ namespace cloakframe
 
             const auto *scores = scoreMatch->value->GetTensorData<float>();
             const auto *boxes = bboxMatch->value->GetTensorData<float>();
-            const auto *keypoints = keypointMatch != nullptr
-                                        ? keypointMatch->value->GetTensorData<float>()
-                                        : nullptr;
+            const auto *keypoints =
+                keypointMatch != nullptr ? keypointMatch->value->GetTensorData<float>() : nullptr;
             if (scores == nullptr || boxes == nullptr)
             {
                 continue;
@@ -548,10 +553,11 @@ namespace cloakframe
                     boxes[i * 4 + 2] * static_cast<float>(stride),
                     boxes[i * 4 + 3] * static_cast<float>(stride),
                 };
-                if (!std::ranges::all_of(distances, [](const float value)
-                {
-                    return std::isfinite(value);
-                }))
+                if (!std::ranges::all_of(distances,
+                        [](const float value)
+                        {
+                            return std::isfinite(value);
+                        }))
                 {
                     continue;
                 }
@@ -560,16 +566,18 @@ namespace cloakframe
                 float y = modelBox.y / prepared.scale;
                 float width = modelBox.width / prepared.scale;
                 float height = modelBox.height / prepared.scale;
-                if (!std::isfinite(x) || !std::isfinite(y) ||
-                    !std::isfinite(width) || !std::isfinite(height))
+                if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(width)
+                    || !std::isfinite(height))
                 {
                     continue;
                 }
 
                 x = std::clamp(x, 0.0F, static_cast<float>(prepared.originalWidth - 1));
                 y = std::clamp(y, 0.0F, static_cast<float>(prepared.originalHeight - 1));
-                const float right = std::clamp(x + width, x + 1.0F, static_cast<float>(prepared.originalWidth));
-                const float bottom = std::clamp(y + height, y + 1.0F, static_cast<float>(prepared.originalHeight));
+                const float right =
+                    std::clamp(x + width, x + 1.0F, static_cast<float>(prepared.originalWidth));
+                const float bottom =
+                    std::clamp(y + height, y + 1.0F, static_cast<float>(prepared.originalHeight));
                 FaceDetection detection{cv::Rect2f(x, y, right - x, bottom - y), score};
                 if (keypoints != nullptr)
                 {
@@ -578,10 +586,10 @@ namespace cloakframe
                     {
                         const int offset = i * kLandmarkCoordinateCount + landmark * 2;
                         landmarks[landmark] = {
-                            (anchors[i].x + keypoints[offset] * static_cast<float>(stride)) /
-                                prepared.scale,
-                            (anchors[i].y + keypoints[offset + 1] * static_cast<float>(stride)) /
-                                prepared.scale,
+                            (anchors[i].x + keypoints[offset] * static_cast<float>(stride))
+                                / prepared.scale,
+                            (anchors[i].y + keypoints[offset + 1] * static_cast<float>(stride))
+                                / prepared.scale,
                         };
                     }
                     if (const auto roll = faceRollFromLandmarks(landmarks, detection.box))
@@ -597,18 +605,19 @@ namespace cloakframe
         if (detections.size() > kMaxCandidatesBeforeNms)
         {
             std::ranges::partial_sort(detections,
-                                      detections.begin() + static_cast<std::ptrdiff_t>(kMaxCandidatesBeforeNms),
-                                      [](const FaceDetection &a, const FaceDetection &b)
-            {
-                return a.score > b.score;
-            });
+                detections.begin() + static_cast<std::ptrdiff_t>(kMaxCandidatesBeforeNms),
+                [](const FaceDetection &a, const FaceDetection &b)
+                {
+                    return a.score > b.score;
+                });
             detections.resize(kMaxCandidatesBeforeNms);
         }
 
         return nonMaxSuppression(std::move(detections), nmsThreshold);
     }
 
-    std::vector<cv::Point2f> ScrfdFaceDetector::anchorCenters(int featureHeight, int featureWidth, int stride)
+    std::vector<cv::Point2f> ScrfdFaceDetector::anchorCenters(
+        int featureHeight, int featureWidth, int stride)
     {
         std::vector<cv::Point2f> anchors;
         anchors.reserve(static_cast<size_t>(featureHeight) * static_cast<size_t>(featureWidth));
@@ -616,7 +625,8 @@ namespace cloakframe
         {
             for (int x = 0; x < featureWidth; ++x)
             {
-                anchors.emplace_back(static_cast<float>(x * stride), static_cast<float>(y * stride));
+                anchors.emplace_back(
+                    static_cast<float>(x * stride), static_cast<float>(y * stride));
             }
         }
         return anchors;

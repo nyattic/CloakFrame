@@ -3,9 +3,9 @@
 #include "cloakframe/Detector.hpp"
 #include "cloakframe/OrtAcceleration.hpp"
 
-#include <onnxruntime_cxx_api.h>
-
 #include <QByteArray>
+
+#include <onnxruntime_cxx_api.h>
 
 #include <string>
 #include <vector>
@@ -16,20 +16,26 @@ namespace cloakframe
     {
     public:
         explicit Yolo5FaceDetector(const std::string &modelPath,
-                                   bool enableAcceleration = false,
-                                   const QByteArray &expectedSha256 = {});
+            bool enableAcceleration = false,
+            const QByteArray &expectedSha256 = {});
 
-        FaceDetections detect(const cv::Mat &bgrImage, float scoreThreshold,
-                              float nmsThreshold) override;
+        FaceDetections detect(
+            const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
 
-        [[nodiscard]] int inputSize() const noexcept override { return 640; }
+        [[nodiscard]] int inputSize() const noexcept override
+        {
+            return 640;
+        }
 
         [[nodiscard]] const char *backendName() const noexcept override
         {
             return ortAcceleratorName(accelerator_);
         }
 
-        [[nodiscard]] OrtAccelerator accelerator() const noexcept { return accelerator_; }
+        [[nodiscard]] OrtAccelerator accelerator() const noexcept
+        {
+            return accelerator_;
+        }
 
     private:
         OrtAccelerator accelerator_ = OrtAccelerator::None;

@@ -22,18 +22,18 @@ namespace cloakframe
     {
         switch (accelerator)
         {
-            case OrtAccelerator::CoreML:
-                return "CoreML";
-            case OrtAccelerator::DirectML:
-                return "DirectML";
-            case OrtAccelerator::CUDA:
-                return "CUDA";
-            case OrtAccelerator::MIGraphX:
-                return "MIGraphX";
-            case OrtAccelerator::ROCm:
-                return "ROCm";
-            case OrtAccelerator::None:
-                break;
+        case OrtAccelerator::CoreML:
+            return "CoreML";
+        case OrtAccelerator::DirectML:
+            return "DirectML";
+        case OrtAccelerator::CUDA:
+            return "CUDA";
+        case OrtAccelerator::MIGraphX:
+            return "MIGraphX";
+        case OrtAccelerator::ROCm:
+            return "ROCm";
+        case OrtAccelerator::None:
+            break;
         }
         return "CPU";
     }
@@ -59,12 +59,14 @@ namespace cloakframe
             }
             catch (const Ort::Exception &error)
             {
-                spdlog::warn("CoreML acceleration unavailable, falling back to CPU: {}", error.what());
+                spdlog::warn(
+                    "CoreML acceleration unavailable, falling back to CPU: {}", error.what());
             }
         }
         else
         {
-            spdlog::info("CoreML execution provider not present in this ONNX Runtime build; using CPU.");
+            spdlog::info(
+                "CoreML execution provider not present in this ONNX Runtime build; using CPU.");
         }
 #elif defined(_WIN32)
         if (providerAvailable("DmlExecutionProvider"))
@@ -73,18 +75,21 @@ namespace cloakframe
             {
                 options.DisableMemPattern();
                 options.SetExecutionMode(ORT_SEQUENTIAL);
-                options.AppendExecutionProvider("DML", std::unordered_map<std::string, std::string>{});
+                options.AppendExecutionProvider(
+                    "DML", std::unordered_map<std::string, std::string>{});
                 return OrtAccelerator::DirectML;
             }
             catch (const Ort::Exception &error)
             {
                 options.EnableMemPattern();
-                spdlog::warn("DirectML acceleration unavailable, falling back to CPU: {}", error.what());
+                spdlog::warn(
+                    "DirectML acceleration unavailable, falling back to CPU: {}", error.what());
             }
         }
         else
         {
-            spdlog::info("DirectML execution provider not present in this ONNX Runtime build; using CPU.");
+            spdlog::info(
+                "DirectML execution provider not present in this ONNX Runtime build; using CPU.");
         }
 #elif defined(__linux__)
         if (providerAvailable("CUDAExecutionProvider"))

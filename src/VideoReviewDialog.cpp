@@ -30,9 +30,13 @@ namespace cloakframe
 
         const VideoReviewBox *boxAtFrame(const VideoReviewTrack &track, int frame)
         {
-            const auto it = std::lower_bound(
-                track.boxes.cbegin(), track.boxes.cend(), frame,
-                [](const VideoReviewBox &box, int value) { return box.frame < value; });
+            const auto it = std::lower_bound(track.boxes.cbegin(),
+                track.boxes.cend(),
+                frame,
+                [](const VideoReviewBox &box, int value)
+                {
+                    return box.frame < value;
+                });
             return it != track.boxes.cend() && it->frame == frame ? &*it : nullptr;
         }
 
@@ -48,16 +52,14 @@ namespace cloakframe
                              .arg(hours)
                              .arg(minutes, 2, 10, QLatin1Char('0'))
                              .arg(secs, 2, 10, QLatin1Char('0'))
-                       : QStringLiteral("%1:%2")
-                             .arg(minutes)
-                             .arg(secs, 2, 10, QLatin1Char('0'));
+                       : QStringLiteral("%1:%2").arg(minutes).arg(secs, 2, 10, QLatin1Char('0'));
         }
 
         QStringList previewFrameArguments(const VideoReviewRequest &request, const int frame)
         {
-            if (request.ffmpegPath.isEmpty() || request.sourcePath.isEmpty()
-                || request.fps <= 0.0 || request.fpsNum <= 0 || request.fpsDen <= 0
-                || frame < 0 || !request.frameSize.isValid())
+            if (request.ffmpegPath.isEmpty() || request.sourcePath.isEmpty() || request.fps <= 0.0
+                || request.fpsNum <= 0 || request.fpsDen <= 0 || frame < 0
+                || !request.frameSize.isValid())
             {
                 return {};
             }
@@ -74,29 +76,26 @@ namespace cloakframe
             previewWidth += previewWidth % 2;
             previewHeight += previewHeight % 2;
 
-            const int marginFrames = std::clamp(
-                static_cast<int>(std::ceil(request.fps * 3.0)), 1, 240);
+            const int marginFrames =
+                std::clamp(static_cast<int>(std::ceil(request.fps * 3.0)), 1, 240);
             const int seekFrame = std::max(0, frame - marginFrames);
-            const QString cfr = QStringLiteral("%1/%2")
-                                    .arg(request.fpsNum).arg(request.fpsDen);
+            const QString cfr = QStringLiteral("%1/%2").arg(request.fpsNum).arg(request.fpsDen);
             const QString filter =
                 QString("fps=fps=%1%2,select=eq(n\\,%3),scale=%4:%5:flags=area")
-                    .arg(cfr,
-                         seekFrame > 0 ? QStringLiteral(":start_time=0") : QString())
+                    .arg(cfr, seekFrame > 0 ? QStringLiteral(":start_time=0") : QString())
                     .arg(frame - seekFrame)
-                    .arg(previewWidth).arg(previewHeight);
+                    .arg(previewWidth)
+                    .arg(previewHeight);
 
             QStringList arguments{"-v", "error", "-nostdin"};
             if (seekFrame > 0)
             {
-                const double seekSeconds = static_cast<double>(seekFrame)
-                                           * request.fpsDen / request.fpsNum;
+                const double seekSeconds =
+                    static_cast<double>(seekFrame) * request.fpsDen / request.fpsNum;
                 arguments << "-ss" << QString::number(seekSeconds, 'f', 6);
             }
-            arguments << "-i" << request.sourcePath
-                      << "-map" << "0:v:0"
-                      << "-vf" << filter
-                      << "-frames:v" << "1"
+            arguments << "-i" << request.sourcePath << "-map" << "0:v:0"
+                      << "-vf" << filter << "-frames:v" << "1"
                       << "-f" << "image2pipe" << "-c:v" << "png" << "-";
             return arguments;
         }
@@ -105,14 +104,16 @@ namespace cloakframe
     class VideoReviewCanvas final : public QWidget
     {
     public:
-        explicit VideoReviewCanvas(QWidget *parent = nullptr) : QWidget(parent)
+        explicit VideoReviewCanvas(QWidget *parent = nullptr)
+            : QWidget(parent)
         {
             setMinimumSize(640, 360);
             setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         }
 
-        void setData(const VideoReviewRequest *request, const QSet<int> *excluded,
-                     const QVector<VideoReviewManualTrack> *manualTracks)
+        void setData(const VideoReviewRequest *request,
+            const QSet<int> *excluded,
+            const QVector<VideoReviewManualTrack> *manualTracks)
         {
             request_ = request;
             excluded_ = excluded;
@@ -164,7 +165,10 @@ namespace cloakframe
             update();
         }
 
-        void refresh() { update(); }
+        void refresh()
+        {
+            update();
+        }
 
     protected:
         void paintEvent(QPaintEvent *) override
@@ -175,26 +179,25 @@ namespace cloakframe
             if (request_ == nullptr || image_.isNull())
             {
                 painter.setPen(QColor("#D1D5DB"));
-                painter.drawText(rect(), Qt::AlignCenter,
-                                 loading_
-                                     ? QCoreApplication::translate(
-                                           "cloakframe::VideoReviewCanvas",
-                                           "Loading frame preview…")
-                                     : QCoreApplication::translate(
-                                           "cloakframe::VideoReviewCanvas",
-                                           "Could not load this frame preview."));
+                painter.drawText(rect(),
+                    Qt::AlignCenter,
+                    loading_ ? QCoreApplication::translate(
+                                   "cloakframe::VideoReviewCanvas", "Loading frame preview…")
+                             : QCoreApplication::translate("cloakframe::VideoReviewCanvas",
+                                   "Could not load this frame preview."));
                 return;
             }
 
             const QSizeF fitted = image_.size().scaled(size(), Qt::KeepAspectRatio);
             const QRectF target((width() - fitted.width()) * 0.5,
-                                (height() - fitted.height()) * 0.5,
-                                fitted.width(), fitted.height());
+                (height() - fitted.height()) * 0.5,
+                fitted.width(),
+                fitted.height());
             painter.drawImage(target, image_);
 
             const double sx = target.width() / request_->frameSize.width();
             const double sy = target.height() / request_->frameSize.height();
-            for (const auto &track: request_->tracks)
+            for (const auto &track : request_->tracks)
             {
                 const auto *box = boxAtFrame(track, frame_);
                 if (box == nullptr)
@@ -202,26 +205,27 @@ namespace cloakframe
                     continue;
                 }
                 const QRectF screen(target.x() + box->rect.x() * sx,
-                                    target.y() + box->rect.y() * sy,
-                                    box->rect.width() * sx,
-                                    box->rect.height() * sy);
+                    target.y() + box->rect.y() * sy,
+                    box->rect.width() * sx,
+                    box->rect.height() * sy);
                 const bool excluded = excluded_ != nullptr && excluded_->contains(track.id);
                 QColor color = excluded ? QColor("#9CA3AF") : QColor("#F59E0B");
-                painter.setPen(QPen(color, excluded ? 2.0 : 3.0,
-                                    excluded ? Qt::DashLine : Qt::SolidLine));
+                painter.setPen(
+                    QPen(color, excluded ? 2.0 : 3.0, excluded ? Qt::DashLine : Qt::SolidLine));
                 QColor fill = color;
                 fill.setAlpha(excluded ? 28 : 52);
                 painter.fillRect(screen, fill);
                 painter.drawRect(screen);
                 painter.setPen(Qt::white);
-                painter.drawText(screen.adjusted(4, 2, -4, -2), Qt::AlignLeft | Qt::AlignTop,
-                                 QCoreApplication::translate(
-                                     "cloakframe::VideoReviewCanvas", "Track %1").arg(track.id));
+                painter.drawText(screen.adjusted(4, 2, -4, -2),
+                    Qt::AlignLeft | Qt::AlignTop,
+                    QCoreApplication::translate("cloakframe::VideoReviewCanvas", "Track %1")
+                        .arg(track.id));
             }
 
             if (manualTracks_ != nullptr)
             {
-                for (const auto &track: *manualTracks_)
+                for (const auto &track : *manualTracks_)
                 {
                     const auto box = manualTrackRectAtFrame(track, frame_);
                     if (!box)
@@ -229,9 +233,9 @@ namespace cloakframe
                         continue;
                     }
                     const QRectF screen(target.x() + box->x() * sx,
-                                        target.y() + box->y() * sy,
-                                        box->width() * sx,
-                                        box->height() * sy);
+                        target.y() + box->y() * sy,
+                        box->width() * sx,
+                        box->height() * sy);
                     const bool selected = track.id == selectedManualTrackId_;
                     const QColor color = selected ? QColor("#EC4899") : QColor("#22D3EE");
                     painter.setPen(QPen(color, selected ? 3.0 : 2.5));
@@ -241,9 +245,9 @@ namespace cloakframe
                     painter.drawRect(screen);
                     painter.setPen(Qt::white);
                     painter.drawText(screen.adjusted(4, 2, -4, -2),
-                                     Qt::AlignLeft | Qt::AlignTop,
-                                     QCoreApplication::translate(
-                                         "cloakframe::VideoReviewCanvas", "Manual %1").arg(track.id));
+                        Qt::AlignLeft | Qt::AlignTop,
+                        QCoreApplication::translate("cloakframe::VideoReviewCanvas", "Manual %1")
+                            .arg(track.id));
                 }
             }
 
@@ -289,9 +293,9 @@ namespace cloakframe
                         continue;
                     }
                     const QRectF screen(target.x() + box->x() * sx,
-                                        target.y() + box->y() * sy,
-                                        box->width() * sx,
-                                        box->height() * sy);
+                        target.y() + box->y() * sy,
+                        box->width() * sx,
+                        box->height() * sy);
                     if (screen.contains(event->position()))
                     {
                         selectManualTrack_(it->id);
@@ -311,9 +315,9 @@ namespace cloakframe
                     continue;
                 }
                 const QRectF screen(target.x() + box->rect.x() * sx,
-                                    target.y() + box->rect.y() * sy,
-                                    box->rect.width() * sx,
-                                    box->rect.height() * sy);
+                    target.y() + box->rect.y() * sy,
+                    box->rect.width() * sx,
+                    box->rect.height() * sy);
                 if (screen.contains(event->position()))
                 {
                     toggleTrack_(it->id);
@@ -350,9 +354,9 @@ namespace cloakframe
                 const double sx = target.width() / request_->frameSize.width();
                 const double sy = target.height() / request_->frameSize.height();
                 const QRectF frameRect((normalized.x() - target.x()) / sx,
-                                       (normalized.y() - target.y()) / sy,
-                                       normalized.width() / sx,
-                                       normalized.height() / sy);
+                    (normalized.y() - target.y()) / sy,
+                    normalized.width() / sx,
+                    normalized.height() / sy);
                 manualBox_(frame_, frameRect);
             }
             update();
@@ -363,8 +367,9 @@ namespace cloakframe
         {
             const QSizeF fitted = image_.size().scaled(size(), Qt::KeepAspectRatio);
             return {(width() - fitted.width()) * 0.5,
-                    (height() - fitted.height()) * 0.5,
-                    fitted.width(), fitted.height()};
+                (height() - fitted.height()) * 0.5,
+                fitted.width(),
+                fitted.height()};
         }
 
         const VideoReviewRequest *request_ = nullptr;
@@ -386,13 +391,15 @@ namespace cloakframe
     class VideoTimeline final : public QSlider
     {
     public:
-        explicit VideoTimeline(QWidget *parent = nullptr) : QSlider(Qt::Horizontal, parent)
+        explicit VideoTimeline(QWidget *parent = nullptr)
+            : QSlider(Qt::Horizontal, parent)
         {
             setMinimumHeight(34);
         }
 
-        void setData(const VideoReviewRequest *request, const QSet<int> *excluded,
-                     const QVector<VideoReviewManualTrack> *manualTracks)
+        void setData(const VideoReviewRequest *request,
+            const QSet<int> *excluded,
+            const QVector<VideoReviewManualTrack> *manualTracks)
         {
             request_ = request;
             excluded_ = excluded;
@@ -410,37 +417,41 @@ namespace cloakframe
             }
             QStyleOptionSlider option;
             initStyleOption(&option);
-            const QRect groove = style()->subControlRect(QStyle::CC_Slider, &option,
-                                                         QStyle::SC_SliderGroove, this);
+            const QRect groove =
+                style()->subControlRect(QStyle::CC_Slider, &option, QStyle::SC_SliderGroove, this);
             QPainter painter(this);
             painter.setRenderHint(QPainter::Antialiasing, false);
             const int y = height() - 5;
-            for (const auto &track: request_->tracks)
+            for (const auto &track : request_->tracks)
             {
                 if (track.boxes.isEmpty())
                 {
                     continue;
                 }
                 const double denominator = static_cast<double>(request_->frameCount - 1);
-                const int x1 = groove.left() + static_cast<int>(std::lround(
-                    track.boxes.front().frame / denominator * groove.width()));
-                const int x2 = groove.left() + static_cast<int>(std::lround(
-                    track.boxes.back().frame / denominator * groove.width()));
+                const int x1 = groove.left()
+                               + static_cast<int>(std::lround(
+                                   track.boxes.front().frame / denominator * groove.width()));
+                const int x2 = groove.left()
+                               + static_cast<int>(std::lround(
+                                   track.boxes.back().frame / denominator * groove.width()));
                 const bool excluded = excluded_ != nullptr && excluded_->contains(track.id);
                 painter.fillRect(QRect(x1, y, std::max(2, x2 - x1 + 1), 3),
-                                 excluded ? QColor("#9CA3AF") : QColor("#F59E0B"));
+                    excluded ? QColor("#9CA3AF") : QColor("#F59E0B"));
             }
             if (manualTracks_ != nullptr)
             {
-                for (const auto &track: *manualTracks_)
+                for (const auto &track : *manualTracks_)
                 {
                     const double denominator = static_cast<double>(request_->frameCount - 1);
-                    const int x1 = groove.left() + static_cast<int>(std::lround(
-                        track.startFrame / denominator * groove.width()));
-                    const int x2 = groove.left() + static_cast<int>(std::lround(
-                        track.endFrame / denominator * groove.width()));
-                    painter.fillRect(QRect(x1, y - 4, std::max(2, x2 - x1 + 1), 3),
-                                     QColor("#22D3EE"));
+                    const int x1 = groove.left()
+                                   + static_cast<int>(std::lround(
+                                       track.startFrame / denominator * groove.width()));
+                    const int x2 = groove.left()
+                                   + static_cast<int>(
+                                       std::lround(track.endFrame / denominator * groove.width()));
+                    painter.fillRect(
+                        QRect(x1, y - 4, std::max(2, x2 - x1 + 1), 3), QColor("#22D3EE"));
                 }
             }
         }
@@ -452,12 +463,12 @@ namespace cloakframe
     };
 
     VideoReviewDialog::VideoReviewDialog(VideoReviewRequest request, QWidget *parent)
-        : QDialog(parent), request_(std::move(request))
+        : QDialog(parent)
+        , request_(std::move(request))
     {
-        for (const auto &track: request_.tracks)
+        for (const auto &track : request_.tracks)
         {
-            if (track.id >= nextManualTrackId_ &&
-                track.id < std::numeric_limits<int>::max())
+            if (track.id >= nextManualTrackId_ && track.id < std::numeric_limits<int>::max())
             {
                 nextManualTrackId_ = track.id + 1;
             }
@@ -471,9 +482,12 @@ namespace cloakframe
             tr("Scrub the timeline and uncheck false detections. To cover a missed region, "
                "draw a manual track and add keyframes as it moves; the boxes between "
                "keyframes are interpolated before encoding.");
-        const bool hasLowConfidenceTracks = std::any_of(
-            request_.tracks.cbegin(), request_.tracks.cend(),
-            [](const VideoReviewTrack &track) { return track.lowConfidence; });
+        const bool hasLowConfidenceTracks = std::any_of(request_.tracks.cbegin(),
+            request_.tracks.cend(),
+            [](const VideoReviewTrack &track)
+            {
+                return track.lowConfidence;
+            });
         if (hasLowConfidenceTracks)
         {
             hintText += QStringLiteral(" ");
@@ -488,18 +502,21 @@ namespace cloakframe
         auto *body = new QHBoxLayout();
         canvas_ = new VideoReviewCanvas(this);
         canvas_->setData(&request_, &excludedTrackIds_, &manualTracks_);
-        canvas_->setToggleCallback([this](int id)
-        {
-            setTrackIncluded(id, excludedTrackIds_.contains(id));
-        });
-        canvas_->setManualTrackSelectedCallback([this](int id)
-        {
-            selectManualTrack(id);
-        });
-        canvas_->setManualBoxCallback([this](int frame, const QRectF &rect)
-        {
-            addOrUpdateManualKeyframe(frame, rect);
-        });
+        canvas_->setToggleCallback(
+            [this](int id)
+            {
+                setTrackIncluded(id, excludedTrackIds_.contains(id));
+            });
+        canvas_->setManualTrackSelectedCallback(
+            [this](int id)
+            {
+                selectManualTrack(id);
+            });
+        canvas_->setManualBoxCallback(
+            [this](int frame, const QRectF &rect)
+            {
+                addOrUpdateManualKeyframe(frame, rect);
+            });
         body->addWidget(canvas_, 1);
 
         auto *side = new QVBoxLayout();
@@ -507,29 +524,25 @@ namespace cloakframe
         side->addWidget(summaryLabel_);
         trackList_ = new QListWidget(this);
         trackList_->setMinimumWidth(260);
-        for (const auto &track: request_.tracks)
+        for (const auto &track : request_.tracks)
         {
             if (track.boxes.isEmpty())
             {
                 continue;
             }
             const QString range = tr("Track %1  ·  %2–%3")
-                    .arg(track.id)
-                    .arg(formatTime(track.boxes.front().frame / request_.fps))
-                    .arg(formatTime(track.boxes.back().frame / request_.fps));
+                                      .arg(track.id)
+                                      .arg(formatTime(track.boxes.front().frame / request_.fps))
+                                      .arg(formatTime(track.boxes.back().frame / request_.fps));
             auto *item = new QListWidgetItem(
-                track.lowConfidence
-                    ? tr("%1  ·  low confidence").arg(range)
-                    : range,
-                trackList_);
+                track.lowConfidence ? tr("%1  ·  low confidence").arg(range) : range, trackList_);
             item->setData(kTrackIdRole, track.id);
             item->setData(kManualTrackRole, false);
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
             if (track.lowConfidence)
             {
-                item->setToolTip(
-                    tr("Few confident detections — excluded by default. Check it to "
-                       "redact this track anyway."));
+                item->setToolTip(tr("Few confident detections — excluded by default. Check it to "
+                                    "redact this track anyway."));
                 item->setCheckState(Qt::Unchecked);
                 excludedTrackIds_.insert(track.id);
             }
@@ -538,43 +551,53 @@ namespace cloakframe
                 item->setCheckState(Qt::Checked);
             }
         }
-        connect(trackList_, &QListWidget::itemChanged, this, [this](QListWidgetItem *item)
-        {
-            if (item->data(kManualTrackRole).toBool())
+        connect(trackList_,
+            &QListWidget::itemChanged,
+            this,
+            [this](QListWidgetItem *item)
             {
-                return;
-            }
-            setTrackIncluded(item->data(kTrackIdRole).toInt(),
-                             item->checkState() == Qt::Checked);
-        });
-        connect(trackList_, &QListWidget::currentItemChanged, this,
-                [this](QListWidgetItem *current)
-        {
-            selectManualTrack(current != nullptr &&
-                                      current->data(kManualTrackRole).toBool()
-                                  ? current->data(kTrackIdRole).toInt()
-                                  : 0);
-        });
-        connect(trackList_, &QListWidget::itemActivated, this, [this](QListWidgetItem *item)
-        {
-            const int id = item->data(kTrackIdRole).toInt();
-            if (item->data(kManualTrackRole).toBool())
-            {
-                const auto *manual = manualTrack(id);
-                if (manual != nullptr)
+                if (item->data(kManualTrackRole).toBool())
                 {
-                    timeline_->setValue(manual->startFrame);
+                    return;
                 }
-                return;
-            }
-            const auto it = std::find_if(request_.tracks.cbegin(), request_.tracks.cend(),
-                                         [id](const VideoReviewTrack &track)
-                                         { return track.id == id; });
-            if (it != request_.tracks.cend() && !it->boxes.isEmpty())
+                setTrackIncluded(
+                    item->data(kTrackIdRole).toInt(), item->checkState() == Qt::Checked);
+            });
+        connect(trackList_,
+            &QListWidget::currentItemChanged,
+            this,
+            [this](QListWidgetItem *current)
             {
-                timeline_->setValue(it->boxes.front().frame);
-            }
-        });
+                selectManualTrack(current != nullptr && current->data(kManualTrackRole).toBool()
+                                      ? current->data(kTrackIdRole).toInt()
+                                      : 0);
+            });
+        connect(trackList_,
+            &QListWidget::itemActivated,
+            this,
+            [this](QListWidgetItem *item)
+            {
+                const int id = item->data(kTrackIdRole).toInt();
+                if (item->data(kManualTrackRole).toBool())
+                {
+                    const auto *manual = manualTrack(id);
+                    if (manual != nullptr)
+                    {
+                        timeline_->setValue(manual->startFrame);
+                    }
+                    return;
+                }
+                const auto it = std::find_if(request_.tracks.cbegin(),
+                    request_.tracks.cend(),
+                    [id](const VideoReviewTrack &track)
+                    {
+                        return track.id == id;
+                    });
+                if (it != request_.tracks.cend() && !it->boxes.isEmpty())
+                {
+                    timeline_->setValue(it->boxes.front().frame);
+                }
+            });
         side->addWidget(trackList_, 1);
 
         addManualTrackButton_ = new QPushButton(tr("Add missed track"), this);
@@ -593,16 +616,32 @@ namespace cloakframe
         drawStatusLabel_->setWordWrap(true);
         drawStatusLabel_->setVisible(false);
         side->addWidget(drawStatusLabel_);
-        connect(addManualTrackButton_, &QPushButton::clicked,
-                this, &VideoReviewDialog::startNewManualTrack);
-        connect(addKeyframeButton_, &QPushButton::clicked,
-                this, &VideoReviewDialog::startManualKeyframe);
-        connect(setStartButton_, &QPushButton::clicked, this,
-                [this] { setManualTrackBoundary(true); });
-        connect(setEndButton_, &QPushButton::clicked, this,
-                [this] { setManualTrackBoundary(false); });
-        connect(removeManualTrackButton_, &QPushButton::clicked,
-                this, &VideoReviewDialog::removeSelectedManualTrack);
+        connect(addManualTrackButton_,
+            &QPushButton::clicked,
+            this,
+            &VideoReviewDialog::startNewManualTrack);
+        connect(addKeyframeButton_,
+            &QPushButton::clicked,
+            this,
+            &VideoReviewDialog::startManualKeyframe);
+        connect(setStartButton_,
+            &QPushButton::clicked,
+            this,
+            [this]
+            {
+                setManualTrackBoundary(true);
+            });
+        connect(setEndButton_,
+            &QPushButton::clicked,
+            this,
+            [this]
+            {
+                setManualTrackBoundary(false);
+            });
+        connect(removeManualTrackButton_,
+            &QPushButton::clicked,
+            this,
+            &VideoReviewDialog::removeSelectedManualTrack);
 
         auto *selectionButtons = new QHBoxLayout();
         auto *includeAll = new QPushButton(tr("Include all"), this);
@@ -610,41 +649,47 @@ namespace cloakframe
         selectionButtons->addWidget(includeAll);
         selectionButtons->addWidget(excludeAll);
         side->addLayout(selectionButtons);
-        connect(includeAll, &QPushButton::clicked, this, [this]
-        {
-            const QSignalBlocker blocker(trackList_);
-            excludedTrackIds_.clear();
-            for (int i = 0; i < trackList_->count(); ++i)
+        connect(includeAll,
+            &QPushButton::clicked,
+            this,
+            [this]
             {
-                auto *item = trackList_->item(i);
-                if (!item->data(kManualTrackRole).toBool())
+                const QSignalBlocker blocker(trackList_);
+                excludedTrackIds_.clear();
+                for (int i = 0; i < trackList_->count(); ++i)
                 {
-                    item->setCheckState(Qt::Checked);
+                    auto *item = trackList_->item(i);
+                    if (!item->data(kManualTrackRole).toBool())
+                    {
+                        item->setCheckState(Qt::Checked);
+                    }
                 }
-            }
-            canvas_->refresh();
-            timeline_->update();
-            updateSummary();
-        });
-        connect(excludeAll, &QPushButton::clicked, this, [this]
-        {
-            const QSignalBlocker blocker(trackList_);
-            for (const auto &track: request_.tracks)
+                canvas_->refresh();
+                timeline_->update();
+                updateSummary();
+            });
+        connect(excludeAll,
+            &QPushButton::clicked,
+            this,
+            [this]
             {
-                excludedTrackIds_.insert(track.id);
-            }
-            for (int i = 0; i < trackList_->count(); ++i)
-            {
-                auto *item = trackList_->item(i);
-                if (!item->data(kManualTrackRole).toBool())
+                const QSignalBlocker blocker(trackList_);
+                for (const auto &track : request_.tracks)
                 {
-                    item->setCheckState(Qt::Unchecked);
+                    excludedTrackIds_.insert(track.id);
                 }
-            }
-            canvas_->refresh();
-            timeline_->update();
-            updateSummary();
-        });
+                for (int i = 0; i < trackList_->count(); ++i)
+                {
+                    auto *item = trackList_->item(i);
+                    if (!item->data(kManualTrackRole).toBool())
+                    {
+                        item->setCheckState(Qt::Unchecked);
+                    }
+                }
+                canvas_->refresh();
+                timeline_->update();
+                updateSummary();
+            });
         body->addLayout(side);
         root->addLayout(body, 1);
 
@@ -709,10 +754,10 @@ namespace cloakframe
     {
         currentFrame_ = std::clamp(frame, 0, std::max(0, request_.frameCount - 1));
         const double currentSeconds = request_.fps > 0.0 ? currentFrame_ / request_.fps : 0.0;
-        const double totalSeconds = request_.fps > 0.0
-                                        ? (request_.frameCount - 1) / request_.fps : 0.0;
-        timeLabel_->setText(tr("%1 / %2")
-                                .arg(formatTime(currentSeconds), formatTime(totalSeconds)));
+        const double totalSeconds =
+            request_.fps > 0.0 ? (request_.frameCount - 1) / request_.fps : 0.0;
+        timeLabel_->setText(
+            tr("%1 / %2").arg(formatTime(currentSeconds), formatTime(totalSeconds)));
         if (frameCache_.contains(currentFrame_))
         {
             seekTimer_->stop();
@@ -745,36 +790,41 @@ namespace cloakframe
         auto *process = new QProcess(this);
         previewProcess_ = process;
         process->setProcessChannelMode(QProcess::SeparateChannels);
-        connect(process, &QProcess::finished, this,
-                [this, process, requestedFrame, generation]
-                (const int exitCode, const QProcess::ExitStatus exitStatus)
-        {
-            completeFramePreview(process, requestedFrame, generation,
-                                 exitStatus == QProcess::NormalExit && exitCode == 0);
-        });
-        connect(process, &QProcess::errorOccurred, this,
-                [this, process, requestedFrame, generation](QProcess::ProcessError)
-        {
-            completeFramePreview(process, requestedFrame, generation, false);
-        });
-        QTimer::singleShot(15000, process,
-                           [this, process, requestedFrame, generation]
-        {
-            if (previewProcess_ == process && previewGeneration_ == generation)
+        connect(process,
+            &QProcess::finished,
+            this,
+            [this, process, requestedFrame, generation](
+                const int exitCode, const QProcess::ExitStatus exitStatus)
             {
-                process->kill();
+                completeFramePreview(process,
+                    requestedFrame,
+                    generation,
+                    exitStatus == QProcess::NormalExit && exitCode == 0);
+            });
+        connect(process,
+            &QProcess::errorOccurred,
+            this,
+            [this, process, requestedFrame, generation](QProcess::ProcessError)
+            {
                 completeFramePreview(process, requestedFrame, generation, false);
-            }
-        });
+            });
+        QTimer::singleShot(15000,
+            process,
+            [this, process, requestedFrame, generation]
+            {
+                if (previewProcess_ == process && previewGeneration_ == generation)
+                {
+                    process->kill();
+                    completeFramePreview(process, requestedFrame, generation, false);
+                }
+            });
         process->start(request_.ffmpegPath, arguments, QIODevice::ReadOnly);
     }
 
     void VideoReviewDialog::completeFramePreview(
-        QProcess *process, const int frame, const quint64 generation,
-        const bool processSucceeded)
+        QProcess *process, const int frame, const quint64 generation, const bool processSucceeded)
     {
-        if (process == nullptr || previewProcess_ != process ||
-            previewGeneration_ != generation)
+        if (process == nullptr || previewProcess_ != process || previewGeneration_ != generation)
         {
             return;
         }
@@ -844,11 +894,9 @@ namespace cloakframe
         for (int i = 0; i < trackList_->count(); ++i)
         {
             auto *item = trackList_->item(i);
-            if (!item->data(kManualTrackRole).toBool() &&
-                item->data(kTrackIdRole).toInt() == id)
+            if (!item->data(kManualTrackRole).toBool() && item->data(kTrackIdRole).toInt() == id)
             {
-                item->setCheckState(excludedTrackIds_.contains(id)
-                                        ? Qt::Unchecked : Qt::Checked);
+                item->setCheckState(excludedTrackIds_.contains(id) ? Qt::Unchecked : Qt::Checked);
                 break;
             }
         }
@@ -856,17 +904,23 @@ namespace cloakframe
 
     VideoReviewManualTrack *VideoReviewDialog::manualTrack(const int id)
     {
-        const auto it = std::find_if(manualTracks_.begin(), manualTracks_.end(),
-                                     [id](const VideoReviewManualTrack &track)
-                                     { return track.id == id; });
+        const auto it = std::find_if(manualTracks_.begin(),
+            manualTracks_.end(),
+            [id](const VideoReviewManualTrack &track)
+            {
+                return track.id == id;
+            });
         return it == manualTracks_.end() ? nullptr : &*it;
     }
 
     const VideoReviewManualTrack *VideoReviewDialog::manualTrack(const int id) const
     {
-        const auto it = std::find_if(manualTracks_.cbegin(), manualTracks_.cend(),
-                                     [id](const VideoReviewManualTrack &track)
-                                     { return track.id == id; });
+        const auto it = std::find_if(manualTracks_.cbegin(),
+            manualTracks_.cend(),
+            [id](const VideoReviewManualTrack &track)
+            {
+                return track.id == id;
+            });
         return it == manualTracks_.cend() ? nullptr : &*it;
     }
 
@@ -892,9 +946,10 @@ namespace cloakframe
         drawStatusLabel_->setVisible(enabled);
         if (enabled)
         {
-            drawStatusLabel_->setText(trackId == 0
-                ? tr("Drag a box around the missed region on the current frame.")
-                : tr("Drag the new box for manual track %1 on this frame.").arg(trackId));
+            drawStatusLabel_->setText(
+                trackId == 0
+                    ? tr("Drag a box around the missed region on the current frame.")
+                    : tr("Drag the new box for manual track %1 on this frame.").arg(trackId));
         }
         addManualTrackButton_->setEnabled(!enabled);
         addKeyframeButton_->setEnabled(!enabled && selectedManualTrackId_ != 0);
@@ -931,8 +986,9 @@ namespace cloakframe
         }
         else
         {
-            const auto position = std::lower_bound(
-                track->keyframes.begin(), track->keyframes.end(), frame,
+            const auto position = std::lower_bound(track->keyframes.begin(),
+                track->keyframes.end(),
+                frame,
                 [](const VideoReviewBox &box, const int value)
                 {
                     return box.frame < value;
@@ -969,9 +1025,8 @@ namespace cloakframe
         auto boundaryRect = manualTrackRectAtFrame(*track, currentFrame_);
         if (!boundaryRect)
         {
-            boundaryRect = currentFrame_ < track->startFrame
-                               ? track->keyframes.front().rect
-                               : track->keyframes.back().rect;
+            boundaryRect = currentFrame_ < track->startFrame ? track->keyframes.front().rect
+                                                             : track->keyframes.back().rect;
         }
         if (start)
         {
@@ -983,12 +1038,14 @@ namespace cloakframe
             track->endFrame = currentFrame_;
             track->startFrame = std::min(track->startFrame, currentFrame_);
         }
-        track->keyframes.removeIf([track](const VideoReviewBox &box)
-        {
-            return box.frame < track->startFrame || box.frame > track->endFrame;
-        });
-        const auto position = std::lower_bound(
-            track->keyframes.begin(), track->keyframes.end(), currentFrame_,
+        track->keyframes.removeIf(
+            [track](const VideoReviewBox &box)
+            {
+                return box.frame < track->startFrame || box.frame > track->endFrame;
+            });
+        const auto position = std::lower_bound(track->keyframes.begin(),
+            track->keyframes.end(),
+            currentFrame_,
             [](const VideoReviewBox &box, const int value)
             {
                 return box.frame < value;
@@ -1009,15 +1066,15 @@ namespace cloakframe
         {
             return;
         }
-        manualTracks_.removeIf([id](const VideoReviewManualTrack &track)
-        {
-            return track.id == id;
-        });
+        manualTracks_.removeIf(
+            [id](const VideoReviewManualTrack &track)
+            {
+                return track.id == id;
+            });
         for (int index = trackList_->count() - 1; index >= 0; --index)
         {
             auto *item = trackList_->item(index);
-            if (item->data(kManualTrackRole).toBool() &&
-                item->data(kTrackIdRole).toInt() == id)
+            if (item->data(kManualTrackRole).toBool() && item->data(kTrackIdRole).toInt() == id)
             {
                 delete trackList_->takeItem(index);
                 break;
@@ -1037,8 +1094,8 @@ namespace cloakframe
         const QSignalBlocker blocker(trackList_);
         if (selectedManualTrackId_ == 0)
         {
-            if (trackList_->currentItem() != nullptr &&
-                trackList_->currentItem()->data(kManualTrackRole).toBool())
+            if (trackList_->currentItem() != nullptr
+                && trackList_->currentItem()->data(kManualTrackRole).toBool())
             {
                 trackList_->setCurrentItem(nullptr);
             }
@@ -1047,8 +1104,8 @@ namespace cloakframe
         for (int index = 0; index < trackList_->count(); ++index)
         {
             auto *item = trackList_->item(index);
-            if (item->data(kManualTrackRole).toBool() &&
-                item->data(kTrackIdRole).toInt() == selectedManualTrackId_)
+            if (item->data(kManualTrackRole).toBool()
+                && item->data(kTrackIdRole).toInt() == selectedManualTrackId_)
             {
                 trackList_->setCurrentItem(item);
                 break;
@@ -1066,14 +1123,13 @@ namespace cloakframe
         for (int index = 0; index < trackList_->count(); ++index)
         {
             auto *item = trackList_->item(index);
-            if (item->data(kManualTrackRole).toBool() &&
-                item->data(kTrackIdRole).toInt() == id)
+            if (item->data(kManualTrackRole).toBool() && item->data(kTrackIdRole).toInt() == id)
             {
-                item->setText(tr("Manual %1  ·  %2–%3  ·  %n keyframe(s)", nullptr,
-                                 track->keyframes.size())
-                                  .arg(id)
-                                  .arg(formatTime(track->startFrame / request_.fps))
-                                  .arg(formatTime(track->endFrame / request_.fps)));
+                item->setText(
+                    tr("Manual %1  ·  %2–%3  ·  %n keyframe(s)", nullptr, track->keyframes.size())
+                        .arg(id)
+                        .arg(formatTime(track->startFrame / request_.fps))
+                        .arg(formatTime(track->endFrame / request_.fps)));
                 break;
             }
         }
@@ -1083,8 +1139,8 @@ namespace cloakframe
     {
         const qsizetype includedAutomatic = request_.tracks.size() - excludedTrackIds_.size();
         summaryLabel_->setText(tr("%1 of %2 automatic tracks included · %3 manual")
-                                   .arg(includedAutomatic)
-                                   .arg(request_.tracks.size())
-                                   .arg(manualTracks_.size()));
+                .arg(includedAutomatic)
+                .arg(request_.tracks.size())
+                .arg(manualTracks_.size()));
     }
 }

@@ -4,10 +4,11 @@
 #include "cloakframe/FaceDetection.hpp"
 #include "cloakframe/OrtAcceleration.hpp"
 
-#include <onnxruntime_cxx_api.h>
+#include <QByteArray>
+
 #include <opencv2/core.hpp>
 
-#include <QByteArray>
+#include <onnxruntime_cxx_api.h>
 
 #include <string>
 #include <vector>
@@ -18,12 +19,16 @@ namespace cloakframe
     {
     public:
         explicit PlateDetector(const std::string &modelPath,
-                               bool enableAcceleration = false,
-                               const QByteArray &expectedSha256 = {});
+            bool enableAcceleration = false,
+            const QByteArray &expectedSha256 = {});
 
-        FaceDetections detect(const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
+        FaceDetections detect(
+            const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
 
-        [[nodiscard]] OrtAccelerator accelerator() const noexcept { return accelerator_; }
+        [[nodiscard]] OrtAccelerator accelerator() const noexcept
+        {
+            return accelerator_;
+        }
 
     private:
         int inputWidth_;

@@ -28,8 +28,7 @@ namespace cloakframe
                 cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
             }
             cv::Mat small;
-            cv::resize(gray, small, {kSampleWidth, kSampleHeight}, 0.0, 0.0,
-                       cv::INTER_AREA);
+            cv::resize(gray, small, {kSampleWidth, kSampleHeight}, 0.0, 0.0, cv::INTER_AREA);
             return small;
         }
 
@@ -44,10 +43,11 @@ namespace cloakframe
     SceneCuts::SceneCuts(std::vector<int> cutFrames)
         : frames_(std::move(cutFrames))
     {
-        std::erase_if(frames_, [](const int frame)
-        {
-            return frame <= 0;
-        });
+        std::erase_if(frames_,
+            [](const int frame)
+            {
+                return frame <= 0;
+            });
         std::ranges::sort(frames_);
         frames_.erase(std::ranges::unique(frames_).begin(), frames_.end());
     }
@@ -78,7 +78,7 @@ namespace cloakframe
     {
         std::vector<int> mapped;
         mapped.reserve(frames_.size());
-        for (const int frame: frames_)
+        for (const int frame : frames_)
         {
             if (frame > 0 && frame < frameCount)
             {
@@ -141,8 +141,8 @@ namespace cloakframe
         }
 
         const float median = recentMedian();
-        const bool spike = diff >= kMinCutDiff &&
-                           (recentDiffs_.empty() || diff >= median * kMedianRatio);
+        const bool spike =
+            diff >= kMinCutDiff && (recentDiffs_.empty() || diff >= median * kMedianRatio);
         if (spike)
         {
             candidateFrame_ = frameIndex_;

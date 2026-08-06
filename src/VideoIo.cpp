@@ -76,7 +76,7 @@ namespace cloakframe
                 return false;
             }
             const QString expected =
-                    QString::fromLatin1(manifest.readAll()).trimmed().section(' ', 0, 0);
+                QString::fromLatin1(manifest.readAll()).trimmed().section(' ', 0, 0);
 
             QFile tool(toolPath);
             if (!tool.open(QIODevice::ReadOnly))
@@ -125,7 +125,7 @@ namespace cloakframe
                     appDir + "/ffmpeg/" + exe,
                     appDir + "/../Resources/ffmpeg/" + exe,
                 };
-                for (const auto &candidate: candidates)
+                for (const auto &candidate : candidates)
                 {
                     const QFileInfo info(QDir::cleanPath(candidate));
                     if (info.exists() && info.isFile() && info.isExecutable())
@@ -158,8 +158,8 @@ namespace cloakframe
         {
             QProcess process;
             process.start(ffmpegPath, {"-version"});
-            if (!process.waitForStarted(kProcessStartTimeoutMs) ||
-                !process.waitForFinished(kProcessStartTimeoutMs))
+            if (!process.waitForStarted(kProcessStartTimeoutMs)
+                || !process.waitForFinished(kProcessStartTimeoutMs))
             {
                 process.kill();
                 return {};
@@ -204,20 +204,20 @@ namespace cloakframe
 
         QString processErrorDetail(QProcess &process)
         {
-            const QString stderrText =
-                    QString::fromUtf8(process.readAllStandardError()).trimmed();
+            const QString stderrText = QString::fromUtf8(process.readAllStandardError()).trimmed();
             if (!stderrText.isEmpty())
             {
                 const auto lines = stderrText.split('\n', Qt::SkipEmptyParts);
-                return lines.mid(std::max(0, static_cast<int>(lines.size()) - 3)).join(' ').trimmed();
+                return lines.mid(std::max(0, static_cast<int>(lines.size()) - 3))
+                    .join(' ')
+                    .trimmed();
             }
             return process.errorString();
         }
 
         QString codecPrefix(const VideoCodec codec)
         {
-            return codec == VideoCodec::Hevc ? QStringLiteral("hevc")
-                                             : QStringLiteral("h264");
+            return codec == VideoCodec::Hevc ? QStringLiteral("hevc") : QStringLiteral("h264");
         }
 
         QString softwareEncoderName(const VideoCodec codec)
@@ -241,42 +241,65 @@ namespace cloakframe
 
         QStringList videoEncoderArgs(const QString &encoder, const int crf)
         {
-            const bool hevc = encoder.startsWith(QLatin1String("hevc_")) ||
-                              encoder == QLatin1String("libx265");
+            const bool hevc =
+                encoder.startsWith(QLatin1String("hevc_")) || encoder == QLatin1String("libx265");
             const int codecCrf = hevc ? crf + 5 : crf;
             if (encoder.endsWith(QLatin1String("_nvenc")))
             {
-                return {"-c:v", encoder, "-preset", "p6", "-rc", "vbr",
-                        "-cq", QString::number(codecCrf), "-b:v", "0"};
+                return {"-c:v",
+                    encoder,
+                    "-preset",
+                    "p6",
+                    "-rc",
+                    "vbr",
+                    "-cq",
+                    QString::number(codecCrf),
+                    "-b:v",
+                    "0"};
             }
             if (encoder.endsWith(QLatin1String("_qsv")))
             {
-                return {"-c:v", encoder, "-preset", "slow",
-                        "-global_quality", QString::number(codecCrf)};
+                return {"-c:v",
+                    encoder,
+                    "-preset",
+                    "slow",
+                    "-global_quality",
+                    QString::number(codecCrf)};
             }
             if (encoder.endsWith(QLatin1String("_videotoolbox")))
             {
-                return {"-c:v", encoder,
-                        "-q:v", QString::number(std::clamp(100 - 2 * crf, 1, 100))};
+                return {
+                    "-c:v", encoder, "-q:v", QString::number(std::clamp(100 - 2 * crf, 1, 100))};
             }
-            return {"-c:v", encoder, "-preset", "medium",
-                    "-crf", QString::number(codecCrf)};
+            return {"-c:v", encoder, "-preset", "medium", "-crf", QString::number(codecCrf)};
         }
 
-        bool encoderWorks(const FfmpegTools &tools, const QString &encoder,
-                          const int width, const int height,
-                          const int fpsNum, const int fpsDen)
+        bool encoderWorks(const FfmpegTools &tools,
+            const QString &encoder,
+            const int width,
+            const int height,
+            const int fpsNum,
+            const int fpsDen)
         {
             QStringList arguments = {
-                "-v", "error", "-nostdin",
-                "-f", "lavfi",
-                "-i", QString("color=black:size=%1x%2:rate=%3/%4")
-                          .arg(width).arg(height).arg(fpsNum).arg(fpsDen),
-                "-frames:v", "3",
-                "-pix_fmt", "yuv420p",
+                "-v",
+                "error",
+                "-nostdin",
+                "-f",
+                "lavfi",
+                "-i",
+                QString("color=black:size=%1x%2:rate=%3/%4")
+                    .arg(width)
+                    .arg(height)
+                    .arg(fpsNum)
+                    .arg(fpsDen),
+                "-frames:v",
+                "3",
+                "-pix_fmt",
+                "yuv420p",
             };
-            arguments << videoEncoderArgs(encoder, crfForQuality(VideoQuality::Balanced))
-                      << "-f" << "null" << "-";
+            arguments << videoEncoderArgs(encoder, crfForQuality(VideoQuality::Balanced)) << "-f"
+                      << "null" << "-";
 
             QProcess probe;
             probe.start(tools.ffmpegPath, arguments);
@@ -293,9 +316,12 @@ namespace cloakframe
             return probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
         }
 
-        QString selectVideoEncoder(const FfmpegTools &tools, const VideoCodec codec,
-                                   const int width, const int height,
-                                   const int fpsNum, const int fpsDen)
+        QString selectVideoEncoder(const FfmpegTools &tools,
+            const VideoCodec codec,
+            const int width,
+            const int height,
+            const int fpsNum,
+            const int fpsDen)
         {
             static std::mutex cacheMutex;
             static QHash<QString, bool> cache;
@@ -303,18 +329,24 @@ namespace cloakframe
             std::lock_guard lock(cacheMutex);
             for (const auto &encoder : hardwareEncoderCandidates(codec))
             {
-                const QString key =
-                        QString("%1:%2x%3:%4/%5")
-                            .arg(encoder).arg(width).arg(height).arg(fpsNum).arg(fpsDen);
+                const QString key = QString("%1:%2x%3:%4/%5")
+                                        .arg(encoder)
+                                        .arg(width)
+                                        .arg(height)
+                                        .arg(fpsNum)
+                                        .arg(fpsDen);
                 auto it = cache.find(key);
                 if (it == cache.end())
                 {
-                    it = cache.insert(key, encoderWorks(tools, encoder, width, height,
-                                                        fpsNum, fpsDen));
+                    it = cache.insert(
+                        key, encoderWorks(tools, encoder, width, height, fpsNum, fpsDen));
                     spdlog::info("Hardware video encoder {} {} at {}x{} {}/{} fps",
-                                 encoder.toStdString(),
-                                 it.value() ? "available" : "unavailable", width, height,
-                                 fpsNum, fpsDen);
+                        encoder.toStdString(),
+                        it.value() ? "available" : "unavailable",
+                        width,
+                        height,
+                        fpsNum,
+                        fpsDen);
                 }
                 if (it.value())
                 {
@@ -373,8 +405,8 @@ namespace cloakframe
         tools.ffprobePath = ffprobe.path;
         tools.bundled = ffmpeg.bundled;
         tools.versionLine = version;
-        spdlog::info("FFmpeg: {} ({})", version.toStdString(),
-                     tools.bundled ? "bundled" : "system");
+        spdlog::info(
+            "FFmpeg: {} ({})", version.toStdString(), tools.bundled ? "bundled" : "system");
         cached = tools;
         return cached;
     }
@@ -382,10 +414,12 @@ namespace cloakframe
     bool isSupportedVideo(const std::filesystem::path &path)
     {
         auto extension = pathToUtf8(path.extension());
-        std::ranges::transform(extension, extension.begin(), [](unsigned char ch)
-        {
-            return static_cast<char>(std::tolower(ch));
-        });
+        std::ranges::transform(extension,
+            extension.begin(),
+            [](unsigned char ch)
+            {
+                return static_cast<char>(std::tolower(ch));
+            });
         return extension == ".mp4" || extension == ".mov" || extension == ".m4v";
     }
 
@@ -393,12 +427,12 @@ namespace cloakframe
     {
         switch (quality)
         {
-            case VideoQuality::Balanced:
-                return 21;
-            case VideoQuality::SpaceSaver:
-                return 24;
-            case VideoQuality::HighQuality:
-                break;
+        case VideoQuality::Balanced:
+            return 21;
+        case VideoQuality::SpaceSaver:
+            return 24;
+        case VideoQuality::HighQuality:
+            break;
         }
         return 18;
     }
@@ -418,16 +452,14 @@ namespace cloakframe
         return fpsDen > 0 ? static_cast<double>(fpsNum) / fpsDen : 0.0;
     }
 
-    std::optional<VideoInfo> probeVideo(const FfmpegTools &tools,
-                                        const QString &path,
-                                        QString *error)
+    std::optional<VideoInfo> probeVideo(
+        const FfmpegTools &tools, const QString &path, QString *error)
     {
         QProcess process;
         process.start(tools.ffprobePath,
-                      {"-v", "error", "-print_format", "json",
-                       "-show_streams", "-show_format", path});
-        if (!process.waitForStarted(kProcessStartTimeoutMs) ||
-            !process.waitForFinished(kProcessIoTimeoutMs))
+            {"-v", "error", "-print_format", "json", "-show_streams", "-show_format", path});
+        if (!process.waitForStarted(kProcessStartTimeoutMs)
+            || !process.waitForFinished(kProcessIoTimeoutMs))
         {
             process.kill();
             if (error)
@@ -440,8 +472,8 @@ namespace cloakframe
         {
             if (error)
             {
-                *error = trVideo("Could not inspect the video: %1")
-                        .arg(processErrorDetail(process));
+                *error =
+                    trVideo("Could not inspect the video: %1").arg(processErrorDetail(process));
             }
             return std::nullopt;
         }
@@ -452,7 +484,7 @@ namespace cloakframe
 
         VideoInfo info;
         bool videoFound = false;
-        for (const auto &entry: streams)
+        for (const auto &entry : streams)
         {
             const auto stream = entry.toObject();
             const auto type = stream.value("codec_type").toString();
@@ -477,11 +509,10 @@ namespace cloakframe
             int avgNum = 0;
             int avgDen = 1;
             const bool avgValid =
-                    parseRational(stream.value("avg_frame_rate").toString(), avgNum, avgDen);
+                parseRational(stream.value("avg_frame_rate").toString(), avgNum, avgDen);
             int rNum = 0;
             int rDen = 1;
-            const bool rValid =
-                    parseRational(stream.value("r_frame_rate").toString(), rNum, rDen);
+            const bool rValid = parseRational(stream.value("r_frame_rate").toString(), rNum, rDen);
             if (avgValid)
             {
                 info.fpsNum = avgNum;
@@ -492,10 +523,11 @@ namespace cloakframe
                 info.fpsNum = rNum;
                 info.fpsDen = rDen;
             }
-            info.isVfr = avgValid && rValid &&
-                         static_cast<qint64>(avgNum) * rDen != static_cast<qint64>(rNum) * avgDen;
+            info.isVfr =
+                avgValid && rValid
+                && static_cast<qint64>(avgNum) * rDen != static_cast<qint64>(rNum) * avgDen;
 
-            for (const auto &sideDataEntry: stream.value("side_data_list").toArray())
+            for (const auto &sideDataEntry : stream.value("side_data_list").toArray())
             {
                 const auto sideData = sideDataEntry.toObject();
                 if (sideData.contains("rotation"))
@@ -510,8 +542,7 @@ namespace cloakframe
             }
 
             bool durationOk = false;
-            const double streamDuration =
-                    stream.value("duration").toString().toDouble(&durationOk);
+            const double streamDuration = stream.value("duration").toString().toDouble(&durationOk);
             if (durationOk && streamDuration > 0)
             {
                 info.durationSeconds = streamDuration;
@@ -533,9 +564,9 @@ namespace cloakframe
             if (std::isfinite(estimate) && estimate > 0.0)
             {
                 info.estimatedFrameCount =
-                        estimate >= static_cast<double>(std::numeric_limits<qint64>::max())
-                            ? std::numeric_limits<qint64>::max()
-                            : static_cast<qint64>(std::llround(estimate));
+                    estimate >= static_cast<double>(std::numeric_limits<qint64>::max())
+                        ? std::numeric_limits<qint64>::max()
+                        : static_cast<qint64>(std::llround(estimate));
             }
         }
 
@@ -578,8 +609,7 @@ namespace cloakframe
         }
         if (info.videoCodec != "h264" && info.videoCodec != "hevc")
         {
-            return trVideo("unsupported video codec '%1' (H.264/HEVC only)")
-                    .arg(info.videoCodec);
+            return trVideo("unsupported video codec '%1' (H.264/HEVC only)").arg(info.videoCodec);
         }
         static const QRegularExpression highBitDepth("(9|10|12|14|16)(le|be)?$");
         if (highBitDepth.match(info.pixelFormat).hasMatch())
@@ -600,16 +630,17 @@ namespace cloakframe
         close();
     }
 
-    bool VideoFrameReader::open(const FfmpegTools &tools, const QString &path,
-                                const VideoInfo &info, const int decodeLongEdge)
+    bool VideoFrameReader::open(const FfmpegTools &tools,
+        const QString &path,
+        const VideoInfo &info,
+        const int decodeLongEdge)
     {
         close();
         error_.clear();
         atEnd_ = false;
         frameWidth_ = info.displayWidth();
         frameHeight_ = info.displayHeight();
-        if (frameWidth_ <= 0 || frameHeight_ <= 0 ||
-            info.fpsNum <= 0 || info.fpsDen <= 0)
+        if (frameWidth_ <= 0 || frameHeight_ <= 0 || info.fpsNum <= 0 || info.fpsDen <= 0)
         {
             error_ = trVideo("Invalid video dimensions.");
             return false;
@@ -628,10 +659,9 @@ namespace cloakframe
         QString sink = QStringLiteral("-");
 #if defined(_WIN32)
         server_ = std::make_unique<QLocalServer>();
-        const QString pipeName =
-                QString("cloakframe-video-%1-%2")
-                        .arg(QCoreApplication::applicationPid())
-                        .arg(QRandomGenerator::global()->generate64(), 0, 16);
+        const QString pipeName = QString("cloakframe-video-%1-%2")
+                                     .arg(QCoreApplication::applicationPid())
+                                     .arg(QRandomGenerator::global()->generate64(), 0, 16);
         if (!server_->listen(pipeName))
         {
             error_ = trVideo("Could not start FFmpeg for decoding.");
@@ -643,13 +673,21 @@ namespace cloakframe
 
         process_ = std::make_unique<QProcess>();
         process_->start(tools.ffmpegPath,
-                        {"-v", "error", "-nostdin", "-y",
-                         "-i", path,
-                         "-map", "0:v:0",
-                         "-vf", filter,
-                         "-f", "rawvideo",
-                         "-pix_fmt", "bgr24",
-                         sink});
+            {"-v",
+                "error",
+                "-nostdin",
+                "-y",
+                "-i",
+                path,
+                "-map",
+                "0:v:0",
+                "-vf",
+                filter,
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "bgr24",
+                sink});
         if (!process_->waitForStarted(kProcessStartTimeoutMs))
         {
             error_ = trVideo("Could not start FFmpeg for decoding.");
@@ -699,8 +737,7 @@ namespace cloakframe
         return frameHeight_;
     }
 
-    bool VideoFrameReader::readFrame(cv::Mat &frame,
-                                     const std::function<bool()> &continueGuard)
+    bool VideoFrameReader::readFrame(cv::Mat &frame, const std::function<bool()> &continueGuard)
     {
         if (!process_ || atEnd_)
         {
@@ -713,15 +750,13 @@ namespace cloakframe
         {
             if (socket_)
             {
-                return socket_->state() == QLocalSocket::UnconnectedState &&
-                       socket_->bytesAvailable() == 0;
+                return socket_->state() == QLocalSocket::UnconnectedState
+                       && socket_->bytesAvailable() == 0;
             }
-            return process_->state() == QProcess::NotRunning &&
-                   process_->bytesAvailable() == 0;
+            return process_->state() == QProcess::NotRunning && process_->bytesAvailable() == 0;
         };
 
-        const qint64 frameBytes =
-                static_cast<qint64>(frameWidth_) * frameHeight_ * 3;
+        const qint64 frameBytes = static_cast<qint64>(frameWidth_) * frameHeight_ * 3;
         frame.create(frameHeight_, frameWidth_, CV_8UC3);
 
         qint64 received = 0;
@@ -745,11 +780,11 @@ namespace cloakframe
                 process_->waitForFinished(kProcessStartTimeoutMs);
                 if (received > 0)
                 {
-                    error_ = trVideo("Decoding ended mid-frame: %1")
-                            .arg(processErrorDetail(*process_));
+                    error_ =
+                        trVideo("Decoding ended mid-frame: %1").arg(processErrorDetail(*process_));
                 }
-                else if (process_->exitStatus() != QProcess::NormalExit ||
-                         process_->exitCode() != 0)
+                else if (process_->exitStatus() != QProcess::NormalExit
+                         || process_->exitCode() != 0)
                 {
                     error_ = trVideo("Decoding failed: %1").arg(processErrorDetail(*process_));
                 }
@@ -772,8 +807,8 @@ namespace cloakframe
                     atEnd_ = true;
                     return false;
                 }
-                ready = device->waitForReadyRead(
-                    static_cast<int>(std::min<qint64>(remaining, 100)));
+                ready =
+                    device->waitForReadyRead(static_cast<int>(std::min<qint64>(remaining, 100)));
             }
         }
         return true;
@@ -813,21 +848,20 @@ namespace cloakframe
     }
 
     bool VideoFrameWriter::open(const FfmpegTools &tools,
-                                const QString &destination,
-                                const QString &audioSource,
-                                const VideoInfo &info,
-                                const int crf,
-                                const bool hardwareEncoder,
-                                const VideoCodec codec,
-                                const QString &outputRoot,
-                                const QString &relativeDestination)
+        const QString &destination,
+        const QString &audioSource,
+        const VideoInfo &info,
+        const int crf,
+        const bool hardwareEncoder,
+        const VideoCodec codec,
+        const QString &outputRoot,
+        const QString &relativeDestination)
     {
         abort();
         error_.clear();
         frameWidth_ = info.displayWidth();
         frameHeight_ = info.displayHeight();
-        if (frameWidth_ <= 0 || frameHeight_ <= 0 ||
-            info.fpsNum <= 0 || info.fpsDen <= 0)
+        if (frameWidth_ <= 0 || frameHeight_ <= 0 || info.fpsNum <= 0 || info.fpsDen <= 0)
         {
             error_ = trVideo("Invalid video dimensions.");
             return false;
@@ -836,10 +870,12 @@ namespace cloakframe
         encoderName_ = softwareEncoderName(codec);
         if (hardwareEncoder)
         {
-            encoderName_ = selectVideoEncoder(tools, codec,
-                                              frameWidth_ - (frameWidth_ % 2),
-                                              frameHeight_ - (frameHeight_ % 2),
-                                              info.fpsNum, info.fpsDen);
+            encoderName_ = selectVideoEncoder(tools,
+                codec,
+                frameWidth_ - (frameWidth_ % 2),
+                frameHeight_ - (frameHeight_ % 2),
+                info.fpsNum,
+                info.fpsDen);
         }
         spdlog::info("Video encoder: {}", encoderName_.toStdString());
 
@@ -863,22 +899,27 @@ namespace cloakframe
         const bool copyAudio = info.hasAudio && mp4CompatibleAudio.contains(info.audioCodec);
 
         QStringList arguments = {
-            "-v", "error", "-y",
-            "-f", "rawvideo",
-            "-pix_fmt", "bgr24",
-            "-s", QString("%1x%2").arg(frameWidth_).arg(frameHeight_),
-            "-framerate", QString("%1/%2").arg(info.fpsNum).arg(info.fpsDen),
-            "-i", "-",
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "bgr24",
+            "-s",
+            QString("%1x%2").arg(frameWidth_).arg(frameHeight_),
+            "-framerate",
+            QString("%1/%2").arg(info.fpsNum).arg(info.fpsDen),
+            "-i",
+            "-",
         };
         if (info.hasAudio && info.durationSeconds > 0)
         {
             arguments << "-t" << QString::number(info.durationSeconds, 'f', 3);
         }
-        arguments << "-i" << audioSource
-                  << "-map" << "0:v:0"
-                  << "-map" << "1:a:0?"
-                  << videoEncoderArgs(encoderName_, crf)
-                  << "-pix_fmt" << "yuv420p";
+        arguments << "-i" << audioSource << "-map" << "0:v:0"
+                  << "-map" << "1:a:0?" << videoEncoderArgs(encoderName_, crf) << "-pix_fmt"
+                  << "yuv420p";
         if (codec == VideoCodec::Hevc)
         {
             arguments << "-tag:v" << "hvc1";
@@ -904,8 +945,7 @@ namespace cloakframe
         arguments << "-map_metadata" << "-1"
                   << "-map_chapters" << "-1"
                   << "-movflags" << "+faststart"
-                  << "-f" << "mp4"
-                  << tempPath_;
+                  << "-f" << "mp4" << tempPath_;
 
         process_ = std::make_unique<QProcess>();
         process_->start(tools.ffmpegPath, arguments);
@@ -919,8 +959,8 @@ namespace cloakframe
         return true;
     }
 
-    bool VideoFrameWriter::writeFrame(const cv::Mat &frame,
-                                      const std::function<bool()> &continueGuard)
+    bool VideoFrameWriter::writeFrame(
+        const cv::Mat &frame, const std::function<bool()> &continueGuard)
     {
         if (continueGuard && !continueGuard())
         {
@@ -929,11 +969,10 @@ namespace cloakframe
         if (!process_ || process_->state() != QProcess::Running)
         {
             error_ = trVideo("Encoding failed: %1")
-                    .arg(process_ ? processErrorDetail(*process_) : QString());
+                         .arg(process_ ? processErrorDetail(*process_) : QString());
             return false;
         }
-        if (frame.cols != frameWidth_ || frame.rows != frameHeight_ ||
-            frame.type() != CV_8UC3)
+        if (frame.cols != frameWidth_ || frame.rows != frameHeight_ || frame.type() != CV_8UC3)
         {
             error_ = trVideo("Internal error: frame does not match the video format.");
             return false;
@@ -945,8 +984,7 @@ namespace cloakframe
             continuous = frame.clone();
         }
 
-        const qint64 frameBytes =
-                static_cast<qint64>(frameWidth_) * frameHeight_ * 3;
+        const qint64 frameBytes = static_cast<qint64>(frameWidth_) * frameHeight_ * 3;
         qint64 written = 0;
         while (written < frameBytes)
         {
@@ -955,8 +993,7 @@ namespace cloakframe
                 return false;
             }
             const qint64 chunk = process_->write(
-                reinterpret_cast<const char *>(continuous.data) + written,
-                frameBytes - written);
+                reinterpret_cast<const char *>(continuous.data) + written, frameBytes - written);
             if (chunk < 0 || process_->state() != QProcess::Running)
             {
                 error_ = trVideo("Encoding failed: %1").arg(processErrorDetail(*process_));
@@ -968,8 +1005,7 @@ namespace cloakframe
                 QElapsedTimer waitTimer;
                 waitTimer.start();
                 bool writtenToProcess = false;
-                while (!writtenToProcess &&
-                       process_->bytesToWrite() > kMaxEncodeBacklogBytes)
+                while (!writtenToProcess && process_->bytesToWrite() > kMaxEncodeBacklogBytes)
                 {
                     if (continueGuard && !continueGuard())
                     {
@@ -977,15 +1013,13 @@ namespace cloakframe
                     }
                     if (process_->state() != QProcess::Running)
                     {
-                        error_ = trVideo("Encoding failed: %1")
-                                .arg(processErrorDetail(*process_));
+                        error_ = trVideo("Encoding failed: %1").arg(processErrorDetail(*process_));
                         return false;
                     }
                     const qint64 remaining = kProcessIoTimeoutMs - waitTimer.elapsed();
                     if (remaining <= 0)
                     {
-                        error_ = trVideo("Encoding failed: %1")
-                                .arg(processErrorDetail(*process_));
+                        error_ = trVideo("Encoding failed: %1").arg(processErrorDetail(*process_));
                         return false;
                     }
                     writtenToProcess = process_->waitForBytesWritten(
@@ -1023,8 +1057,7 @@ namespace cloakframe
             }
             process_->waitForFinished(static_cast<int>(std::min<qint64>(remaining, 100)));
         }
-        const bool ok = process_->exitStatus() == QProcess::NormalExit &&
-                        process_->exitCode() == 0;
+        const bool ok = process_->exitStatus() == QProcess::NormalExit && process_->exitCode() == 0;
         if (!ok)
         {
             error_ = trVideo("Encoding failed: %1").arg(processErrorDetail(*process_));
@@ -1050,8 +1083,8 @@ namespace cloakframe
         else
         {
             std::error_code ec;
-            const auto destination = std::filesystem::absolute(
-                pathFromQString(destinationPath_), ec);
+            const auto destination =
+                std::filesystem::absolute(pathFromQString(destinationPath_), ec);
             if (!ec)
             {
                 outputRoot = std::filesystem::canonical(destination.parent_path(), ec);
@@ -1104,9 +1137,8 @@ namespace cloakframe
         if (stagingDirectory_)
         {
             for (int attempt = 0;
-                 stagingDirectory_->isValid() && !stagingDirectory_->remove() &&
-                 attempt < 20;
-                 ++attempt)
+                stagingDirectory_->isValid() && !stagingDirectory_->remove() && attempt < 20;
+                ++attempt)
             {
                 QThread::msleep(100);
             }

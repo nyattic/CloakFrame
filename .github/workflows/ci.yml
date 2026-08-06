@@ -28,6 +28,55 @@ env:
   DIRECTML_SHA256: 4e7cb7ddce8cf837a7a75dc029209b520ca0101470fcdf275c1f49736a3615b9
 
 jobs:
+  static:
+    name: Format and repository checks
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install LLVM 22
+        run: brew install llvm@22
+
+      - name: Check source formatting
+        run: |
+          clang_format="$(brew --prefix llvm@22)/bin/clang-format"
+          git ls-files -z -- '*.cpp' '*.hpp' '*.mm' |
+            xargs -0 "$clang_format" --dry-run --Werror
+
+      - name: Test download badge aggregation
+        run: node --test .github/scripts/update-download-badge.test.js
+
+  tidy:
+    name: Clang-Tidy
+    runs-on: macos-15
+    timeout-minutes: 35
+    env:
+      CMAKE_PREFIX_PATH: /opt/homebrew
+      PKG_CONFIG_PATH: /opt/homebrew/lib/pkgconfig
+      HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install dependencies and LLVM 22
+        run: brew install cmake qt opencv onnxruntime spdlog exiv2 llvm@22
+
+      - name: Configure
+        run: |
+          llvm_prefix="$(brew --prefix llvm@22)"
+          cmake -S . -B build-tidy -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+            -DCLOAKFRAME_SELF_UPDATE=OFF \
+            -DCLOAKFRAME_WARNINGS_AS_ERRORS=ON \
+            -DCLOAKFRAME_CLANG_TIDY="$llvm_prefix/bin/clang-tidy" \
+            -DCLOAKFRAME_RUN_CLANG_TIDY="$llvm_prefix/bin/run-clang-tidy"
+
+      - name: Run Clang-Tidy
+        run: cmake --build build-tidy --target cloakframe_tidy --parallel
+
   macos:
     name: Build & test macOS
     runs-on: macos-15
@@ -43,7 +92,11 @@ jobs:
         run: brew install cmake qt opencv onnxruntime spdlog exiv2 ffmpeg
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+          -DCLOAKFRAME_WARNINGS_AS_ERRORS=ON
 
       - name: Build
         run: cmake --build build --parallel
@@ -113,7 +166,10 @@ jobs:
           echo "ONNXRUNTIME_ROOT=$HOME/onnx/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}" >> "$GITHUB_ENV"
 
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCLOAKFRAME_WARNINGS_AS_ERRORS=ON
 
       - name: Build
         run: cmake --build build --parallel
@@ -194,7 +250,10 @@ jobs:
         shell: pwsh
         run: |
           $env:CMAKE_PREFIX_PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows-static-md"
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DONNXRUNTIME_ROOT=$env:ONNXRUNTIME_ROOT"
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCLOAKFRAME_WARNINGS_AS_ERRORS=ON `
+            "-DONNXRUNTIME_ROOT=$env:ONNXRUNTIME_ROOT"
 
       - name: Build
         run: cmake --build build --parallel

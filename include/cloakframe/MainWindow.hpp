@@ -1,13 +1,12 @@
 #pragma once
 
-#include "cloakframe/VideoReviewTypes.hpp"
-
 #include "cloakframe/ProcessorWorker.hpp"
 #include "cloakframe/ReviewTypes.hpp"
 #include "cloakframe/Theme.hpp"
+#include "cloakframe/VideoReviewTypes.hpp"
 
-#include <QElapsedTimer>
 #include <QByteArray>
+#include <QElapsedTimer>
 #include <QMainWindow>
 #include <QTranslator>
 #include <QVector>
@@ -50,11 +49,11 @@ namespace cloakframe
         ~MainWindow() override;
 
         Q_INVOKABLE cloakframe::ReviewResult requestReview(const QImage &image,
-                                                         const QString &sourceName,
-                                                         const QVector<QRectF> &detected,
-                                                         int currentIndex,
-                                                         int total,
-                                                         double previewScale);
+            const QString &sourceName,
+            const QVector<QRectF> &detected,
+            int currentIndex,
+            int total,
+            double previewScale);
 
         Q_INVOKABLE cloakframe::VideoReviewResult requestVideoReview(
             const cloakframe::VideoReviewRequest &request);
@@ -158,12 +157,12 @@ namespace cloakframe
 
             [[nodiscard]] bool operator==(const DetectorCacheKey &other) const
             {
-                return canonicalModelPath == other.canonicalModelPath &&
-                       modelSize == other.modelSize &&
-                       modelLastModifiedMs == other.modelLastModifiedMs &&
-                       modelSha256 == other.modelSha256 &&
-                       gpuAcceleration == other.gpuAcceleration &&
-                       faceModelKind == other.faceModelKind;
+                return canonicalModelPath == other.canonicalModelPath
+                       && modelSize == other.modelSize
+                       && modelLastModifiedMs == other.modelLastModifiedMs
+                       && modelSha256 == other.modelSha256
+                       && gpuAcceleration == other.gpuAcceleration
+                       && faceModelKind == other.faceModelKind;
             }
         };
 
@@ -182,8 +181,8 @@ namespace cloakframe
             bool detectPlates = false;
         };
 
-        [[nodiscard]] static DetectorCacheKey makeDetectorCacheKey(
-            const QString &modelPath, bool gpuAcceleration,
+        [[nodiscard]] static DetectorCacheKey makeDetectorCacheKey(const QString &modelPath,
+            bool gpuAcceleration,
             FaceModelKind faceModelKind = FaceModelKind::Scrfd);
 
         QComboBox *modelCombo_ = nullptr;

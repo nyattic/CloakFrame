@@ -39,15 +39,17 @@ namespace cloakframe
     class ReviewCanvas final : public QWidget
     {
     public:
-        ReviewCanvas(QImage image, const QVector<QRectF> &detected, ReviewPreviewSpec spec,
-                     QWidget *parent)
-            : QWidget(parent), image_(std::move(image)), spec_(spec)
+        ReviewCanvas(
+            QImage image, const QVector<QRectF> &detected, ReviewPreviewSpec spec, QWidget *parent)
+            : QWidget(parent)
+            , image_(std::move(image))
+            , spec_(spec)
         {
             setMouseTracking(true);
             setFocusPolicy(Qt::StrongFocus);
             const QRectF imageBounds(QPointF(0, 0), QSizeF(image_.size()));
             boxes_.reserve(detected.size());
-            for (const auto &rect: detected)
+            for (const auto &rect : detected)
             {
                 const QRectF clamped = rect.intersected(imageBounds);
                 if (clamped.width() >= 1.0 && clamped.height() >= 1.0)
@@ -63,7 +65,7 @@ namespace cloakframe
             QVector<QRectF> result;
             result.reserve(boxes_.size());
             const QRectF imageBounds(QPointF(0, 0), QSizeF(image_.size()));
-            for (const auto &box: boxes_)
+            for (const auto &box : boxes_)
             {
                 if (!box.detected || box.included)
                 {
@@ -78,8 +80,14 @@ namespace cloakframe
             return result;
         }
 
-        [[nodiscard]] bool canUndo() const { return !undoStack_.empty(); }
-        [[nodiscard]] bool canRedo() const { return !redoStack_.empty(); }
+        [[nodiscard]] bool canUndo() const
+        {
+            return !undoStack_.empty();
+        }
+        [[nodiscard]] bool canRedo() const
+        {
+            return !redoStack_.empty();
+        }
 
         void undo()
         {
@@ -245,7 +253,7 @@ namespace cloakframe
                 const qreal centeredX = (width() - scaled.width()) / 2.0;
                 const qreal centeredY = (height() - scaled.height()) / 2.0;
                 pan_ = QPointF(pos.x() - relX * scaled.width() - centeredX,
-                               pos.y() - relY * scaled.height() - centeredY);
+                    pos.y() - relY * scaled.height() - centeredY);
                 clampPan();
             }
             update();
@@ -314,12 +322,12 @@ namespace cloakframe
 
         void mouseReleaseEvent(QMouseEvent *event) override
         {
-            if (panning_ &&
-                (event->button() == Qt::RightButton || event->button() == Qt::MiddleButton))
+            if (panning_
+                && (event->button() == Qt::RightButton || event->button() == Qt::MiddleButton))
             {
                 panning_ = false;
-                setCursor(hitTest(event->position()) >= 0 ? Qt::PointingHandCursor
-                                                          : Qt::CrossCursor);
+                setCursor(
+                    hitTest(event->position()) >= 0 ? Qt::PointingHandCursor : Qt::CrossCursor);
                 return;
             }
             if (!drawing_ || event->button() != Qt::LeftButton)
@@ -330,8 +338,9 @@ namespace cloakframe
             const QRectF screenRect = QRectF(dragStart_, dragCurrent_).normalized();
             if (screenRect.width() >= kMinBoxPixels && screenRect.height() >= kMinBoxPixels)
             {
-                const QRectF imageRect = screenToImage(screenRect).intersected(
-                    QRectF(QPointF(0, 0), QSizeF(image_.size())));
+                const QRectF imageRect =
+                    screenToImage(screenRect)
+                        .intersected(QRectF(QPointF(0, 0), QSizeF(image_.size())));
                 if (imageRect.width() >= 1.0 && imageRect.height() >= 1.0)
                 {
                     pushUndoSnapshot();
@@ -345,44 +354,44 @@ namespace cloakframe
         {
             switch (event->key())
             {
-                case Qt::Key_Space:
-                    if (!event->isAutoRepeat())
-                    {
-                        peeking_ = true;
-                        peekImage_ = renderPeek();
-                        update();
-                    }
+            case Qt::Key_Space:
+                if (!event->isAutoRepeat())
+                {
+                    peeking_ = true;
+                    peekImage_ = renderPeek();
+                    update();
+                }
+                return;
+            case Qt::Key_0:
+            case Qt::Key_F:
+                resetView();
+                return;
+            case Qt::Key_Left:
+            case Qt::Key_Up:
+                moveFocus(-1);
+                return;
+            case Qt::Key_Right:
+            case Qt::Key_Down:
+                moveFocus(1);
+                return;
+            case Qt::Key_Return:
+            case Qt::Key_Enter:
+                if (focusedIndex_ >= 0)
+                {
+                    activateBox(focusedIndex_);
                     return;
-                case Qt::Key_0:
-                case Qt::Key_F:
-                    resetView();
+                }
+                break;
+            case Qt::Key_Delete:
+            case Qt::Key_Backspace:
+                if (focusedIndex_ >= 0)
+                {
+                    excludeBox(focusedIndex_);
                     return;
-                case Qt::Key_Left:
-                case Qt::Key_Up:
-                    moveFocus(-1);
-                    return;
-                case Qt::Key_Right:
-                case Qt::Key_Down:
-                    moveFocus(1);
-                    return;
-                case Qt::Key_Return:
-                case Qt::Key_Enter:
-                    if (focusedIndex_ >= 0)
-                    {
-                        activateBox(focusedIndex_);
-                        return;
-                    }
-                    break;
-                case Qt::Key_Delete:
-                case Qt::Key_Backspace:
-                    if (focusedIndex_ >= 0)
-                    {
-                        excludeBox(focusedIndex_);
-                        return;
-                    }
-                    break;
-                default:
-                    break;
+                }
+                break;
+            default:
+                break;
             }
             QWidget::keyPressEvent(event);
         }
@@ -501,23 +510,32 @@ namespace cloakframe
             {
                 return {};
             }
-            cv::Mat mat(base.height(), base.width(), CV_8UC3,
-                        base.bits(), static_cast<size_t>(base.bytesPerLine()));
+            cv::Mat mat(base.height(),
+                base.width(),
+                CV_8UC3,
+                base.bits(),
+                static_cast<size_t>(base.bytesPerLine()));
             FaceDetections detections;
-            for (const auto &rect: finalBoxes())
+            for (const auto &rect : finalBoxes())
             {
                 FaceDetection det;
                 det.box = cv::Rect2f(static_cast<float>(rect.x()),
-                                     static_cast<float>(rect.y()),
-                                     static_cast<float>(rect.width()),
-                                     static_cast<float>(rect.height()));
+                    static_cast<float>(rect.y()),
+                    static_cast<float>(rect.width()),
+                    static_cast<float>(rect.height()));
                 det.score = 1.0F;
                 detections.push_back(det);
             }
-            const int blockSize = std::max(
-                2, static_cast<int>(std::round(spec_.blockSize * spec_.previewScale)));
-            applyAnonymization(mat, detections, spec_.method, blockSize, spec_.padding,
-                               spec_.shape, spec_.softEdges, spec_.customImage);
+            const int blockSize =
+                std::max(2, static_cast<int>(std::round(spec_.blockSize * spec_.previewScale)));
+            applyAnonymization(mat,
+                detections,
+                spec_.method,
+                blockSize,
+                spec_.padding,
+                spec_.shape,
+                spec_.softEdges,
+                spec_.customImage);
             return base;
         }
 
@@ -546,9 +564,9 @@ namespace cloakframe
             const double sx = target.width() / image_.width();
             const double sy = target.height() / image_.height();
             return QRectF(target.x() + rect.x() * sx,
-                          target.y() + rect.y() * sy,
-                          rect.width() * sx,
-                          rect.height() * sy);
+                target.y() + rect.y() * sy,
+                rect.width() * sx,
+                rect.height() * sy);
         }
 
         [[nodiscard]] QRectF screenToImage(const QRectF &rect) const
@@ -561,9 +579,9 @@ namespace cloakframe
             const double sx = image_.width() / target.width();
             const double sy = image_.height() / target.height();
             return QRectF((rect.x() - target.x()) * sx,
-                          (rect.y() - target.y()) * sy,
-                          rect.width() * sx,
-                          rect.height() * sy);
+                (rect.y() - target.y()) * sy,
+                rect.width() * sx,
+                rect.height() * sy);
         }
 
         [[nodiscard]] int hitTest(QPointF pos) const
@@ -620,13 +638,13 @@ namespace cloakframe
     };
 
     ReviewDialog::ReviewDialog(const QImage &image,
-                               const QString &sourceName,
-                               const QVector<QRectF> &detected,
-                               int currentIndex,
-                               int total,
-                               bool preserveMetadata,
-                               const ReviewPreviewSpec &previewSpec,
-                               QWidget *parent)
+        const QString &sourceName,
+        const QVector<QRectF> &detected,
+        int currentIndex,
+        int total,
+        bool preserveMetadata,
+        const ReviewPreviewSpec &previewSpec,
+        QWidget *parent)
         : QDialog(parent)
     {
         setWindowTitle(tr("Review — %1").arg(sourceName));
@@ -639,9 +657,10 @@ namespace cloakframe
 
         auto *header = new QLabel(
             QString("<b>%1</b> &nbsp;·&nbsp; <span style='color:%2'>%3 / %4</span>")
-                .arg(sourceName.toHtmlEscaped(),
-                     palette().placeholderText().color().name())
-                .arg(currentIndex).arg(total), this);
+                .arg(sourceName.toHtmlEscaped(), palette().placeholderText().color().name())
+                .arg(currentIndex)
+                .arg(total),
+            this);
         header->setTextFormat(Qt::RichText);
         root->addWidget(header);
 
@@ -651,13 +670,14 @@ namespace cloakframe
         canvas_->setFocus(Qt::OtherFocusReason);
         root->addWidget(canvas_, 1);
 
-        hintLabel_ = new QLabel(
-            tr("Click or Return toggles a box · Drag an empty area to add · "
-               "Arrow keys move the selection · Hold Space to preview the result · "
-               "Scroll to zoom, right-drag to pan, 0 resets · %1 / %2 to undo/redo · "
-               "Esc skips this image without saving")
-                .arg(QKeySequence(QKeySequence::Undo).toString(QKeySequence::NativeText),
-                     QKeySequence(QKeySequence::Redo).toString(QKeySequence::NativeText)), this);
+        hintLabel_ =
+            new QLabel(tr("Click or Return toggles a box · Drag an empty area to add · "
+                          "Arrow keys move the selection · Hold Space to preview the result · "
+                          "Scroll to zoom, right-drag to pan, 0 resets · %1 / %2 to undo/redo · "
+                          "Esc skips this image without saving")
+                           .arg(QKeySequence(QKeySequence::Undo).toString(QKeySequence::NativeText),
+                               QKeySequence(QKeySequence::Redo).toString(QKeySequence::NativeText)),
+                this);
         hintLabel_->setProperty("role", "sectionHint");
         hintLabel_->setWordWrap(true);
         root->addWidget(hintLabel_);
@@ -698,62 +718,104 @@ namespace cloakframe
         buttonRow->addWidget(save);
         root->addLayout(buttonRow);
 
-        connect(cancelAll, &QPushButton::clicked, this, [this, currentIndex, total]
-        {
-            const int remaining = total - currentIndex + 1;
-            const auto answer = QMessageBox::question(
-                this, tr("Cancel All?"),
-                tr("Stop reviewing and cancel the remaining %n image(s)?\n\n"
-                   "Images already saved are kept.", nullptr, remaining),
-                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-            if (answer != QMessageBox::Yes)
+        connect(cancelAll,
+            &QPushButton::clicked,
+            this,
+            [this, currentIndex, total]
             {
-                return;
-            }
-            decision_ = ReviewDecision::CancelAll;
-            QDialog::reject();
-        });
-        connect(undoButton, &QPushButton::clicked, this, [this] { canvas_->undo(); });
-        connect(redoButton, &QPushButton::clicked, this, [this] { canvas_->redo(); });
-        connect(doNotSave, &QPushButton::clicked, this, [this]
-        {
-            decision_ = ReviewDecision::DoNotSave;
-            accept();
-        });
-        connect(copyOriginal, &QPushButton::clicked, this, [this, preserveMetadata]
-        {
-            const QString detail = preserveMetadata
-                ? tr("The unredacted original will be saved to the output folder, "
-                     "including its original metadata (EXIF, GPS, timestamps).")
-                : tr("The unredacted original will be saved to the output folder "
-                     "(re-encoded without metadata).");
-            const auto answer = QMessageBox::warning(
-                this, tr("Copy Original?"),
-                tr("This image will not be anonymized.\n\n%1\n\nContinue?").arg(detail),
-                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-            if (answer != QMessageBox::Yes)
+                const int remaining = total - currentIndex + 1;
+                const auto answer = QMessageBox::question(this,
+                    tr("Cancel All?"),
+                    tr("Stop reviewing and cancel the remaining %n image(s)?\n\n"
+                       "Images already saved are kept.",
+                        nullptr,
+                        remaining),
+                    QMessageBox::Yes | QMessageBox::No,
+                    QMessageBox::No);
+                if (answer != QMessageBox::Yes)
+                {
+                    return;
+                }
+                decision_ = ReviewDecision::CancelAll;
+                QDialog::reject();
+            });
+        connect(undoButton,
+            &QPushButton::clicked,
+            this,
+            [this]
             {
-                return;
-            }
-            decision_ = ReviewDecision::CopyOriginal;
-            accept();
-        });
-        connect(save, &QPushButton::clicked, this, [this]
-        {
-            decision_ = ReviewDecision::Save;
-            accept();
-        });
+                canvas_->undo();
+            });
+        connect(redoButton,
+            &QPushButton::clicked,
+            this,
+            [this]
+            {
+                canvas_->redo();
+            });
+        connect(doNotSave,
+            &QPushButton::clicked,
+            this,
+            [this]
+            {
+                decision_ = ReviewDecision::DoNotSave;
+                accept();
+            });
+        connect(copyOriginal,
+            &QPushButton::clicked,
+            this,
+            [this, preserveMetadata]
+            {
+                const QString detail =
+                    preserveMetadata
+                        ? tr("The unredacted original will be saved to the output folder, "
+                             "including its original metadata (EXIF, GPS, timestamps).")
+                        : tr("The unredacted original will be saved to the output folder "
+                             "(re-encoded without metadata).");
+                const auto answer = QMessageBox::warning(this,
+                    tr("Copy Original?"),
+                    tr("This image will not be anonymized.\n\n%1\n\nContinue?").arg(detail),
+                    QMessageBox::Yes | QMessageBox::No,
+                    QMessageBox::No);
+                if (answer != QMessageBox::Yes)
+                {
+                    return;
+                }
+                decision_ = ReviewDecision::CopyOriginal;
+                accept();
+            });
+        connect(save,
+            &QPushButton::clicked,
+            this,
+            [this]
+            {
+                decision_ = ReviewDecision::Save;
+                accept();
+            });
 
-        canvas_->setHistoryChangedCallback([this, undoButton, redoButton]
-        {
-            undoButton->setEnabled(canvas_->canUndo());
-            redoButton->setEnabled(canvas_->canRedo());
-        });
+        canvas_->setHistoryChangedCallback(
+            [this, undoButton, redoButton]
+            {
+                undoButton->setEnabled(canvas_->canUndo());
+                redoButton->setEnabled(canvas_->canRedo());
+            });
 
         auto *undoShortcut = new QShortcut(QKeySequence::Undo, this);
         auto *redoShortcut = new QShortcut(QKeySequence::Redo, this);
-        connect(undoShortcut, &QShortcut::activated, this, [this] { canvas_->undo(); });
-        connect(redoShortcut, &QShortcut::activated, this, [this] { canvas_->redo(); });
+        connect(undoShortcut,
+            &QShortcut::activated,
+            this,
+            [this]
+            {
+                canvas_->undo();
+            });
+        connect(redoShortcut,
+            &QShortcut::activated,
+            this,
+            [this]
+            {
+                canvas_->redo();
+            });
     }
 
     ReviewResult ReviewDialog::result() const

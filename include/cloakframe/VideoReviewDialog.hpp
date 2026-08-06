@@ -35,8 +35,8 @@ namespace cloakframe
     private:
         void setFrame(int frame);
         void loadFramePreview();
-        void completeFramePreview(QProcess *process, int frame,
-                                  quint64 generation, bool processSucceeded);
+        void completeFramePreview(
+            QProcess *process, int frame, quint64 generation, bool processSucceeded);
         void cancelFramePreview();
         void setTrackIncluded(int id, bool included);
         void syncTrackItem(int id);

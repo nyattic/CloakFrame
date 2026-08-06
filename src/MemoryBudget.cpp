@@ -23,15 +23,12 @@ namespace cloakframe
 #if defined(_WIN32)
             MEMORYSTATUSEX status{};
             status.dwLength = sizeof(status);
-            return ::GlobalMemoryStatusEx(&status)
-                       ? static_cast<std::uint64_t>(status.ullTotalPhys)
-                       : 0ULL;
+            return ::GlobalMemoryStatusEx(&status) ? static_cast<std::uint64_t>(status.ullTotalPhys)
+                                                   : 0ULL;
 #elif defined(__APPLE__)
             std::uint64_t bytes = 0;
             std::size_t size = sizeof(bytes);
-            return ::sysctlbyname("hw.memsize", &bytes, &size, nullptr, 0) == 0
-                       ? bytes
-                       : 0ULL;
+            return ::sysctlbyname("hw.memsize", &bytes, &size, nullptr, 0) == 0 ? bytes : 0ULL;
 #else
             const long pages = ::sysconf(_SC_PHYS_PAGES);
             const long pageSize = ::sysconf(_SC_PAGE_SIZE);
@@ -41,8 +38,7 @@ namespace cloakframe
             }
             const auto unsignedPages = static_cast<std::uint64_t>(pages);
             const auto unsignedPageSize = static_cast<std::uint64_t>(pageSize);
-            return unsignedPages > std::numeric_limits<std::uint64_t>::max() /
-                                   unsignedPageSize
+            return unsignedPages > std::numeric_limits<std::uint64_t>::max() / unsignedPageSize
                        ? 0ULL
                        : unsignedPages * unsignedPageSize;
 #endif
@@ -51,8 +47,8 @@ namespace cloakframe
     }
 
     std::uint64_t adaptiveMemoryBudget(const std::uint64_t minimum,
-                                       const std::uint64_t maximum,
-                                       const std::uint64_t divisor) noexcept
+        const std::uint64_t maximum,
+        const std::uint64_t divisor) noexcept
     {
         if (minimum >= maximum || divisor == 0)
         {

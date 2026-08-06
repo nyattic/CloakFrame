@@ -1,7 +1,6 @@
 #include <onnxruntime_cxx_api.h>
-
-#include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_sinks.h>
+#include <spdlog/spdlog.h>
 
 #include <filesystem>
 #include <memory>
@@ -55,8 +54,10 @@ int main(int argc, char *argv[])
             auto name = session.GetInputNameAllocated(i, allocator);
             const auto typeInfo = session.GetInputTypeInfo(i);
             const auto info = typeInfo.GetTensorTypeAndShapeInfo();
-            spdlog::info("  {} {} type={}", name.get(), shapeToString(info.GetShape()),
-                         static_cast<int>(info.GetElementType()));
+            spdlog::info("  {} {} type={}",
+                name.get(),
+                shapeToString(info.GetShape()),
+                static_cast<int>(info.GetElementType()));
         }
 
         spdlog::info("Outputs");
@@ -65,8 +66,10 @@ int main(int argc, char *argv[])
             auto name = session.GetOutputNameAllocated(i, allocator);
             const auto typeInfo = session.GetOutputTypeInfo(i);
             const auto info = typeInfo.GetTensorTypeAndShapeInfo();
-            spdlog::info("  {} {} type={}", name.get(), shapeToString(info.GetShape()),
-                         static_cast<int>(info.GetElementType()));
+            spdlog::info("  {} {} type={}",
+                name.get(),
+                shapeToString(info.GetShape()),
+                static_cast<int>(info.GetElementType()));
         }
     }
     catch (const std::exception &exception)

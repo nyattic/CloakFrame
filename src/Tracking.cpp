@@ -29,8 +29,8 @@ namespace cloakframe
             }
         }
 
-        void periodicallyRequireTrackingContinue(const TrackingContinueGuard &continueGuard,
-                                                  std::size_t &operations)
+        void periodicallyRequireTrackingContinue(
+            const TrackingContinueGuard &continueGuard, std::size_t &operations)
         {
             ++operations;
             if ((operations & (kCancellationCheckInterval - 1)) == 0)
@@ -39,11 +39,10 @@ namespace cloakframe
             }
         }
 
-        std::size_t trackedBoxCount(const std::vector<Track> &tracks,
-                                    const std::size_t maximum)
+        std::size_t trackedBoxCount(const std::vector<Track> &tracks, const std::size_t maximum)
         {
             std::size_t count = 0;
-            for (const auto &track: tracks)
+            for (const auto &track : tracks)
             {
                 if (count > maximum || track.boxes.size() > maximum - count)
                 {
@@ -61,7 +60,8 @@ namespace cloakframe
 
         cv::Rect2f boxWithCenter(const cv::Rect2f &box, const cv::Point2f &center)
         {
-            return {center.x - box.width * 0.5F, center.y - box.height * 0.5F, box.width, box.height};
+            return {
+                center.x - box.width * 0.5F, center.y - box.height * 0.5F, box.width, box.height};
         }
 
         cv::Rect2f boxUnion(const cv::Rect2f &a, const cv::Rect2f &b)
@@ -76,9 +76,9 @@ namespace cloakframe
         cv::Rect2f lerpBox(const cv::Rect2f &a, const cv::Rect2f &b, float t)
         {
             return {a.x + (b.x - a.x) * t,
-                    a.y + (b.y - a.y) * t,
-                    a.width + (b.width - a.width) * t,
-                    a.height + (b.height - a.height) * t};
+                a.y + (b.y - a.y) * t,
+                a.width + (b.width - a.width) * t,
+                a.height + (b.height - a.height) * t};
         }
 
         float lerpAngle(const float from, const float to, const float t)
@@ -106,13 +106,13 @@ namespace cloakframe
             constexpr float kMaxDimensionRatioCap = 2.4F;
             constexpr float kMaxAreaRatioCap = 4.5F;
 
-            if (from.width <= 0.0F || from.height <= 0.0F
-                || to.width <= 0.0F || to.height <= 0.0F)
+            if (from.width <= 0.0F || from.height <= 0.0F || to.width <= 0.0F || to.height <= 0.0F)
             {
                 return true;
             }
             const float slack = 1.0F + kPerFrameSlack * static_cast<float>(std::max(0, gap - 1));
-            const float dimensionLimit = std::min(kMaxDimensionRatioCap, kMaxDimensionRatio * slack);
+            const float dimensionLimit =
+                std::min(kMaxDimensionRatioCap, kMaxDimensionRatio * slack);
             const float areaLimit = std::min(kMaxAreaRatioCap, kMaxAreaRatio * slack * slack);
             const float widthRatio = std::max(to.width / from.width, from.width / to.width);
             const float heightRatio = std::max(to.height / from.height, from.height / to.height);
@@ -129,48 +129,49 @@ namespace cloakframe
         };
 
         std::vector<Match> greedyIouMatches(const std::vector<cv::Rect2f> &predictions,
-                                            const std::vector<cv::Rect2f> &lastBoxes,
-                                            const std::vector<int> &gaps,
-                                            const std::vector<size_t> &trackIndices,
-                                            const FaceDetections &detections,
-                                            const std::vector<size_t> &detectionIndices,
-                                            float iouThreshold,
-                                            const TrackingContinueGuard &continueGuard)
+            const std::vector<cv::Rect2f> &lastBoxes,
+            const std::vector<int> &gaps,
+            const std::vector<size_t> &trackIndices,
+            const FaceDetections &detections,
+            const std::vector<size_t> &detectionIndices,
+            float iouThreshold,
+            const TrackingContinueGuard &continueGuard)
         {
-            if (!detectionIndices.empty() &&
-                trackIndices.size() > kMaxMatchComparisons / detectionIndices.size())
+            if (!detectionIndices.empty()
+                && trackIndices.size() > kMaxMatchComparisons / detectionIndices.size())
             {
                 throw std::length_error("Tracking data exceeds the safety limit.");
             }
             std::vector<Match> candidates;
             std::size_t comparisons = 0;
-            for (const size_t trackIndex: trackIndices)
+            for (const size_t trackIndex : trackIndices)
             {
-                for (const size_t detectionIndex: detectionIndices)
+                for (const size_t detectionIndex : detectionIndices)
                 {
                     periodicallyRequireTrackingContinue(continueGuard, comparisons);
-                    const float iou = intersectionOverUnion(predictions[trackIndex],
-                                                            detections[detectionIndex].box);
+                    const float iou = intersectionOverUnion(
+                        predictions[trackIndex], detections[detectionIndex].box);
                     if (iou >= iouThreshold
                         && !sizeJumpTooLarge(lastBoxes[trackIndex],
-                                             detections[detectionIndex].box,
-                                             gaps[trackIndex]))
+                            detections[detectionIndex].box,
+                            gaps[trackIndex]))
                     {
                         candidates.push_back({trackIndex, detectionIndex, iou});
                     }
                 }
             }
 
-            std::ranges::sort(candidates, [](const Match &a, const Match &b)
-            {
-                return a.iou > b.iou;
-            });
+            std::ranges::sort(candidates,
+                [](const Match &a, const Match &b)
+                {
+                    return a.iou > b.iou;
+                });
 
             std::vector<Match> matches;
             std::vector<bool> trackUsed(predictions.size(), false);
             std::vector<bool> detectionUsed(detections.size(), false);
             std::size_t selectionOperations = 0;
-            for (const auto &candidate: candidates)
+            for (const auto &candidate : candidates)
             {
                 periodicallyRequireTrackingContinue(continueGuard, selectionOperations);
                 if (trackUsed[candidate.trackIndex] || detectionUsed[candidate.detectionIndex])
@@ -237,12 +238,15 @@ namespace cloakframe
         if (dt > 0.0F)
         {
             const cv::Point2f observed = (boxCenter(detection.box) - boxCenter(last.box)) / dt;
-            active.velocity = active.velocity * (1.0F - config_.velocityBlend)
-                              + observed * config_.velocityBlend;
+            active.velocity =
+                active.velocity * (1.0F - config_.velocityBlend) + observed * config_.velocityBlend;
         }
-        active.track.boxes.push_back({frame, detection.box, detection.score, false,
-                                      detection.rollRadians,
-                                      hasValidFacePose(detection)});
+        active.track.boxes.push_back({frame,
+            detection.box,
+            detection.score,
+            false,
+            detection.rollRadians,
+            hasValidFacePose(detection)});
         ++boxCount_;
         active.lastFrame = frame;
         if (detection.score >= config_.highScoreThreshold)
@@ -251,8 +255,8 @@ namespace cloakframe
         }
     }
 
-    void ByteTracker::update(int frame, const FaceDetections &detections,
-                             const TrackingContinueGuard &continueGuard)
+    void ByteTracker::update(
+        int frame, const FaceDetections &detections, const TrackingContinueGuard &continueGuard)
     {
         requireTrackingContinue(continueGuard);
         if (detections.size() > kMaxDetectionsPerFrame || active_.size() > kMaxActiveTracks)
@@ -261,29 +265,30 @@ namespace cloakframe
         }
         if (cuts_.isCut(frame))
         {
-            for (auto &active: active_)
+            for (auto &active : active_)
             {
                 finished_.push_back(std::move(active.track));
             }
             active_.clear();
         }
 
-        std::erase_if(active_, [&](ActiveTrack &active)
-        {
-            const cv::Rect2f &lastBox = active.track.boxes.back().box;
-            const float scale = std::max(lastBox.width, lastBox.height);
-            const float speed = std::hypot(active.velocity.x, active.velocity.y);
-            const bool moving = scale > 0.0F && speed > config_.coastMotionThreshold * scale;
-            const int coastLimit = moving ? config_.maxFramesSinceHighScoreMoving
-                                          : config_.maxFramesSinceHighScore;
-            if (frame - active.lastFrame > config_.maxFramesLost
-                || frame - active.lastHighScoreFrame > coastLimit)
+        std::erase_if(active_,
+            [&](ActiveTrack &active)
             {
-                finished_.push_back(std::move(active.track));
-                return true;
-            }
-            return false;
-        });
+                const cv::Rect2f &lastBox = active.track.boxes.back().box;
+                const float scale = std::max(lastBox.width, lastBox.height);
+                const float speed = std::hypot(active.velocity.x, active.velocity.y);
+                const bool moving = scale > 0.0F && speed > config_.coastMotionThreshold * scale;
+                const int coastLimit = moving ? config_.maxFramesSinceHighScoreMoving
+                                              : config_.maxFramesSinceHighScore;
+                if (frame - active.lastFrame > config_.maxFramesLost
+                    || frame - active.lastHighScoreFrame > coastLimit)
+                {
+                    finished_.push_back(std::move(active.track));
+                    return true;
+                }
+                return false;
+            });
 
         std::vector<cv::Rect2f> predictions(active_.size());
         std::vector<cv::Rect2f> lastBoxes(active_.size());
@@ -316,39 +321,51 @@ namespace cloakframe
             std::erase(indices, value);
         };
 
-        const auto highMatches = greedyIouMatches(predictions, lastBoxes, gaps, unmatchedTracks,
-                                                  detections, highDetections,
-                                                  config_.iouThreshold, continueGuard);
-        for (const auto &match: highMatches)
+        const auto highMatches = greedyIouMatches(predictions,
+            lastBoxes,
+            gaps,
+            unmatchedTracks,
+            detections,
+            highDetections,
+            config_.iouThreshold,
+            continueGuard);
+        for (const auto &match : highMatches)
         {
             extendTrack(active_[match.trackIndex], frame, detections[match.detectionIndex]);
             removeMatched(unmatchedTracks, match.trackIndex);
             removeMatched(highDetections, match.detectionIndex);
         }
 
-        const auto lowMatches = greedyIouMatches(predictions, lastBoxes, gaps, unmatchedTracks,
-                                                 detections, lowDetections,
-                                                 config_.iouThreshold, continueGuard);
-        for (const auto &match: lowMatches)
+        const auto lowMatches = greedyIouMatches(predictions,
+            lastBoxes,
+            gaps,
+            unmatchedTracks,
+            detections,
+            lowDetections,
+            config_.iouThreshold,
+            continueGuard);
+        for (const auto &match : lowMatches)
         {
             extendTrack(active_[match.trackIndex], frame, detections[match.detectionIndex]);
             removeMatched(unmatchedTracks, match.trackIndex);
         }
 
-        for (const size_t detectionIndex: highDetections)
+        for (const size_t detectionIndex : highDetections)
         {
-            if (active_.size() >= kMaxActiveTracks ||
-                active_.size() + finished_.size() >= kMaxTrackCount ||
-                boxCount_ >= kMaxTrackedBoxesPerPass)
+            if (active_.size() >= kMaxActiveTracks
+                || active_.size() + finished_.size() >= kMaxTrackCount
+                || boxCount_ >= kMaxTrackedBoxesPerPass)
             {
                 throw std::length_error("Tracking data exceeds the safety limit.");
             }
             ActiveTrack fresh;
             fresh.track.id = nextId_++;
-            fresh.track.boxes.push_back({frame, detections[detectionIndex].box,
-                                         detections[detectionIndex].score, false,
-                                         detections[detectionIndex].rollRadians,
-                                         hasValidFacePose(detections[detectionIndex])});
+            fresh.track.boxes.push_back({frame,
+                detections[detectionIndex].box,
+                detections[detectionIndex].score,
+                false,
+                detections[detectionIndex].rollRadians,
+                hasValidFacePose(detections[detectionIndex])});
             fresh.lastFrame = frame;
             fresh.lastHighScoreFrame = frame;
             active_.push_back(std::move(fresh));
@@ -358,7 +375,7 @@ namespace cloakframe
 
     std::vector<Track> ByteTracker::finish()
     {
-        for (auto &active: active_)
+        for (auto &active : active_)
         {
             finished_.push_back(std::move(active.track));
         }
@@ -366,18 +383,19 @@ namespace cloakframe
 
         std::vector<Track> result = std::move(finished_);
         finished_ = {};
-        std::erase_if(result, [](const Track &track)
-        {
-            return track.boxes.empty();
-        });
+        std::erase_if(result,
+            [](const Track &track)
+            {
+                return track.boxes.empty();
+            });
         std::ranges::sort(result, {}, &Track::id);
         return result;
     }
 
     std::vector<Track> buildTracks(const std::vector<FaceDetections> &frameDetections,
-                                   const TrackerConfig &config,
-                                   const SceneCuts &cuts,
-                                   const TrackingContinueGuard &continueGuard)
+        const TrackerConfig &config,
+        const SceneCuts &cuts,
+        const TrackingContinueGuard &continueGuard)
     {
         ByteTracker tracker(config, cuts);
         for (size_t frame = 0; frame < frameDetections.size(); ++frame)
@@ -389,10 +407,10 @@ namespace cloakframe
     }
 
     std::vector<Track> buildBidirectionalTracks(const std::vector<FaceDetections> &frameDetections,
-                                                const TrackerConfig &config,
-                                                float mergeIouThreshold,
-                                                const SceneCuts &cuts,
-                                                const TrackingContinueGuard &continueGuard)
+        const TrackerConfig &config,
+        float mergeIouThreshold,
+        const SceneCuts &cuts,
+        const TrackingContinueGuard &continueGuard)
     {
         auto forward = buildTracks(frameDetections, config, cuts, continueGuard);
 
@@ -401,27 +419,26 @@ namespace cloakframe
         for (int frame = 0; frame < frameCount; ++frame)
         {
             backwardTracker.update(frame,
-                                   frameDetections[static_cast<std::size_t>(frameCount - frame - 1)],
-                                   continueGuard);
+                frameDetections[static_cast<std::size_t>(frameCount - frame - 1)],
+                continueGuard);
         }
         requireTrackingContinue(continueGuard);
         auto backward = backwardTracker.finish();
-        if (!backward.empty() &&
-            forward.size() > kMaxTrackMergeComparisons / backward.size())
+        if (!backward.empty() && forward.size() > kMaxTrackMergeComparisons / backward.size())
         {
             throw std::length_error("Tracking data exceeds the safety limit.");
         }
         std::size_t totalBoxes = trackedBoxCount(forward, kMaxFinalTrackedBoxes);
         const auto backwardBoxes = trackedBoxCount(backward, kMaxTrackedBoxesPerPass);
-        if (totalBoxes > kMaxBidirectionalTrackedBoxes ||
-            backwardBoxes > kMaxBidirectionalTrackedBoxes - totalBoxes)
+        if (totalBoxes > kMaxBidirectionalTrackedBoxes
+            || backwardBoxes > kMaxBidirectionalTrackedBoxes - totalBoxes)
         {
             throw std::length_error("Tracking data exceeds the safety limit.");
         }
         std::size_t reframeOperations = 0;
-        for (auto &track: backward)
+        for (auto &track : backward)
         {
-            for (auto &box: track.boxes)
+            for (auto &box : track.boxes)
             {
                 periodicallyRequireTrackingContinue(continueGuard, reframeOperations);
                 box.frame = frameCount - 1 - box.frame;
@@ -430,22 +447,22 @@ namespace cloakframe
         }
 
         int nextId = 1;
-        for (const auto &track: forward)
+        for (const auto &track : forward)
         {
             nextId = std::max(nextId, track.id + 1);
         }
 
-        for (auto &candidate: backward)
+        for (auto &candidate : backward)
         {
             requireTrackingContinue(continueGuard);
             Track *bestMatch = nullptr;
             float bestScore = 0.0F;
             std::size_t mergeOperations = 0;
-            for (auto &existing: forward)
+            for (auto &existing : forward)
             {
                 int sharedFrames = 0;
                 float iouSum = 0.0F;
-                for (const auto &box: candidate.boxes)
+                for (const auto &box : candidate.boxes)
                 {
                     periodicallyRequireTrackingContinue(continueGuard, mergeOperations);
                     if (const auto *other = existing.boxAtFrame(box.frame))
@@ -468,9 +485,8 @@ namespace cloakframe
 
             if (bestMatch == nullptr)
             {
-                if (forward.size() >= kMaxTrackCount ||
-                    totalBoxes > kMaxFinalTrackedBoxes ||
-                    candidate.boxes.size() > kMaxFinalTrackedBoxes - totalBoxes)
+                if (forward.size() >= kMaxTrackCount || totalBoxes > kMaxFinalTrackedBoxes
+                    || candidate.boxes.size() > kMaxFinalTrackedBoxes - totalBoxes)
                 {
                     throw std::length_error("Tracking data exceeds the safety limit.");
                 }
@@ -481,7 +497,7 @@ namespace cloakframe
             }
 
             std::vector<TrackedBox> missing;
-            for (const auto &box: candidate.boxes)
+            for (const auto &box : candidate.boxes)
             {
                 periodicallyRequireTrackingContinue(continueGuard, mergeOperations);
                 if (bestMatch->boxAtFrame(box.frame) == nullptr)
@@ -489,8 +505,8 @@ namespace cloakframe
                     missing.push_back(box);
                 }
             }
-            if (totalBoxes > kMaxFinalTrackedBoxes ||
-                missing.size() > kMaxFinalTrackedBoxes - totalBoxes)
+            if (totalBoxes > kMaxFinalTrackedBoxes
+                || missing.size() > kMaxFinalTrackedBoxes - totalBoxes)
             {
                 throw std::length_error("Tracking data exceeds the safety limit.");
             }
@@ -502,8 +518,8 @@ namespace cloakframe
         return forward;
     }
 
-    void interpolateGaps(Track &track, int maxGap, const SceneCuts &cuts,
-                         const TrackingContinueGuard &continueGuard)
+    void interpolateGaps(
+        Track &track, int maxGap, const SceneCuts &cuts, const TrackingContinueGuard &continueGuard)
     {
         if (track.boxes.size() < 2 || maxGap < 1)
         {
@@ -539,14 +555,13 @@ namespace cloakframe
             {
                 const float t = static_cast<float>(step) / static_cast<float>(gap + 1);
                 TrackedBox interpolated{current.frame + step,
-                                        lerpBox(current.box, next.box, t),
-                                        std::min(current.score, next.score),
-                                        true};
-                if (isValidFacePose(current.rollRadians, current.hasPose) &&
-                    isValidFacePose(next.rollRadians, next.hasPose))
+                    lerpBox(current.box, next.box, t),
+                    std::min(current.score, next.score),
+                    true};
+                if (isValidFacePose(current.rollRadians, current.hasPose)
+                    && isValidFacePose(next.rollRadians, next.hasPose))
                 {
-                    interpolated.rollRadians = lerpAngle(current.rollRadians,
-                                                         next.rollRadians, t);
+                    interpolated.rollRadians = lerpAngle(current.rollRadians, next.rollRadians, t);
                     interpolated.hasPose = isValidFacePose(interpolated.rollRadians, true);
                 }
                 append(interpolated);
@@ -556,8 +571,7 @@ namespace cloakframe
         track.boxes = std::move(filled);
     }
 
-    void smoothTrack(Track &track, int radius,
-                     const TrackingContinueGuard &continueGuard)
+    void smoothTrack(Track &track, int radius, const TrackingContinueGuard &continueGuard)
     {
         if (radius < 1 || track.boxes.size() < 3)
         {
@@ -569,7 +583,8 @@ namespace cloakframe
         for (size_t i = 0; i < track.boxes.size(); ++i)
         {
             periodicallyRequireTrackingContinue(continueGuard, operations);
-            const size_t begin = i >= static_cast<size_t>(radius) ? i - static_cast<size_t>(radius) : 0;
+            const size_t begin =
+                i >= static_cast<size_t>(radius) ? i - static_cast<size_t>(radius) : 0;
             const size_t end = std::min(track.boxes.size() - 1, i + static_cast<size_t>(radius));
 
             cv::Rect2f accumulated{0.0F, 0.0F, 0.0F, 0.0F};
@@ -611,30 +626,34 @@ namespace cloakframe
                 }
             }
             const float inverse = 1.0F / static_cast<float>(count);
-            const cv::Rect2f smoothed{accumulated.x * inverse, accumulated.y * inverse,
-                                      accumulated.width * inverse, accumulated.height * inverse};
+            const cv::Rect2f smoothed{accumulated.x * inverse,
+                accumulated.y * inverse,
+                accumulated.width * inverse,
+                accumulated.height * inverse};
             constexpr float kMaxSmoothingAreaGrowth = 1.25F;
             const float originalArea = original[i].box.area();
             if (original[i].interpolated)
             {
                 track.boxes[i].box =
-                        (originalArea > 0.0F &&
-                         smoothed.area() > originalArea * kMaxSmoothingAreaGrowth)
-                            ? original[i].box
-                            : smoothed;
+                    (originalArea > 0.0F
+                        && smoothed.area() > originalArea * kMaxSmoothingAreaGrowth)
+                        ? original[i].box
+                        : smoothed;
                 continue;
             }
             const cv::Rect2f covered = boxUnion(smoothed, original[i].box);
             track.boxes[i].box =
-                    (originalArea > 0.0F &&
-                     covered.area() > originalArea * kMaxSmoothingAreaGrowth)
-                        ? original[i].box
-                        : covered;
+                (originalArea > 0.0F && covered.area() > originalArea * kMaxSmoothingAreaGrowth)
+                    ? original[i].box
+                    : covered;
         }
     }
 
-    void extendTrackEnds(Track &track, int frames, int frameCount, const SceneCuts &cuts,
-                         const TrackingContinueGuard &continueGuard)
+    void extendTrackEnds(Track &track,
+        int frames,
+        int frameCount,
+        const SceneCuts &cuts,
+        const TrackingContinueGuard &continueGuard)
     {
         if (track.boxes.empty() || frames < 1 || frameCount < 1)
         {
@@ -654,14 +673,15 @@ namespace cloakframe
             {
                 throw std::length_error("Tracking data exceeds the safety limit.");
             }
-            prefix.push_back({frame, first.box, first.score, true,
-                              first.rollRadians, first.hasPose});
+            prefix.push_back(
+                {frame, first.box, first.score, true, first.rollRadians, first.hasPose});
         }
 
         std::vector<TrackedBox> suffix;
         const auto &last = track.boxes.back();
         const int lastAllowed = frameCount - 1;
-        for (int frame = last.frame + 1; frame <= std::min(lastAllowed, last.frame + frames); ++frame)
+        for (int frame = last.frame + 1; frame <= std::min(lastAllowed, last.frame + frames);
+            ++frame)
         {
             requireTrackingContinue(continueGuard);
             if (cuts.spansCut(last.frame, frame))
@@ -672,24 +692,25 @@ namespace cloakframe
             {
                 throw std::length_error("Tracking data exceeds the safety limit.");
             }
-            suffix.push_back({frame, last.box, last.score, true,
-                              last.rollRadians, last.hasPose});
+            suffix.push_back({frame, last.box, last.score, true, last.rollRadians, last.hasPose});
         }
 
         track.boxes.insert(track.boxes.begin(), prefix.begin(), prefix.end());
         track.boxes.insert(track.boxes.end(), suffix.begin(), suffix.end());
     }
 
-    void postProcessTracks(std::vector<Track> &tracks, const TrackPostProcessConfig &config,
-                           int frameCount, const SceneCuts &cuts,
-                           const TrackingContinueGuard &continueGuard)
+    void postProcessTracks(std::vector<Track> &tracks,
+        const TrackPostProcessConfig &config,
+        int frameCount,
+        const SceneCuts &cuts,
+        const TrackingContinueGuard &continueGuard)
     {
         std::size_t filteringOperations = 0;
         const auto isLowConfidence = [&](const Track &track)
         {
             int strong = 0;
             int real = 0;
-            for (const auto &tracked: track.boxes)
+            for (const auto &tracked : track.boxes)
             {
                 periodicallyRequireTrackingContinue(continueGuard, filteringOperations);
                 if (tracked.interpolated)
@@ -707,14 +728,14 @@ namespace cloakframe
                 return false;
             }
             const bool cleanShortBurst =
-                    strong >= config.shortTrackMinStrong
-                    && static_cast<float>(strong)
-                               >= config.shortTrackStrongRatio * static_cast<float>(real);
+                strong >= config.shortTrackMinStrong
+                && static_cast<float>(strong)
+                       >= config.shortTrackStrongRatio * static_cast<float>(real);
             return !cleanShortBurst;
         };
         if (config.retainLowConfidenceTracks)
         {
-            for (auto &track: tracks)
+            for (auto &track : tracks)
             {
                 track.lowConfidence = isLowConfidence(track);
             }
@@ -724,14 +745,14 @@ namespace cloakframe
             std::erase_if(tracks, isLowConfidence);
         }
         std::size_t totalBoxes = trackedBoxCount(tracks, kMaxFinalTrackedBoxes);
-        for (auto &track: tracks)
+        for (auto &track : tracks)
         {
             requireTrackingContinue(continueGuard);
             const auto previous = track.boxes.size();
             interpolateGaps(track, config.maxInterpolationGap, cuts, continueGuard);
             const auto withoutCurrent = totalBoxes - previous;
-            if (withoutCurrent > kMaxFinalTrackedBoxes ||
-                track.boxes.size() > kMaxFinalTrackedBoxes - withoutCurrent)
+            if (withoutCurrent > kMaxFinalTrackedBoxes
+                || track.boxes.size() > kMaxFinalTrackedBoxes - withoutCurrent)
             {
                 throw std::length_error("Tracking data exceeds the safety limit.");
             }
@@ -740,8 +761,8 @@ namespace cloakframe
             const auto beforeExtension = track.boxes.size();
             extendTrackEnds(track, config.extensionFrames, frameCount, cuts, continueGuard);
             const auto withoutExtended = totalBoxes - beforeExtension;
-            if (withoutExtended > kMaxFinalTrackedBoxes ||
-                track.boxes.size() > kMaxFinalTrackedBoxes - withoutExtended)
+            if (withoutExtended > kMaxFinalTrackedBoxes
+                || track.boxes.size() > kMaxFinalTrackedBoxes - withoutExtended)
             {
                 throw std::length_error("Tracking data exceeds the safety limit.");
             }
@@ -752,7 +773,7 @@ namespace cloakframe
     std::vector<cv::Rect2f> trackRegionsForFrame(const std::vector<Track> &tracks, int frame)
     {
         std::vector<cv::Rect2f> regions;
-        for (const auto &track: tracks)
+        for (const auto &track : tracks)
         {
             if (const auto *box = track.boxAtFrame(frame))
             {

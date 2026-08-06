@@ -18,8 +18,8 @@ namespace cloakframe
     inline bool isValidFacePose(float rollRadians, bool hasPose)
     {
         constexpr float kMaximumSupportedRoll = 1.0471975512F;
-        return hasPose && std::isfinite(rollRadians) &&
-               std::abs(rollRadians) <= kMaximumSupportedRoll;
+        return hasPose && std::isfinite(rollRadians)
+               && std::abs(rollRadians) <= kMaximumSupportedRoll;
     }
 
     inline bool hasValidFacePose(const FaceDetection &detection)
@@ -29,12 +29,10 @@ namespace cloakframe
 
     inline bool isValidFaceDetection(const FaceDetection &detection)
     {
-        return std::isfinite(detection.score) &&
-               std::isfinite(detection.box.x) &&
-               std::isfinite(detection.box.y) &&
-               std::isfinite(detection.box.width) &&
-               std::isfinite(detection.box.height) &&
-               detection.box.width > 0.0F && detection.box.height > 0.0F;
+        return std::isfinite(detection.score) && std::isfinite(detection.box.x)
+               && std::isfinite(detection.box.y) && std::isfinite(detection.box.width)
+               && std::isfinite(detection.box.height) && detection.box.width > 0.0F
+               && detection.box.height > 0.0F;
     }
 
     using FaceDetections = std::vector<FaceDetection>;
