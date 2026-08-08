@@ -197,27 +197,29 @@ namespace cloakframe
             {
                 const int helpers = std::max(0, workerCount - 1);
                 workers_.reserve(static_cast<std::size_t>(helpers));
-                for (int index = 0; index < helpers; ++index)
+                try
                 {
-                    workers_.emplace_back(
-                        [this]
-                        {
-                            workerLoop();
-                        });
+                    for (int index = 0; index < helpers; ++index)
+                    {
+                        workers_.emplace_back(
+                            [this]
+                            {
+                                workerLoop();
+                            });
+                    }
+                }
+                catch (...)
+                {
+                    // A throwing thread constructor skips ~MaskWorkerPool, so the helpers that
+                    // did start must be joined here before workers_ is destroyed.
+                    stopAndJoin();
+                    throw;
                 }
             }
 
             ~MaskWorkerPool()
             {
-                {
-                    const std::scoped_lock lock(mutex_);
-                    stopping_ = true;
-                }
-                workAvailable_.notify_all();
-                for (auto &worker : workers_)
-                {
-                    worker.join();
-                }
+                stopAndJoin();
             }
 
             MaskWorkerPool(const MaskWorkerPool &) = delete;
@@ -244,6 +246,22 @@ namespace cloakframe
             }
 
         private:
+            void stopAndJoin() noexcept
+            {
+                {
+                    const std::scoped_lock lock(mutex_);
+                    stopping_ = true;
+                }
+                workAvailable_.notify_all();
+                for (auto &worker : workers_)
+                {
+                    if (worker.joinable())
+                    {
+                        worker.join();
+                    }
+                }
+            }
+
             void workerLoop()
             {
                 std::uint64_t observedGeneration = 0;

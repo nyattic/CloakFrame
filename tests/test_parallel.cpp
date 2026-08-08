@@ -4,6 +4,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdio>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -137,6 +138,71 @@ namespace
             });
         assert(consumedCount == 5);
     }
+
+    void testPropagatesProducerException()
+    {
+        std::atomic<bool> cancelled{false};
+        bool caught = false;
+
+        try
+        {
+            cloakframe::processOrdered<int>(
+                200,
+                8,
+                8,
+                cancelled,
+                [](std::size_t index) -> int
+                {
+                    if (index == 7)
+                    {
+                        throw std::runtime_error("produce failed");
+                    }
+                    std::this_thread::sleep_for(std::chrono::microseconds(50));
+                    return static_cast<int>(index);
+                },
+                [](std::size_t, int &&)
+                {
+                });
+        }
+        catch (const std::runtime_error &)
+        {
+            caught = true;
+        }
+
+        assert(caught);
+    }
+
+    void testPropagatesConsumerException()
+    {
+        std::atomic<bool> cancelled{false};
+        bool caught = false;
+
+        try
+        {
+            cloakframe::processOrdered<int>(
+                200,
+                8,
+                8,
+                cancelled,
+                [](std::size_t index)
+                {
+                    return static_cast<int>(index);
+                },
+                [](std::size_t index, int &&)
+                {
+                    if (index == 5)
+                    {
+                        throw std::runtime_error("consume failed");
+                    }
+                });
+        }
+        catch (const std::runtime_error &)
+        {
+            caught = true;
+        }
+
+        assert(caught);
+    }
 }
 
 int main()
@@ -149,6 +215,10 @@ int main()
     std::puts("cancellation: ok");
     testSingleThreadAndEmpty();
     std::puts("edge cases: ok");
+    testPropagatesProducerException();
+    std::puts("producer exception: ok");
+    testPropagatesConsumerException();
+    std::puts("consumer exception: ok");
     std::puts("all parallel tests passed");
     return 0;
 }

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <exception>
 #include <map>
 #include <mutex>
 #include <thread>
@@ -33,44 +34,89 @@ namespace cloakframe
         std::size_t consumedCount = 0;
         std::map<std::size_t, Result> ready;
         bool stopped = false;
+        std::exception_ptr workerError;
 
         auto worker = [&]
         {
-            for (;;)
+            try
             {
-                std::size_t index = 0;
+                for (;;)
                 {
-                    std::unique_lock lock(mutex);
-                    produceCv.wait(lock,
-                        [&]
-                        {
-                            return stopped || nextIndex >= itemCount
-                                   || nextIndex < consumedCount + maxInFlight;
-                        });
-                    if (stopped || nextIndex >= itemCount)
+                    std::size_t index = 0;
                     {
+                        std::unique_lock lock(mutex);
+                        produceCv.wait(lock,
+                            [&]
+                            {
+                                return stopped || nextIndex >= itemCount
+                                       || nextIndex < consumedCount + maxInFlight;
+                            });
+                        if (stopped || nextIndex >= itemCount)
+                        {
+                            return;
+                        }
+                        index = nextIndex++;
+                    }
+                    if (cancelled.load(std::memory_order_acquire))
+                    {
+                        std::lock_guard lock(mutex);
+                        stopped = true;
+                        produceCv.notify_all();
+                        consumeCv.notify_all();
                         return;
                     }
-                    index = nextIndex++;
+                    Result result = produce(index);
+                    {
+                        std::lock_guard lock(mutex);
+                        ready.emplace(index, std::move(result));
+                        consumeCv.notify_all();
+                    }
                 }
-                if (cancelled.load(std::memory_order_acquire))
+            }
+            catch (...)
+            {
+                std::lock_guard lock(mutex);
+                if (!workerError)
                 {
-                    std::lock_guard lock(mutex);
-                    stopped = true;
-                    produceCv.notify_all();
-                    consumeCv.notify_all();
-                    return;
+                    workerError = std::current_exception();
                 }
-                Result result = produce(index);
-                {
-                    std::lock_guard lock(mutex);
-                    ready.emplace(index, std::move(result));
-                    consumeCv.notify_all();
-                }
+                stopped = true;
+                produceCv.notify_all();
+                consumeCv.notify_all();
             }
         };
 
         std::vector<std::thread> workers;
+
+        // Destroying a joinable std::thread calls std::terminate, so every exit path -
+        // including a throwing thread constructor or a throwing consume() - must stop and
+        // join whatever was already started before `workers` is destroyed.
+        struct StopAndJoin
+        {
+            std::vector<std::thread> &workers;
+            std::mutex &mutex;
+            std::condition_variable &produceCv;
+            std::condition_variable &consumeCv;
+            bool &stopped;
+
+            ~StopAndJoin()
+            {
+                {
+                    std::lock_guard lock(mutex);
+                    stopped = true;
+                }
+                produceCv.notify_all();
+                consumeCv.notify_all();
+                for (auto &thread : workers)
+                {
+                    if (thread.joinable())
+                    {
+                        thread.join();
+                    }
+                }
+            }
+        } stopAndJoin{workers, mutex, produceCv, consumeCv, stopped};
+
         workers.reserve(threadCount);
         for (unsigned i = 0; i < threadCount; ++i)
         {
@@ -104,7 +150,15 @@ namespace cloakframe
 
         for (auto &thread : workers)
         {
-            thread.join();
+            if (thread.joinable())
+            {
+                thread.join();
+            }
+        }
+
+        if (workerError)
+        {
+            std::rethrow_exception(workerError);
         }
     }
 }

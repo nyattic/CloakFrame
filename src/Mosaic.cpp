@@ -97,9 +97,23 @@ namespace cloakframe
             cv::resize(small, roi, roi.size(), 0.0, 0.0, cv::INTER_LINEAR);
         }
 
+        double opaqueAlphaFor(const cv::Mat &image)
+        {
+            switch (image.depth())
+            {
+            case CV_16U:
+                return 65535.0;
+            case CV_32F:
+            case CV_64F:
+                return 1.0;
+            default:
+                return 255.0;
+            }
+        }
+
         void fillRegion(cv::Mat roi)
         {
-            roi.setTo(cv::Scalar(0, 0, 0));
+            roi.setTo(cv::Scalar(0, 0, 0, opaqueAlphaFor(roi)));
         }
 
         int availableInsetFor(const cv::Rect &region, const cv::Rect &detected)

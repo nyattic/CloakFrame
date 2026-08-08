@@ -361,8 +361,6 @@ namespace cloakframe
 
     void ProcessorWorker::process()
     {
-        cancelled_.store(false, std::memory_order_relaxed);
-
         try
         {
             if (detectFaces_)

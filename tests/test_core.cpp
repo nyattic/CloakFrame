@@ -364,6 +364,35 @@ namespace
         assert(std::filesystem::exists(output / "input.png"));
     }
 
+    void testWorkerHonoursCancelRequestedBeforeProcess()
+    {
+        QTemporaryDir temp;
+        assert(temp.isValid());
+        const auto root = std::filesystem::path(temp.path().toStdString());
+        const auto source = root / "input.png";
+        const auto output = root / "out";
+        assert(cv::imwrite(source.string(), cv::Mat(24, 24, CV_8UC3, cv::Scalar(20, 40, 60))));
+
+        cloakframe::ProcessingRequest request;
+        request.inputs = {QString::fromStdString(source.string())};
+        request.outputDirectory = QString::fromStdString(output.string());
+        request.detectFaces = false;
+
+        cloakframe::RunOutcome result = cloakframe::RunOutcome::Completed;
+        cloakframe::ProcessorWorker worker(std::move(request));
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::finished,
+            [&](const cloakframe::RunOutcome value)
+            {
+                result = value;
+            });
+        worker.cancel();
+        worker.process();
+
+        assert(result == cloakframe::RunOutcome::Cancelled);
+        assert(!std::filesystem::exists(output / "input.png"));
+    }
+
     void testWorkerUsesStableImageSnapshotDuringReview()
     {
         QTemporaryDir temp;
@@ -679,6 +708,43 @@ namespace
             image.at<cv::Vec3b>(box.y + box.height / 2, box.x + box.width + 1);
         assert(feathered != cv::Vec3b(0, 0, 0));
         assert(feathered != cv::Vec3b(100, 100, 100));
+    }
+
+    void testFillIsOpaqueOnAlphaImages()
+    {
+        const cv::Rect box(24, 24, 16, 16);
+        cloakframe::FaceDetections detections;
+        detections.push_back({cv::Rect2f(box), 1.0F});
+
+        cv::Mat image(64, 64, CV_8UC4, cv::Scalar(100, 110, 120, 200));
+        cloakframe::applyAnonymization(image,
+            detections,
+            cloakframe::AnonymizationMethod::Fill,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            false);
+
+        for (int y = box.y; y < box.y + box.height; ++y)
+        {
+            for (int x = box.x; x < box.x + box.width; ++x)
+            {
+                assert(image.at<cv::Vec4b>(y, x) == cv::Vec4b(0, 0, 0, 255));
+            }
+        }
+        assert(image.at<cv::Vec4b>(0, 0) == cv::Vec4b(100, 110, 120, 200));
+
+        cv::Mat deep(64, 64, CV_16UC4, cv::Scalar(1000, 2000, 3000, 40000));
+        cloakframe::applyAnonymization(deep,
+            detections,
+            cloakframe::AnonymizationMethod::Fill,
+            4,
+            0.0F,
+            cloakframe::MaskShape::Rectangle,
+            false);
+
+        assert(deep.at<cv::Vec4w>(box.y + 1, box.x + 1) == cv::Vec4w(0, 0, 0, 65535));
+        assert(deep.at<cv::Vec4w>(0, 0) == cv::Vec4w(1000, 2000, 3000, 40000));
     }
 
     void testSoftEdgesEllipseKeepsCoreCovered()
@@ -1611,12 +1677,14 @@ int main(int argc, char **argv)
     testOutputPlanRejectsExistingAndDuplicateDestinations();
     testWorkerReportsUnredactedOutputAsWarningAndPreservesIt();
     testWorkerReportsCopiedOriginalAsWarning();
+    testWorkerHonoursCancelRequestedBeforeProcess();
     testWorkerUsesStableImageSnapshotDuringReview();
     testWorkerAcceptsThirtyMegabyteJpeg();
     testWorkerRejectsMultiFrameImages();
     testAnimatedImageContainersAreDetectedWithoutDecodingAllFrames();
     testApplyMosaicTouchesOnlyDetectedRegion();
     testSoftEdgesKeepDetectedRegionFullyCovered();
+    testFillIsOpaqueOnAlphaImages();
     testSoftEdgesEllipseKeepsCoreCovered();
     testSoftEdgesAtImageBorderStayInBounds();
     testSoftEdgesUsePaddingForAGradualTransition();
