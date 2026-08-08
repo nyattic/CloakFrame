@@ -16,7 +16,9 @@ function(cloakframe_enable_velopack target)
         if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
             message(FATAL_ERROR "Velopack integration expects a 64-bit Windows build")
         endif()
-        add_library(velopack::velopack SHARED IMPORTED)
+        # GLOBAL: the packaging module runs in the top-level directory, so a target
+        # imported with this function's default (src/) scope would not be visible there.
+        add_library(velopack::velopack SHARED IMPORTED GLOBAL)
         set_target_properties(velopack::velopack PROPERTIES
             IMPORTED_LOCATION "${velopack_libc_SOURCE_DIR}/lib/velopack_libc_win_x64_msvc.dll"
             IMPORTED_IMPLIB "${velopack_libc_SOURCE_DIR}/lib/velopack_libc_win_x64_msvc.dll.lib"
@@ -33,7 +35,7 @@ function(cloakframe_enable_velopack target)
         else()
             set(_velopack_arch "x64")
         endif()
-        add_library(velopack::velopack STATIC IMPORTED)
+        add_library(velopack::velopack STATIC IMPORTED GLOBAL)
         set_target_properties(velopack::velopack PROPERTIES
             IMPORTED_LOCATION "${velopack_libc_SOURCE_DIR}/lib-static/velopack_libc_linux_${_velopack_arch}_gnu.a"
             INTERFACE_INCLUDE_DIRECTORIES "${velopack_libc_SOURCE_DIR}/include"

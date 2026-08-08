@@ -75,7 +75,10 @@ if(CLOAKFRAME_FFMPEG_DIR)
 endif()
 
 if(APPLE AND CLOAKFRAME_USE_SPARKLE)
-    install(DIRECTORY "${sparkle_SOURCE_DIR}/Sparkle.framework"
+    if(NOT CLOAKFRAME_SPARKLE_DIR)
+        message(FATAL_ERROR "Sparkle is enabled but CLOAKFRAME_SPARKLE_DIR is unset")
+    endif()
+    install(DIRECTORY "${CLOAKFRAME_SPARKLE_DIR}/Sparkle.framework"
         DESTINATION "CloakFrame.app/Contents/Frameworks"
         USE_SOURCE_PERMISSIONS)
 endif()
@@ -89,7 +92,7 @@ if(APPLE)
         "-codesign=-")
     if(CLOAKFRAME_USE_SPARKLE)
         list(APPEND _cloakframe_deploy_tool_options
-            "-libpath=${sparkle_SOURCE_DIR}")
+            "-libpath=${CLOAKFRAME_SPARKLE_DIR}")
     endif()
 endif()
 

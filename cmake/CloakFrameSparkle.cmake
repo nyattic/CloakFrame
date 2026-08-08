@@ -12,6 +12,11 @@ function(cloakframe_enable_sparkle target)
     )
     FetchContent_MakeAvailable(sparkle)
 
+    # FetchContent sets sparkle_SOURCE_DIR in this function's scope only; the packaging
+    # module needs it from the top-level directory.
+    set(CLOAKFRAME_SPARKLE_DIR "${sparkle_SOURCE_DIR}" CACHE INTERNAL
+        "Directory holding the fetched Sparkle.framework")
+
     target_link_libraries(${target} PRIVATE "${sparkle_SOURCE_DIR}/Sparkle.framework")
     set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH "${sparkle_SOURCE_DIR}")
     target_compile_definitions(${target} PRIVATE CLOAKFRAME_HAVE_SPARKLE)
