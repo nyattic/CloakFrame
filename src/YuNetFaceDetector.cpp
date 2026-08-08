@@ -127,10 +127,13 @@ namespace cloakframe
             throw std::invalid_argument("YuNet requires an 8-bit BGR image.");
         }
 
-        const float scale = std::min(static_cast<float>(kInputSize) / bgrImage.cols,
-            static_cast<float>(kInputSize) / bgrImage.rows);
-        const int resizedWidth = std::max(1, static_cast<int>(bgrImage.cols * scale));
-        const int resizedHeight = std::max(1, static_cast<int>(bgrImage.rows * scale));
+        const float scale =
+            std::min(static_cast<float>(kInputSize) / static_cast<float>(bgrImage.cols),
+                static_cast<float>(kInputSize) / static_cast<float>(bgrImage.rows));
+        const int resizedWidth =
+            std::max(1, static_cast<int>(static_cast<float>(bgrImage.cols) * scale));
+        const int resizedHeight =
+            std::max(1, static_cast<int>(static_cast<float>(bgrImage.rows) * scale));
         const float padX = static_cast<float>(kInputSize - resizedWidth) / 2.0F;
         const float padY = static_cast<float>(kInputSize - resizedHeight) / 2.0F;
 

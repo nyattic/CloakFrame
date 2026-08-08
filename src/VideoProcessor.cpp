@@ -225,7 +225,7 @@ namespace cloakframe
             MaskWorkerPool(const MaskWorkerPool &) = delete;
             MaskWorkerPool &operator=(const MaskWorkerPool &) = delete;
 
-            void run(std::function<void()> task)
+            void run(const std::function<void()> &task)
             {
                 {
                     const std::scoped_lock lock(mutex_);
@@ -532,8 +532,10 @@ namespace cloakframe
                 result.error = reader.errorString();
                 return result;
             }
-            scaleX = static_cast<float>(activeInfo.displayWidth()) / reader.frameWidth();
-            scaleY = static_cast<float>(activeInfo.displayHeight()) / reader.frameHeight();
+            scaleX = static_cast<float>(activeInfo.displayWidth())
+                     / static_cast<float>(reader.frameWidth());
+            scaleY = static_cast<float>(activeInfo.displayHeight())
+                     / static_cast<float>(reader.frameHeight());
 
             StageTimer readTimer;
             StageTimer detectTimer;
@@ -768,7 +770,7 @@ namespace cloakframe
         spdlog::info("Video masking plan: {} worker(s), {} frame batch, {} MiB raw-frame cap",
             workerCount,
             batchCap,
-            (maskingPlan.frameBytes * batchCap) / (1024 * 1024));
+            (maskingPlan.frameBytes * static_cast<qint64>(batchCap)) / (qint64{1024} * 1024));
         const ScopedCvThreads maskThreads(1);
         MaskWorkerPool maskPool(hasTrackedRegions ? workerCount : 1);
         qint64 frameIndex = 0;

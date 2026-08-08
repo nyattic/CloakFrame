@@ -160,7 +160,8 @@ namespace cloakframe
     bool ensureBuiltinModelAvailable(
         QWidget *parent, const BuiltinModel &model, const QString &destPath)
     {
-        const auto sizeMb = QString::number(model.approxBytes / 1024.0 / 1024.0, 'f', 1);
+        const auto sizeMb =
+            QString::number(static_cast<double>(model.approxBytes) / 1024.0 / 1024.0, 'f', 1);
         const auto answer = QMessageBox::question(parent,
             QCoreApplication::translate("cloakframe::MainWindow", "Download Model"),
             builtinModelConsentText(model).arg(model.fileName, sizeMb),
@@ -176,7 +177,8 @@ namespace cloakframe
     bool ensurePlateModelAvailable(QWidget *parent, const QString &destPath)
     {
         const auto &model = plateModel();
-        const auto sizeMb = QString::number(model.approxBytes / 1024.0 / 1024.0, 'f', 1);
+        const auto sizeMb =
+            QString::number(static_cast<double>(model.approxBytes) / 1024.0 / 1024.0, 'f', 1);
         const auto answer = QMessageBox::question(parent,
             QCoreApplication::translate("cloakframe::MainWindow", "Download Model"),
             QCoreApplication::translate("cloakframe::MainWindow",
@@ -233,7 +235,7 @@ namespace cloakframe
                 "Only load ONNX models from sources you trust.\n\nModel: %1\nSize: %2 "
                 "MB\n\nContinue?")
                 .arg(info.fileName())
-                .arg(QString::number(info.size() / 1024.0 / 1024.0, 'f', 1)),
+                .arg(QString::number(static_cast<double>(info.size()) / 1024.0 / 1024.0, 'f', 1)),
             QMessageBox::Yes | QMessageBox::No,
             QMessageBox::No);
         return answer == QMessageBox::Yes;

@@ -290,7 +290,13 @@ namespace cloakframe
             }
 
             FaceDetections detections;
-            detections.push_back({cv::Rect2f(w * 0.3F, h * 0.2F, w * 0.4F, h * 0.6F), 1.0F});
+            const auto sampleWidth = static_cast<float>(w);
+            const auto sampleHeight = static_cast<float>(h);
+            detections.push_back({cv::Rect2f(sampleWidth * 0.3F,
+                                      sampleHeight * 0.2F,
+                                      sampleWidth * 0.4F,
+                                      sampleHeight * 0.6F),
+                1.0F});
             applyAnonymization(sample,
                 detections,
                 method,
@@ -1423,7 +1429,7 @@ namespace cloakframe
                 qint64 hashedBytes = 0;
                 while (!file.atEnd())
                 {
-                    const QByteArray chunk = file.read(1024 * 1024);
+                    const QByteArray chunk = file.read(qint64{1024} * 1024);
                     if (chunk.isEmpty())
                     {
                         break;
@@ -2607,11 +2613,7 @@ namespace cloakframe
         const bool exists = !path.isEmpty() && QFileInfo::exists(path);
         const bool missingBuiltin = !exists && selectedBuiltinModel() != nullptr;
 
-        if (path.isEmpty() || exists)
-        {
-            modelPathEdit_->setText(path);
-        }
-        else if (missingBuiltin)
+        if (!path.isEmpty() && missingBuiltin)
         {
             modelPathEdit_->setText(tr("Not downloaded yet — click Download"));
         }
@@ -2764,7 +2766,7 @@ namespace cloakframe
         ReviewDialog dialog(
             image, sourceName, detected, currentIndex, total, preserveMetadata, spec, this);
         dialog.exec();
-        return dialog.result();
+        return dialog.reviewResult();
     }
 
     VideoReviewResult MainWindow::requestVideoReview(const VideoReviewRequest &request)
@@ -2777,6 +2779,6 @@ namespace cloakframe
         }
         VideoReviewDialog dialog(request, this);
         dialog.exec();
-        return dialog.result();
+        return dialog.reviewResult();
     }
 }

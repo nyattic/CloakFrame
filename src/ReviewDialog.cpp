@@ -43,7 +43,7 @@ namespace cloakframe
             QImage image, const QVector<QRectF> &detected, ReviewPreviewSpec spec, QWidget *parent)
             : QWidget(parent)
             , image_(std::move(image))
-            , spec_(spec)
+            , spec_(std::move(spec))
         {
             setMouseTracking(true);
             setFocusPolicy(Qt::StrongFocus);
@@ -432,9 +432,10 @@ namespace cloakframe
 
         void clampFocus()
         {
-            if (focusedIndex_ >= boxes_.size())
+            const auto boxCount = static_cast<int>(boxes_.size());
+            if (focusedIndex_ >= boxCount)
             {
-                focusedIndex_ = boxes_.size() - 1;
+                focusedIndex_ = boxCount - 1;
             }
         }
 
@@ -446,13 +447,14 @@ namespace cloakframe
                 update();
                 return;
             }
+            const auto boxCount = static_cast<int>(boxes_.size());
             if (focusedIndex_ < 0)
             {
-                focusedIndex_ = delta > 0 ? 0 : boxes_.size() - 1;
+                focusedIndex_ = delta > 0 ? 0 : boxCount - 1;
             }
             else
             {
-                focusedIndex_ = (focusedIndex_ + delta + boxes_.size()) % boxes_.size();
+                focusedIndex_ = (focusedIndex_ + delta + boxCount) % boxCount;
             }
             update();
         }
@@ -586,7 +588,7 @@ namespace cloakframe
 
         [[nodiscard]] int hitTest(QPointF pos) const
         {
-            for (int i = boxes_.size() - 1; i >= 0; --i)
+            for (int i = static_cast<int>(boxes_.size()) - 1; i >= 0; --i)
             {
                 if (imageToScreen(boxes_[i].rect).contains(pos))
                 {
@@ -818,7 +820,7 @@ namespace cloakframe
             });
     }
 
-    ReviewResult ReviewDialog::result() const
+    ReviewResult ReviewDialog::reviewResult() const
     {
         ReviewResult res;
         res.decision = decision_;

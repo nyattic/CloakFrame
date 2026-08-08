@@ -17,8 +17,8 @@ namespace cloakframe
         constexpr std::size_t kMaxTrackedBoxesPerPass = 8'000'000;
         constexpr std::size_t kMaxBidirectionalTrackedBoxes = 16'000'000;
         constexpr std::size_t kMaxFinalTrackedBoxes = 8'000'000;
-        constexpr std::size_t kMaxMatchComparisons = 1U * 1024U * 1024U;
-        constexpr std::size_t kMaxTrackMergeComparisons = 4U * 1024U * 1024U;
+        constexpr std::size_t kMaxMatchComparisons = std::size_t{1} * 1024 * 1024;
+        constexpr std::size_t kMaxTrackMergeComparisons = std::size_t{4} * 1024 * 1024;
         constexpr std::size_t kCancellationCheckInterval = 16'384;
 
         void requireTrackingContinue(const TrackingContinueGuard &continueGuard)

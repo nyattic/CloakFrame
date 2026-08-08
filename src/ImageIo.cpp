@@ -358,12 +358,15 @@ namespace cloakframe
                     {
                         return 2;
                     }
-                    input.seekg(
-                        static_cast<std::streamoff>(length - 1U + (length & 1U)), std::ios::cur);
+                    input.seekg(static_cast<std::streamoff>(length) - 1
+                                    + static_cast<std::streamoff>(length & 1U),
+                        std::ios::cur);
                 }
                 else
                 {
-                    input.seekg(static_cast<std::streamoff>(length + (length & 1U)), std::ios::cur);
+                    input.seekg(static_cast<std::streamoff>(length)
+                                    + static_cast<std::streamoff>(length & 1U),
+                        std::ios::cur);
                 }
 
                 const bool imageData = chunkHeader[0] == 'V' && chunkHeader[1] == 'P'
@@ -453,13 +456,13 @@ namespace cloakframe
             std::istream &input,
             const std::function<bool()> &continueGuard = {})
         {
-            constexpr std::size_t guardInterval = 16U * 1024U * 1024U;
+            constexpr std::size_t guardInterval = std::size_t{16} * 1024 * 1024;
             if (continueGuard && !continueGuard())
             {
                 return false;
             }
 
-            std::array<unsigned char, 64U * 1024U> buffer{};
+            std::array<unsigned char, std::size_t{64} * 1024> buffer{};
             std::size_t bytesSinceGuard = 0;
             for (;;)
             {
@@ -635,8 +638,8 @@ namespace cloakframe
             const int destinationDescriptor,
             const std::function<bool()> &continueGuard)
         {
-            constexpr std::size_t guardInterval = 16U * 1024U * 1024U;
-            std::array<unsigned char, 64U * 1024U> buffer{};
+            constexpr std::size_t guardInterval = std::size_t{16} * 1024 * 1024;
+            std::array<unsigned char, std::size_t{64} * 1024> buffer{};
             std::size_t bytesSinceGuard = 0;
             if (continueGuard && !continueGuard())
             {
@@ -1404,6 +1407,8 @@ namespace cloakframe
                 }
             }
         }
+        // Orientation is advisory: fall through to the Qt reader below.
+        // NOLINTNEXTLINE(bugprone-empty-catch)
         catch (const std::exception &)
         {
         }
@@ -1515,6 +1520,8 @@ namespace cloakframe
         {
             count = std::max(count, cv::imcount(toUtf8(source), cv::IMREAD_UNCHANGED));
         }
+        // imcount is a best-effort second opinion; the count read above stands.
+        // NOLINTNEXTLINE(bugprone-empty-catch)
         catch (const cv::Exception &)
         {
         }
@@ -1939,7 +1946,7 @@ namespace cloakframe
             Exiv2::ExifThumb thumb(exif);
             thumb.erase();
             constexpr std::size_t metadataEntryLimit = 128U;
-            constexpr std::size_t metadataTotalLimit = 64U * 1024U;
+            constexpr std::size_t metadataTotalLimit = std::size_t{64} * 1024;
             std::size_t exifBytes = 0;
             for (auto it = exif.begin(); it != exif.end();)
             {

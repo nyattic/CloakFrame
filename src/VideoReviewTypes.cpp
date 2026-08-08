@@ -97,7 +97,8 @@ namespace cloakframe
 
         Track result;
         result.id = assignedId;
-        result.boxes.reserve(static_cast<std::size_t>(track.endFrame - track.startFrame + 1));
+        result.boxes.reserve(static_cast<std::size_t>(track.endFrame)
+                             - static_cast<std::size_t>(track.startFrame) + 1);
         const QRectF frameBounds(QPointF(0.0, 0.0), QSizeF(frameSize));
         for (int frame = track.startFrame; frame <= track.endFrame; ++frame)
         {

@@ -1382,7 +1382,7 @@ namespace cloakframe
                     tr("Redacted %n region(s): %1", nullptr, result.trackCount).arg(fileName));
                 outcome.redacted = 1;
             }
-            if (const double elapsedSeconds = totalTimer.elapsed() / 1000.0;
+            if (const double elapsedSeconds = static_cast<double>(totalTimer.elapsed()) / 1000.0;
                 elapsedSeconds > 0 && info->fps() > 0)
             {
                 const double videoSeconds = static_cast<double>(result.frameCount) / info->fps();

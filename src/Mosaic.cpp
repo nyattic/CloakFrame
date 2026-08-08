@@ -249,8 +249,14 @@ namespace cloakframe
             return rendered8;
         }
 
+        // cv::Mat is a refcounted header: taking it by value is how the pixels stay
+        // shared and writable. A const reference here would only launder that away.
         void customImageRegion(
-            cv::Mat roi, const cv::Mat &customImage, const float rollRadians, const bool hasPose)
+            // NOLINTNEXTLINE(performance-unnecessary-value-param)
+            cv::Mat roi,
+            const cv::Mat &customImage,
+            const float rollRadians,
+            const bool hasPose)
         {
             cv::Mat transformed =
                 transformedCustomImage(customImage, roi.size(), rollRadians, hasPose);
@@ -334,7 +340,7 @@ namespace cloakframe
             int innerTransition,
             int outerTransition)
         {
-            constexpr std::size_t maxDistanceTransformPixels = 2U * 1024U * 1024U;
+            constexpr std::size_t maxDistanceTransformPixels = std::size_t{2} * 1024 * 1024;
             const auto pixelCount =
                 static_cast<std::size_t>(size.width) * static_cast<std::size_t>(size.height);
             if (pixelCount > maxDistanceTransformPixels)
@@ -447,8 +453,8 @@ namespace cloakframe
         std::list<MaskKey> g_maskCacheRecency;
         std::size_t g_maskCacheBytes = 0;
         constexpr std::size_t kMaskCacheEntryCap = 2048;
-        constexpr std::size_t kMaskCacheByteCap = 32U * 1024U * 1024U;
-        constexpr std::size_t kMaskCacheSingleEntryCap = 8U * 1024U * 1024U;
+        constexpr std::size_t kMaskCacheByteCap = std::size_t{32} * 1024 * 1024;
+        constexpr std::size_t kMaskCacheSingleEntryCap = std::size_t{8} * 1024 * 1024;
 
         cv::Mat cachedSoftTransitionMask(const cv::Size &size,
             const cv::Rect &core,
@@ -577,6 +583,9 @@ namespace cloakframe
         }
 
         template <typename Pixel>
+        // cv::Mat is a refcounted header: taking it by value is how the pixels stay
+        // shared and writable. A const reference here would only launder that away.
+        // NOLINTNEXTLINE(performance-unnecessary-value-param)
         void blendWithMaskDepth(cv::Mat roi, const cv::Mat &anonymized, const cv::Mat &alpha)
         {
             if (alpha.depth() == CV_8U)
@@ -589,6 +598,9 @@ namespace cloakframe
             }
         }
 
+        // cv::Mat is a refcounted header: taking it by value is how the pixels stay
+        // shared and writable. A const reference here would only launder that away.
+        // NOLINTNEXTLINE(performance-unnecessary-value-param)
         void blendWithMask(cv::Mat roi, const cv::Mat &anonymized, const cv::Mat &alpha)
         {
             switch (roi.depth())
@@ -620,6 +632,9 @@ namespace cloakframe
         }
     }
 
+    // cv::Mat is a refcounted header: taking it by value is how the pixels stay shared
+    // and writable. A const reference here would only launder that away.
+    // NOLINTNEXTLINE(performance-unnecessary-value-param)
     void applyEffect(cv::Mat roi, AnonymizationMethod method, int blockSize)
     {
         switch (method)

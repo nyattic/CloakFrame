@@ -164,10 +164,12 @@ namespace cloakframe
         const float ratio =
             std::min(static_cast<float>(inputWidth_) / static_cast<float>(bgrImage.cols),
                 static_cast<float>(inputHeight_) / static_cast<float>(bgrImage.rows));
-        const int resizedWidth = std::max(1, static_cast<int>(std::round(bgrImage.cols * ratio)));
-        const int resizedHeight = std::max(1, static_cast<int>(std::round(bgrImage.rows * ratio)));
-        const float padX = (inputWidth_ - resizedWidth) / 2.0F;
-        const float padY = (inputHeight_ - resizedHeight) / 2.0F;
+        const int resizedWidth =
+            std::max(1, static_cast<int>(std::round(static_cast<float>(bgrImage.cols) * ratio)));
+        const int resizedHeight =
+            std::max(1, static_cast<int>(std::round(static_cast<float>(bgrImage.rows) * ratio)));
+        const float padX = static_cast<float>(inputWidth_ - resizedWidth) / 2.0F;
+        const float padY = static_cast<float>(inputHeight_ - resizedHeight) / 2.0F;
 
         cv::Mat resized;
         cv::resize(

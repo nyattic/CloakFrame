@@ -42,7 +42,7 @@ namespace cloakframe
             const ReviewPreviewSpec &previewSpec,
             QWidget *parent = nullptr);
 
-        [[nodiscard]] ReviewResult result() const;
+        [[nodiscard]] ReviewResult reviewResult() const;
 
         void reject() override;
 

@@ -190,10 +190,13 @@ namespace cloakframe
             throw std::invalid_argument("YOLO5Face-n requires an 8-bit BGR image.");
         }
 
-        const float scale = std::min(static_cast<float>(kInputSize) / bgrImage.cols,
-            static_cast<float>(kInputSize) / bgrImage.rows);
-        const int resizedWidth = std::max(1, static_cast<int>(bgrImage.cols * scale));
-        const int resizedHeight = std::max(1, static_cast<int>(bgrImage.rows * scale));
+        const float scale =
+            std::min(static_cast<float>(kInputSize) / static_cast<float>(bgrImage.cols),
+                static_cast<float>(kInputSize) / static_cast<float>(bgrImage.rows));
+        const int resizedWidth =
+            std::max(1, static_cast<int>(static_cast<float>(bgrImage.cols) * scale));
+        const int resizedHeight =
+            std::max(1, static_cast<int>(static_cast<float>(bgrImage.rows) * scale));
         const float padX = static_cast<float>(kInputSize - resizedWidth) / 2.0F;
         const float padY = static_cast<float>(kInputSize - resizedHeight) / 2.0F;
         const int left = static_cast<int>(padX);
@@ -238,7 +241,7 @@ namespace cloakframe
             || outputShape.size() != 3 || outputShape[0] != 1 || outputShape[1] != kExpectedRows
             || outputShape[2] != kOutputColumns
             || outputInfo.GetElementCount()
-                   != static_cast<std::size_t>(kExpectedRows * kOutputColumns))
+                   != static_cast<std::size_t>(kExpectedRows) * kOutputColumns)
         {
             throw std::runtime_error("YOLO5Face-n returned an invalid tensor shape.");
         }
@@ -252,7 +255,7 @@ namespace cloakframe
         FaceDetections candidates;
         for (int index = 0; index < kExpectedRows; ++index)
         {
-            const float *row = data + index * kOutputColumns;
+            const float *row = data + static_cast<std::ptrdiff_t>(index) * kOutputColumns;
             const float score = row[4];
             if (!std::isfinite(score) || score < scoreThreshold)
             {

@@ -283,6 +283,8 @@ namespace cloakframe
 
                 std::vector<const char *> inputPtrs;
                 std::vector<const char *> outputPtrs;
+                inputPtrs.reserve(inputNames_.size());
+                outputPtrs.reserve(outputNames_.size());
                 for (const auto &name : inputNames_)
                 {
                     inputPtrs.push_back(name.c_str());
@@ -308,6 +310,9 @@ namespace cloakframe
                     throw;
                 }
             }
+            // The probe only decides whether this input size works; the fallback below
+            // retries with another one.
+            // NOLINTNEXTLINE(bugprone-empty-catch)
             catch (const std::exception &)
             {
             }
@@ -372,7 +377,7 @@ namespace cloakframe
         cv::Mat rgb;
         cv::cvtColor(canvas, rgb, cv::COLOR_BGR2RGB);
 
-        prepared.tensor.resize(kChannels * inputSize_ * inputSize_);
+        prepared.tensor.resize(static_cast<std::size_t>(kChannels) * inputSize_ * inputSize_);
         const int planeSize = inputSize_ * inputSize_;
         for (int y = 0; y < inputSize_; ++y)
         {
@@ -548,7 +553,7 @@ namespace cloakframe
                 }
 
                 std::array<float, 4> distances = {
-                    boxes[i * 4] * static_cast<float>(stride),
+                    boxes[static_cast<std::ptrdiff_t>(i) * 4] * static_cast<float>(stride),
                     boxes[i * 4 + 1] * static_cast<float>(stride),
                     boxes[i * 4 + 2] * static_cast<float>(stride),
                     boxes[i * 4 + 3] * static_cast<float>(stride),

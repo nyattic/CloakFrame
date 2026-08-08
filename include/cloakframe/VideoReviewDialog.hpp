@@ -28,7 +28,7 @@ namespace cloakframe
 
         ~VideoReviewDialog() override;
 
-        [[nodiscard]] VideoReviewResult result() const;
+        [[nodiscard]] VideoReviewResult reviewResult() const;
 
         void reject() override;
 

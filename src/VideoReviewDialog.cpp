@@ -729,7 +729,7 @@ namespace cloakframe
         cancelFramePreview();
     }
 
-    VideoReviewResult VideoReviewDialog::result() const
+    VideoReviewResult VideoReviewDialog::reviewResult() const
     {
         VideoReviewResult result;
         result.decision = decision_;
@@ -1120,8 +1120,9 @@ namespace cloakframe
             auto *item = trackList_->item(index);
             if (item->data(kManualTrackRole).toBool() && item->data(kTrackIdRole).toInt() == id)
             {
-                item->setText(
-                    tr("Manual %1  ·  %2–%3  ·  %n keyframe(s)", nullptr, track->keyframes.size())
+                item->setText(tr("Manual %1  ·  %2–%3  ·  %n keyframe(s)",
+                    nullptr,
+                    static_cast<int>(track->keyframes.size()))
                         .arg(id)
                         .arg(formatTime(track->startFrame / request_.fps))
                         .arg(formatTime(track->endFrame / request_.fps)));
