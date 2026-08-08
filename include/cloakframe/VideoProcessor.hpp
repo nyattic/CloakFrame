@@ -46,6 +46,8 @@ namespace cloakframe
         QString error;
         qint64 frameCount = 0;
         int trackCount = 0;
+        // Frames inside a retained track's span that the output does not mask.
+        int uncoveredRegions = 0;
         QString encoderName;
     };
 

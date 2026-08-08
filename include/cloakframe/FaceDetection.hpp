@@ -36,4 +36,13 @@ namespace cloakframe
     }
 
     using FaceDetections = std::vector<FaceDetection>;
+
+    // A detector must report candidates it discarded to stay inside a safety cap.
+    // A nonzero `omitted` means the frame holds regions the model did find but the
+    // caller will never see, so the caller cannot treat the result as full coverage.
+    struct DetectionResult
+    {
+        FaceDetections detections;
+        int omitted = 0;
+    };
 }

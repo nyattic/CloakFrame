@@ -307,6 +307,7 @@ namespace cloakframe
         int failed = 0;
         int unredacted = 0;
         int warnings = 0;
+        int uncovered = 0;
         bool cancelled = false;
     };
 
@@ -500,6 +501,7 @@ namespace cloakframe
             int failedCount = 0;
             int unredactedCount = 0;
             int warningCount = 0;
+            int uncoveredCount = 0;
 
             const auto applyOutcome = [&](ItemOutcome &&outcome)
             {
@@ -513,6 +515,7 @@ namespace cloakframe
                 failedCount += outcome.failed;
                 unredactedCount += outcome.unredacted;
                 warningCount += outcome.warnings;
+                uncoveredCount += outcome.uncovered;
                 if (!outcome.cancelled)
                 {
                     emit progressChanged(++completed, total);
@@ -598,6 +601,7 @@ namespace cloakframe
             summary.skipped = skippedCount;
             summary.failed = failedCount;
             summary.unredacted = unredactedCount;
+            summary.uncovered = uncoveredCount;
             emit summaryAvailable(summary);
 
             if (unredactedCount > 0)
@@ -608,6 +612,15 @@ namespace cloakframe
                     unredactedCount));
             }
 
+            if (uncoveredCount > 0)
+            {
+                emit logMessage(
+                    tr("Warning: %n detected region(s) could not be redacted. Review the affected "
+                       "files before sharing.",
+                        nullptr,
+                        uncoveredCount));
+            }
+
             if (cancelled_.load(std::memory_order_acquire))
             {
                 emit finished(RunOutcome::Cancelled);
@@ -615,7 +628,7 @@ namespace cloakframe
             }
 
             if (failedCount > 0 || skippedCount > 0 || unredactedCount > 0 || copiedCount > 0
-                || warningCount > 0)
+                || warningCount > 0 || uncoveredCount > 0)
             {
                 emit logMessage(tr("Completed with warnings. Review the summary before sharing."));
                 emit finished(RunOutcome::CompletedWithWarnings);
@@ -858,17 +871,22 @@ namespace cloakframe
 
             emit stageChanged(index, total, tr("Detecting"), fileName);
             FaceDetections detected;
+            int omittedDetections = 0;
             {
                 std::lock_guard lock(detectMutex_);
                 if (detectFaces_ && detector_)
                 {
-                    detected = detector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
+                    auto faces = detector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
+                    detected = std::move(faces.detections);
+                    omittedDetections += faces.omitted;
                 }
                 if (detectPlates_ && plateDetector_)
                 {
-                    const auto plates =
-                        plateDetector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
-                    detected.insert(detected.end(), plates.begin(), plates.end());
+                    auto plates = plateDetector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
+                    detected.insert(detected.end(),
+                        std::make_move_iterator(plates.detections.begin()),
+                        std::make_move_iterator(plates.detections.end()));
+                    omittedDetections += plates.omitted;
                 }
             }
             if (cancelled_.load(std::memory_order_acquire))
@@ -1050,6 +1068,16 @@ namespace cloakframe
                             .arg(fileName));
                     outcome.redacted = 1;
                 }
+                if (omittedDetections > 0)
+                {
+                    outcome.logs.push_back(
+                        tr("Warning: %n detected region(s) exceeded the safety limit and were "
+                           "left unredacted in %1. Review before sharing.",
+                            nullptr,
+                            omittedDetections)
+                            .arg(fileName));
+                    outcome.uncovered = omittedDetections;
+                }
             }
         }
         catch (const std::exception &exception)
@@ -1168,19 +1196,25 @@ namespace cloakframe
 
         const float detectionThreshold =
             std::min(options.tracker.lowScoreThreshold, scoreThreshold_);
-        const auto detect = [this, detectionThreshold](const cv::Mat &frame)
+        // Guarded by detectMutex_, which the lambda holds for its whole body.
+        int omittedDetections = 0;
+        const auto detect = [this, detectionThreshold, &omittedDetections](const cv::Mat &frame)
         {
             std::lock_guard lock(detectMutex_);
             FaceDetections detections;
             if (detectFaces_ && videoDetector_)
             {
-                detections = videoDetector_->detect(frame, detectionThreshold, nmsThreshold_);
+                auto faces = videoDetector_->detect(frame, detectionThreshold, nmsThreshold_);
+                detections = std::move(faces.detections);
+                omittedDetections += faces.omitted;
             }
             if (detectPlates_ && plateDetector_)
             {
-                const auto plates =
-                    plateDetector_->detect(frame, detectionThreshold, nmsThreshold_);
-                detections.insert(detections.end(), plates.begin(), plates.end());
+                auto plates = plateDetector_->detect(frame, detectionThreshold, nmsThreshold_);
+                detections.insert(detections.end(),
+                    std::make_move_iterator(plates.detections.begin()),
+                    std::make_move_iterator(plates.detections.end()));
+                omittedDetections += plates.omitted;
             }
             return detections;
         };
@@ -1361,6 +1395,16 @@ namespace cloakframe
             if (!result.encoderName.isEmpty())
             {
                 outcome.logs.push_back(tr("Video encoder: %1").arg(result.encoderName));
+            }
+            if (const int uncovered = omittedDetections + result.uncoveredRegions; uncovered > 0)
+            {
+                outcome.logs.push_back(
+                    tr("Warning: %n detected region(s) were left unredacted in %1. Review before "
+                       "sharing.",
+                        nullptr,
+                        uncovered)
+                        .arg(fileName));
+                outcome.uncovered = uncovered;
             }
             break;
         case VideoProcessStatus::Cancelled:

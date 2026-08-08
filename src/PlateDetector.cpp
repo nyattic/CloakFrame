@@ -153,7 +153,7 @@ namespace cloakframe
         }
     }
 
-    FaceDetections PlateDetector::detect(
+    DetectionResult PlateDetector::detect(
         const cv::Mat &bgrImage, float scoreThreshold, float /*nmsThreshold*/)
     {
         if (bgrImage.empty())
@@ -284,6 +284,6 @@ namespace cloakframe
             }
         }
 
-        return detections;
+        return {std::move(detections), 0};
     }
 }

@@ -319,7 +319,7 @@ namespace cloakframe
         adoptOriginalSessionIfAccelerated(modelBytes);
     }
 
-    FaceDetections ScrfdFaceDetector::detect(
+    DetectionResult ScrfdFaceDetector::detect(
         const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold)
     {
         if (bgrImage.empty())
@@ -391,7 +391,7 @@ namespace cloakframe
         return prepared;
     }
 
-    FaceDetections ScrfdFaceDetector::decode(const std::vector<Ort::Value> &outputs,
+    DetectionResult ScrfdFaceDetector::decode(const std::vector<Ort::Value> &outputs,
         const PreparedImage &prepared,
         float scoreThreshold,
         float nmsThreshold) const
@@ -602,6 +602,7 @@ namespace cloakframe
             }
         }
 
+        std::size_t omitted = 0;
         if (detections.size() > kMaxCandidatesBeforeNms)
         {
             std::ranges::partial_sort(detections,
@@ -610,10 +611,12 @@ namespace cloakframe
                 {
                     return a.score > b.score;
                 });
+            omitted = detections.size() - kMaxCandidatesBeforeNms;
             detections.resize(kMaxCandidatesBeforeNms);
         }
 
-        return nonMaxSuppression(std::move(detections), nmsThreshold);
+        return {nonMaxSuppression(std::move(detections), nmsThreshold),
+            static_cast<int>(std::min<std::size_t>(omitted, std::numeric_limits<int>::max()))};
     }
 
     std::vector<cv::Point2f> ScrfdFaceDetector::anchorCenters(

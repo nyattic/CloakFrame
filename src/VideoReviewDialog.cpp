@@ -541,15 +541,10 @@ namespace cloakframe
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
             if (track.lowConfidence)
             {
-                item->setToolTip(tr("Few confident detections — excluded by default. Check it to "
-                                    "redact this track anyway."));
-                item->setCheckState(Qt::Unchecked);
-                excludedTrackIds_.insert(track.id);
+                item->setToolTip(tr("Few confident detections — included by default. Uncheck it to "
+                                    "leave this track unredacted."));
             }
-            else
-            {
-                item->setCheckState(Qt::Checked);
-            }
+            item->setCheckState(Qt::Checked);
         }
         connect(trackList_,
             &QListWidget::itemChanged,

@@ -115,7 +115,7 @@ namespace cloakframe
         }
     }
 
-    FaceDetections YuNetFaceDetector::detect(
+    DetectionResult YuNetFaceDetector::detect(
         const cv::Mat &bgrImage, const float scoreThreshold, const float nmsThreshold)
     {
         if (bgrImage.empty())
@@ -203,6 +203,6 @@ namespace cloakframe
             }
             detections.push_back(detection);
         }
-        return detections;
+        return {std::move(detections), 0};
     }
 }

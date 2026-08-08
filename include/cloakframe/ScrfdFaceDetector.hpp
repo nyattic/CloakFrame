@@ -25,7 +25,7 @@ namespace cloakframe
             bool enableAcceleration = false,
             const QByteArray &expectedSha256 = {});
 
-        FaceDetections detect(
+        DetectionResult detect(
             const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
 
         [[nodiscard]] OrtAccelerator accelerator() const noexcept
@@ -60,7 +60,7 @@ namespace cloakframe
 
         [[nodiscard]] PreparedImage prepare(const cv::Mat &bgrImage) const;
 
-        [[nodiscard]] FaceDetections decode(const std::vector<Ort::Value> &outputs,
+        [[nodiscard]] DetectionResult decode(const std::vector<Ort::Value> &outputs,
             const PreparedImage &prepared,
             float scoreThreshold,
             float nmsThreshold) const;

@@ -393,6 +393,56 @@ namespace
         assert(!std::filesystem::exists(output / "input.png"));
     }
 
+    class OverflowingDetector final : public cloakframe::Detector
+    {
+    public:
+        cloakframe::DetectionResult detect(const cv::Mat &, float, float) override
+        {
+            cloakframe::FaceDetections detections;
+            detections.push_back({cv::Rect2f(4.0F, 4.0F, 8.0F, 8.0F), 0.9F});
+            return {std::move(detections), 3};
+        }
+    };
+
+    void testDroppedDetectionsKeepTheRunOutOfCleanCompletion()
+    {
+        QTemporaryDir temp;
+        assert(temp.isValid());
+        const auto root = std::filesystem::path(temp.path().toStdString());
+        const auto source = root / "input.png";
+        const auto output = root / "out";
+        assert(cv::imwrite(source.string(), cv::Mat(32, 32, CV_8UC3, cv::Scalar(20, 40, 60))));
+
+        cloakframe::ProcessingRequest request;
+        request.inputs = {QString::fromStdString(source.string())};
+        request.outputDirectory = QString::fromStdString(output.string());
+        request.detectFaces = true;
+
+        cloakframe::DetectorCache cache;
+        cache.face = std::make_shared<OverflowingDetector>();
+
+        cloakframe::RunOutcome result = cloakframe::RunOutcome::Failed;
+        cloakframe::RunSummary summary;
+        cloakframe::ProcessorWorker worker(std::move(request), std::move(cache));
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::summaryAvailable,
+            [&](const cloakframe::RunSummary value)
+            {
+                summary = value;
+            });
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::finished,
+            [&](const cloakframe::RunOutcome value)
+            {
+                result = value;
+            });
+        worker.process();
+
+        assert(summary.redacted == 1);
+        assert(summary.uncovered == 3);
+        assert(result == cloakframe::RunOutcome::CompletedWithWarnings);
+    }
+
     void testWorkerUsesStableImageSnapshotDuringReview()
     {
         QTemporaryDir temp;
@@ -1580,7 +1630,7 @@ namespace
         assert(patchedSize.inputSize() == 320);
 
         const cv::Mat blank(180, 320, CV_8UC3, cv::Scalar(30, 30, 30));
-        assert(patchedSize.detect(blank, 0.5F, 0.4F).empty());
+        assert(patchedSize.detect(blank, 0.5F, 0.4F).detections.empty());
     }
 
     void testDynamicScrfdModelRunsAtRequestedSize()
@@ -1597,7 +1647,7 @@ namespace
         assert(patchedSize.inputSize() == 320);
 
         const cv::Mat blank(180, 320, CV_8UC3, cv::Scalar(30, 30, 30));
-        assert(patchedSize.detect(blank, 0.5F, 0.4F).empty());
+        assert(patchedSize.detect(blank, 0.5F, 0.4F).detections.empty());
     }
 
     void testRecommendedFaceModels()
@@ -1619,12 +1669,13 @@ namespace
             cloakframe::Yolo5FaceDetector detector(
                 yoloPath.toStdString(), false, QByteArray::fromHex(model.sha256.toLatin1()));
             assert(detector.inputSize() == 640);
-            assert(detector.detect(blank, 0.99F, 0.4F).empty());
+            assert(detector.detect(blank, 0.99F, 0.4F).detections.empty());
             if (!faceImage.empty())
             {
-                const auto detections = detector.detect(faceImage, 0.25F, 0.4F);
-                assert(!detections.empty());
-                assert(std::ranges::any_of(detections, &cloakframe::FaceDetection::hasPose));
+                const auto result = detector.detect(faceImage, 0.25F, 0.4F);
+                assert(!result.detections.empty());
+                assert(result.omitted == 0);
+                assert(std::ranges::any_of(result.detections, &cloakframe::FaceDetection::hasPose));
             }
         }
 
@@ -1638,12 +1689,13 @@ namespace
             cloakframe::YuNetFaceDetector detector(
                 yuNetPath.toStdString(), QByteArray::fromHex(model.sha256.toLatin1()));
             assert(detector.inputSize() == 640);
-            assert(detector.detect(blank, 0.99F, 0.4F).empty());
+            assert(detector.detect(blank, 0.99F, 0.4F).detections.empty());
             if (!faceImage.empty())
             {
-                const auto detections = detector.detect(faceImage, 0.25F, 0.4F);
-                assert(!detections.empty());
-                assert(std::ranges::any_of(detections, &cloakframe::FaceDetection::hasPose));
+                const auto result = detector.detect(faceImage, 0.25F, 0.4F);
+                assert(!result.detections.empty());
+                assert(result.omitted == 0);
+                assert(std::ranges::any_of(result.detections, &cloakframe::FaceDetection::hasPose));
             }
         }
     }
@@ -1661,9 +1713,9 @@ namespace
         cloakframe::PlateDetector detector(
             platePath.toStdString(), false, QByteArray::fromHex(model.sha256.toLatin1()));
         const cv::Mat blank(360, 640, CV_8UC3, cv::Scalar(30, 30, 30));
-        assert(detector.detect(blank, 0.99F, 0.4F).empty());
+        assert(detector.detect(blank, 0.99F, 0.4F).detections.empty());
         const cv::Mat tall(640, 360, CV_8UC3, cv::Scalar(200, 200, 200));
-        assert(detector.detect(tall, 0.99F, 0.4F).empty());
+        assert(detector.detect(tall, 0.99F, 0.4F).detections.empty());
     }
 }
 
@@ -1678,6 +1730,7 @@ int main(int argc, char **argv)
     testWorkerReportsUnredactedOutputAsWarningAndPreservesIt();
     testWorkerReportsCopiedOriginalAsWarning();
     testWorkerHonoursCancelRequestedBeforeProcess();
+    testDroppedDetectionsKeepTheRunOutOfCleanCompletion();
     testWorkerUsesStableImageSnapshotDuringReview();
     testWorkerAcceptsThirtyMegabyteJpeg();
     testWorkerRejectsMultiFrameImages();

@@ -360,7 +360,9 @@ namespace cloakframe
     {
         // A low user threshold may supply weak candidates to continue an existing track, but
         // those candidates must not create and preserve thousands of false-positive tracks.
-        return std::max(0.35F, scoreThreshold - 0.1F);
+        // The floor must never exceed the user's own threshold, or video would ignore a low
+        // setting that images honour.
+        return std::min(scoreThreshold, std::max(0.35F, scoreThreshold - 0.1F));
     }
 
     VideoMaskingPlan videoMaskingPlan(const int width,
@@ -644,8 +646,9 @@ namespace cloakframe
             TrackPostProcessConfig postProcess = options.postProcess;
             postProcess.strongScoreThreshold = trackerConfig.highScoreThreshold;
             postProcess.retainLowConfidenceTracks = static_cast<bool>(review);
-            postProcessTracks(
+            const auto coverage = postProcessTracks(
                 tracks, postProcess, static_cast<int>(frameCount), sceneCuts, trackingContinue);
+            result.uncoveredRegions = coverage.uncoveredFrames;
         }
         catch (const TrackingCancelled &)
         {

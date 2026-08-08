@@ -518,13 +518,14 @@ namespace cloakframe
         return forward;
     }
 
-    void interpolateGaps(
+    int interpolateGaps(
         Track &track, int maxGap, const SceneCuts &cuts, const TrackingContinueGuard &continueGuard)
     {
         if (track.boxes.size() < 2 || maxGap < 1)
         {
-            return;
+            return 0;
         }
+        int uncovered = 0;
 
         std::vector<TrackedBox> filled;
         filled.reserve(track.boxes.size());
@@ -545,20 +546,35 @@ namespace cloakframe
             append(current);
 
             const int gap = next.frame - current.frame - 1;
-            if (gap < 1 || gap > maxGap || cuts.spansCut(current.frame, next.frame)
-                || gapMotionTooFast(current.box, next.box, gap)
-                || sizeJumpTooLarge(current.box, next.box, gap))
+            if (gap < 1)
             {
                 continue;
             }
+            // A cut means the subject legitimately left; anything else is a hole inside
+            // one track's own span and must be covered or reported.
+            if (cuts.spansCut(current.frame, next.frame))
+            {
+                continue;
+            }
+            if (gap > maxGap)
+            {
+                uncovered += gap;
+                continue;
+            }
+
+            // Motion and size guards mean the path between the anchors is unknown, so
+            // cover the gap with the union of both ends rather than leaving it bare.
+            const bool unreliable = gapMotionTooFast(current.box, next.box, gap)
+                                    || sizeJumpTooLarge(current.box, next.box, gap);
+            const cv::Rect2f conservative = current.box | next.box;
             for (int step = 1; step <= gap; ++step)
             {
                 const float t = static_cast<float>(step) / static_cast<float>(gap + 1);
                 TrackedBox interpolated{current.frame + step,
-                    lerpBox(current.box, next.box, t),
+                    unreliable ? conservative : lerpBox(current.box, next.box, t),
                     std::min(current.score, next.score),
                     true};
-                if (isValidFacePose(current.rollRadians, current.hasPose)
+                if (!unreliable && isValidFacePose(current.rollRadians, current.hasPose)
                     && isValidFacePose(next.rollRadians, next.hasPose))
                 {
                     interpolated.rollRadians = lerpAngle(current.rollRadians, next.rollRadians, t);
@@ -569,6 +585,7 @@ namespace cloakframe
         }
         append(track.boxes.back());
         track.boxes = std::move(filled);
+        return uncovered;
     }
 
     void smoothTrack(Track &track, int radius, const TrackingContinueGuard &continueGuard)
@@ -699,12 +716,13 @@ namespace cloakframe
         track.boxes.insert(track.boxes.end(), suffix.begin(), suffix.end());
     }
 
-    void postProcessTracks(std::vector<Track> &tracks,
+    TrackCoverageReport postProcessTracks(std::vector<Track> &tracks,
         const TrackPostProcessConfig &config,
         int frameCount,
         const SceneCuts &cuts,
         const TrackingContinueGuard &continueGuard)
     {
+        TrackCoverageReport report;
         std::size_t filteringOperations = 0;
         const auto isLowConfidence = [&](const Track &track)
         {
@@ -742,14 +760,35 @@ namespace cloakframe
         }
         else
         {
-            std::erase_if(tracks, isLowConfidence);
+            // Dropping a whole track also drops the frames the detector was confident
+            // about. Keep those, and only discard tracks with nothing strong in them.
+            for (auto &track : tracks)
+            {
+                if (!isLowConfidence(track))
+                {
+                    continue;
+                }
+                track.lowConfidence = true;
+                std::erase_if(track.boxes,
+                    [&](const TrackedBox &box)
+                    {
+                        return box.interpolated || box.score < config.strongScoreThreshold;
+                    });
+            }
+            const auto emptied = std::erase_if(tracks,
+                [](const Track &track)
+                {
+                    return track.boxes.empty();
+                });
+            report.droppedTracks = static_cast<int>(emptied);
         }
         std::size_t totalBoxes = trackedBoxCount(tracks, kMaxFinalTrackedBoxes);
         for (auto &track : tracks)
         {
             requireTrackingContinue(continueGuard);
             const auto previous = track.boxes.size();
-            interpolateGaps(track, config.maxInterpolationGap, cuts, continueGuard);
+            report.uncoveredFrames +=
+                interpolateGaps(track, config.maxInterpolationGap, cuts, continueGuard);
             const auto withoutCurrent = totalBoxes - previous;
             if (withoutCurrent > kMaxFinalTrackedBoxes
                 || track.boxes.size() > kMaxFinalTrackedBoxes - withoutCurrent)
@@ -768,6 +807,7 @@ namespace cloakframe
             }
             totalBoxes = withoutExtended + track.boxes.size();
         }
+        return report;
     }
 
     std::vector<cv::Rect2f> trackRegionsForFrame(const std::vector<Track> &tracks, int frame)

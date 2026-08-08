@@ -111,7 +111,7 @@ namespace cloakframe
         const SceneCuts &cuts = {},
         const TrackingContinueGuard &continueGuard = {});
 
-    void interpolateGaps(Track &track,
+    int interpolateGaps(Track &track,
         int maxGap,
         const SceneCuts &cuts = {},
         const TrackingContinueGuard &continueGuard = {});
@@ -124,7 +124,16 @@ namespace cloakframe
         const SceneCuts &cuts = {},
         const TrackingContinueGuard &continueGuard = {});
 
-    void postProcessTracks(std::vector<Track> &tracks,
+    // Coverage that post-processing could not deliver. `uncoveredFrames` counts frames
+    // inside a retained track's own span that end up with no mask, so a caller must not
+    // report a clean result while it is nonzero.
+    struct TrackCoverageReport
+    {
+        int uncoveredFrames = 0;
+        int droppedTracks = 0;
+    };
+
+    TrackCoverageReport postProcessTracks(std::vector<Track> &tracks,
         const TrackPostProcessConfig &config,
         int frameCount,
         const SceneCuts &cuts = {},

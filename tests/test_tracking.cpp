@@ -110,7 +110,7 @@ namespace
         assert(std::abs(filled->box.x - expectedX) < 1.0F);
     }
 
-    void testGapLargerThanLimitIsNotInterpolated()
+    void testGapLargerThanLimitIsReportedAsUncovered()
     {
         auto sequence = movingObjectSequence(20, 50.0F, 5.0F);
         for (int frame = 5; frame <= 12; ++frame)
@@ -120,8 +120,37 @@ namespace
 
         auto tracks = cloakframe::buildTracks(sequence);
         assert(tracks.size() == 1);
-        cloakframe::interpolateGaps(tracks[0], 3);
+        const int uncovered = cloakframe::interpolateGaps(tracks[0], 3);
         assert(tracks[0].boxAtFrame(8) == nullptr);
+        assert(uncovered == 8);
+
+        auto reported = cloakframe::buildTracks(sequence);
+        cloakframe::TrackPostProcessConfig config;
+        config.maxInterpolationGap = 3;
+        config.extensionFrames = 0;
+        const auto report = cloakframe::postProcessTracks(reported, config, 20);
+        assert(report.uncoveredFrames == 8);
+    }
+
+    void testGuardRejectedGapIsCoveredConservatively()
+    {
+        std::vector<cloakframe::FaceDetections> sequence(3);
+        sequence[0].push_back(det(100.0F, 100.0F, 0.9F, 40.0F));
+        sequence[2].push_back(det(100.0F, 100.0F, 0.9F, 58.0F));
+
+        auto tracks = cloakframe::buildTracks(sequence);
+        assert(tracks.size() == 1);
+        const int uncovered = cloakframe::interpolateGaps(tracks[0], 20);
+        assert(uncovered == 0);
+
+        const auto *middle = tracks[0].boxAtFrame(1);
+        assert(middle != nullptr);
+        const auto first = tracks[0].boxAtFrame(0)->box;
+        const auto last = tracks[0].boxAtFrame(2)->box;
+        assert(middle->box.x <= std::min(first.x, last.x) + 0.001F);
+        assert(middle->box.y <= std::min(first.y, last.y) + 0.001F);
+        assert(middle->box.br().x >= std::max(first.br().x, last.br().x) - 0.001F);
+        assert(middle->box.br().y >= std::max(first.br().y, last.br().y) - 0.001F);
     }
 
     void testPoseIsTrackedAndInterpolated()
@@ -188,15 +217,27 @@ namespace
         assert(tracks[0].lastFrame() == 34);
     }
 
-    void testTracksWithFewStrongDetectionsAreDropped()
+    void testWeakTracksKeepTheirConfidentFrames()
     {
         auto weak = movingObjectSequence(20, 50.0F, 5.0F, 100.0F, 0.2F);
         weak[3][0].score = 0.9F;
         weak[4][0].score = 0.9F;
         auto weakTracks = cloakframe::buildBidirectionalTracks(weak);
         assert(weakTracks.size() == 1);
-        cloakframe::postProcessTracks(weakTracks, {}, 20);
-        assert(weakTracks.empty());
+        cloakframe::TrackPostProcessConfig noExtension;
+        noExtension.extensionFrames = 0;
+        cloakframe::postProcessTracks(weakTracks, noExtension, 20);
+        assert(weakTracks.size() == 1);
+        assert(weakTracks[0].lowConfidence);
+        assert(weakTracks[0].boxAtFrame(3) != nullptr);
+        assert(weakTracks[0].boxAtFrame(4) != nullptr);
+
+        auto nothingStrong = cloakframe::buildBidirectionalTracks(weak);
+        cloakframe::TrackPostProcessConfig strict;
+        strict.strongScoreThreshold = 0.95F;
+        const auto report = cloakframe::postProcessTracks(nothingStrong, strict, 20);
+        assert(nothingStrong.empty());
+        assert(report.droppedTracks == 1);
 
         auto solid = movingObjectSequence(20, 50.0F, 5.0F);
         auto solidTracks = cloakframe::buildBidirectionalTracks(solid);
@@ -255,12 +296,18 @@ namespace
         assert(tracks.size() == 1);
         assert(tracks[0].boxAtFrame(5) != nullptr);
 
+        // A stricter policy may call the track low confidence, but the frame the detector
+        // was sure about still has to be covered.
         auto strictTracks =
             cloakframe::buildBidirectionalTracks(sequence, {}, 0.5F, cloakframe::SceneCuts({5}));
         cloakframe::TrackPostProcessConfig strict;
         strict.shortTrackMinStrong = 2;
-        cloakframe::postProcessTracks(strictTracks, strict, 6, cloakframe::SceneCuts({5}));
-        assert(strictTracks.empty());
+        const auto report =
+            cloakframe::postProcessTracks(strictTracks, strict, 6, cloakframe::SceneCuts({5}));
+        assert(strictTracks.size() == 1);
+        assert(strictTracks[0].lowConfidence);
+        assert(strictTracks[0].boxAtFrame(5) != nullptr);
+        assert(report.droppedTracks == 0);
     }
 
     void testMovingCoastingSurvivesLongerThanStatic()
@@ -600,13 +647,26 @@ namespace
         assert(cloakframe::buildTracks(sequence).size() == 1);
     }
 
-    void testInterpolationSkipsAcrossSizeJump()
+    void testInterpolationCoversSizeJumpConservatively()
     {
         cloakframe::Track track;
         track.boxes.push_back({0, cv::Rect2f(100.0F, 100.0F, 40.0F, 40.0F), 0.9F, false});
         track.boxes.push_back({5, cv::Rect2f(60.0F, 60.0F, 160.0F, 160.0F), 0.9F, false});
-        cloakframe::interpolateGaps(track, 10);
-        assert(track.boxes.size() == 2);
+        const auto first = track.boxes.front().box;
+        const auto last = track.boxes.back().box;
+
+        const int uncovered = cloakframe::interpolateGaps(track, 10);
+        assert(uncovered == 0);
+        assert(track.boxes.size() == 6);
+        for (const auto &tracked : track.boxes)
+        {
+            if (!tracked.interpolated)
+            {
+                continue;
+            }
+            assert(contains(tracked.box, first));
+            assert(contains(tracked.box, last));
+        }
     }
 
     void testSmoothingDoesNotInflateInterpolatedBoxes()
@@ -709,12 +769,13 @@ int main()
     testManualVideoTrackInterpolationAndBounds();
     testConstantVelocitySingleTrack();
     testGapInterpolationFillsMissedFrames();
-    testGapLargerThanLimitIsNotInterpolated();
+    testGapLargerThanLimitIsReportedAsUncovered();
+    testGuardRejectedGapIsCoveredConservatively();
     testPoseIsTrackedAndInterpolated();
     testPoseSmoothingReducesAngleJitter();
     testLowConfidenceDetectionsExtendButNeverStartTracks();
     testLowConfidenceCoastingExpires();
-    testTracksWithFewStrongDetectionsAreDropped();
+    testWeakTracksKeepTheirConfidentFrames();
     testRetainedLowConfidenceTracksAreMarkedNotDropped();
     testShortStrongBurstIsKept();
     testHighConfidenceSingletonIsKept();
@@ -737,7 +798,7 @@ int main()
     testSceneCutDetectorCommitsTrailingCandidate();
     testSizeJumpStartsNewTrackInsteadOfAssociating();
     testGradualGrowthKeepsOneTrack();
-    testInterpolationSkipsAcrossSizeJump();
+    testInterpolationCoversSizeJumpConservatively();
     testSmoothingDoesNotInflateInterpolatedBoxes();
     testTrackingSafetyLimitsRejectExcessiveData();
     testTrackingCancellationGuard();

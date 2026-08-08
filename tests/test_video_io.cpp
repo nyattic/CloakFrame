@@ -136,14 +136,14 @@ namespace
         assert(cloakframe::crfForQuality(cloakframe::VideoQuality::SpaceSaver) == 24);
     }
 
-    void testWeakVideoDetectionsCannotBecomeStrongTracks()
+    void testVideoStrongThresholdNeverExceedsUserThreshold()
     {
         const auto close = [](float actual, float expected)
         {
             return std::abs(actual - expected) < 0.0001F;
         };
-        assert(close(cloakframe::videoStrongScoreThreshold(0.05F), 0.35F));
-        assert(close(cloakframe::videoStrongScoreThreshold(0.20F), 0.35F));
+        assert(close(cloakframe::videoStrongScoreThreshold(0.05F), 0.05F));
+        assert(close(cloakframe::videoStrongScoreThreshold(0.20F), 0.20F));
         assert(close(cloakframe::videoStrongScoreThreshold(0.50F), 0.40F));
         assert(close(cloakframe::videoStrongScoreThreshold(0.90F), 0.80F));
     }
@@ -194,7 +194,7 @@ int main(int argc, char **argv)
     std::puts("supported extensions: ok");
     testCrfPresets();
     std::puts("crf presets: ok");
-    testWeakVideoDetectionsCannotBecomeStrongTracks();
+    testVideoStrongThresholdNeverExceedsUserThreshold();
     std::puts("video strong-score floor: ok");
     testVideoMaskingPlanIsBoundedByWorkersAndBytes();
     std::puts("bounded video masking plan: ok");

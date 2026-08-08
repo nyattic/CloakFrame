@@ -178,7 +178,7 @@ namespace cloakframe
         outputName_ = session_.GetOutputNameAllocated(0, allocator).get();
     }
 
-    FaceDetections Yolo5FaceDetector::detect(
+    DetectionResult Yolo5FaceDetector::detect(
         const cv::Mat &bgrImage, const float scoreThreshold, const float nmsThreshold)
     {
         if (bgrImage.empty())
@@ -302,6 +302,7 @@ namespace cloakframe
             candidates.push_back(detection);
         }
 
+        std::size_t omitted = 0;
         if (candidates.size() > kMaxCandidatesBeforeNms)
         {
             std::sort(candidates.begin(),
@@ -310,13 +311,16 @@ namespace cloakframe
                 {
                     return a.score > b.score;
                 });
+            omitted += candidates.size() - kMaxCandidatesBeforeNms;
             candidates.resize(kMaxCandidatesBeforeNms);
         }
         auto detections = nonMaxSuppression(std::move(candidates), nmsThreshold);
         if (detections.size() > kMaxDetections)
         {
+            omitted += detections.size() - kMaxDetections;
             detections.resize(kMaxDetections);
         }
-        return detections;
+        return {std::move(detections),
+            static_cast<int>(std::min<std::size_t>(omitted, std::numeric_limits<int>::max()))};
     }
 }

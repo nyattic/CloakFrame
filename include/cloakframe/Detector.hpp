@@ -11,7 +11,7 @@ namespace cloakframe
     public:
         virtual ~Detector() = default;
 
-        virtual FaceDetections detect(
+        virtual DetectionResult detect(
             const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) = 0;
 
         [[nodiscard]] virtual int inputSize() const noexcept

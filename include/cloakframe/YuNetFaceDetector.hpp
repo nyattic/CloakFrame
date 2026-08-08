@@ -16,7 +16,7 @@ namespace cloakframe
         explicit YuNetFaceDetector(
             const std::string &modelPath, const QByteArray &expectedSha256 = {});
 
-        FaceDetections detect(
+        DetectionResult detect(
             const cv::Mat &bgrImage, float scoreThreshold, float nmsThreshold) override;
 
         [[nodiscard]] int inputSize() const noexcept override
