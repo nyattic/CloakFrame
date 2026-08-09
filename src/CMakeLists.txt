@@ -114,6 +114,11 @@ endif()
 
 if(WIN32)
     target_sources(CloakFrame PRIVATE ${PROJECT_SOURCE_DIR}/assets/CloakFrame.rc)
+    if(MSVC)
+        # The manifest comes from the resource script; a linker-generated one would collide
+        # with it and would not carry activeCodePage or longPathAware.
+        target_link_options(CloakFrame PRIVATE /MANIFEST:NO)
+    endif()
 endif()
 
 set_target_properties(CloakFrame PROPERTIES

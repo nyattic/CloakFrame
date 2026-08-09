@@ -108,12 +108,15 @@ jobs:
           chmod 755 ffmpeg-bundle/ffmpeg ffmpeg-bundle/ffprobe
 
       - name: Configure
+        env:
+          SPARKLE_ED_PUBLIC_KEY: ${{ vars.SPARKLE_ED_PUBLIC_KEY }}
         run: |
           cmake -S . -B build-release -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
             "-DCMAKE_PREFIX_PATH=$(brew --prefix qt);/opt/homebrew" \
-            "-DCLOAKFRAME_FFMPEG_DIR=$PWD/ffmpeg-bundle"
+            "-DCLOAKFRAME_FFMPEG_DIR=$PWD/ffmpeg-bundle" \
+            "-DCLOAKFRAME_SPARKLE_PUBLIC_KEY=$SPARKLE_ED_PUBLIC_KEY"
 
       - name: Build and test
         run: |
@@ -264,26 +267,44 @@ jobs:
       - name: Generate Sparkle appcast
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          SPARKLE_ED_PUBLIC_KEY: ${{ vars.SPARKLE_ED_PUBLIC_KEY }}
         run: |
-          notes="release-notes/v${CLOAKFRAME_VERSION}.md"
-          if [[ -s "$notes" ]]; then
-            cp "$notes" "artifacts/${MACOS_ASSET_NAME%.dmg}.md"
-          fi
+          # generate_appcast picks up <asset>.md as the default notes and <asset>.<lang>.md as
+          # the localized ones, so Sparkle shows each user their own language.
+          cp "release-notes/${CLOAKFRAME_VERSION}.en.md" "artifacts/${MACOS_ASSET_NAME%.dmg}.md"
+          cp "release-notes/${CLOAKFRAME_VERSION}.ko.md" "artifacts/${MACOS_ASSET_NAME%.dmg}.ko.md"
+          cp "release-notes/${CLOAKFRAME_VERSION}.ja.md" "artifacts/${MACOS_ASSET_NAME%.dmg}.ja.md"
           generator="build-release/_deps/sparkle-src/bin/generate_appcast"
           args=(
             --link "https://github.com/nyattic/CloakFrame"
             --download-url-prefix "https://github.com/nyattic/CloakFrame/releases/download/v${CLOAKFRAME_VERSION}/"
+            --release-notes-url-prefix "https://github.com/nyattic/CloakFrame/releases/download/v${CLOAKFRAME_VERSION}/"
             --embed-release-notes
             artifacts
           )
+          # The app only enforces EdDSA when it was built with the matching public key, so the
+          # two halves have to be configured together or an update would ship unverifiable.
+          if [[ -n "$SPARKLE_ED_PUBLIC_KEY" && -z "$SPARKLE_ED_PRIVATE_KEY" ]]; then
+            echo "The app pins SPARKLE_ED_PUBLIC_KEY but SPARKLE_ED_PRIVATE_KEY is not set;" \
+              "the update would be rejected by every client." >&2
+            exit 1
+          fi
+          if [[ -z "$SPARKLE_ED_PUBLIC_KEY" && -n "$SPARKLE_ED_PRIVATE_KEY" ]]; then
+            echo "SPARKLE_ED_PRIVATE_KEY is set but the app pins no public key, so the" \
+              "signature would never be checked. Set the SPARKLE_ED_PUBLIC_KEY variable." >&2
+            exit 1
+          fi
           if [[ -n "$SPARKLE_ED_PRIVATE_KEY" ]]; then
             echo "$SPARKLE_ED_PRIVATE_KEY" | \
               "$generator" --ed-key-file - "${args[@]}"
+            grep -q 'edSignature=' artifacts/appcast.xml
           else
-            echo "SPARKLE_ED_PRIVATE_KEY is not set; relying on Apple code signing validation."
+            echo "No Sparkle update key is configured; relying on Apple code signing validation."
             "$generator" "${args[@]}"
           fi
           rm -rf artifacts/old_updates
+          # The default notes are embedded in the appcast; the localized ones are linked by URL
+          # and must stay in artifacts/ so the release upload publishes them.
           rm -f "artifacts/${MACOS_ASSET_NAME%.dmg}.md"
           test -s "artifacts/$MACOS_ASSET_NAME"
 

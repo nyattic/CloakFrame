@@ -150,6 +150,7 @@ exported compilation database.
 | --- | --- | --- |
 | `BUILD_TESTING` | `ON` | Build and register the test suite |
 | `CLOAKFRAME_SELF_UPDATE` | `ON` | Include Velopack or Sparkle self-update support |
+| `CLOAKFRAME_SPARKLE_PUBLIC_KEY` | empty | Pin the macOS update signing key so Sparkle requires an EdDSA signature |
 | `CLOAKFRAME_WARNINGS_AS_ERRORS` | `OFF` | Promote compiler warnings to errors |
 | `CLOAKFRAME_FFMPEG_DIR` | empty | Bundle `ffmpeg` and `ffprobe` from this directory during installation |
 | `CLOAKFRAME_DIRECTML_DLL` | empty | Bundle DirectML with a Windows installation |
@@ -157,6 +158,29 @@ exported compilation database.
 
 Pass `-DCLOAKFRAME_SELF_UPDATE=OFF` for distribution packaging that must not
 embed the project's updater. The app then links users to GitHub Releases.
+
+### macOS update signing key
+
+Sparkle checks an EdDSA signature only when the bundle pins the matching public
+key, so `CLOAKFRAME_SPARKLE_PUBLIC_KEY` decides whether macOS updates have a
+trust anchor of their own or rely on Apple code signing alone. Configuring
+without it prints a warning.
+
+Create the key pair once, on a machine that is not the CI runner:
+
+```bash
+build/_deps/sparkle-src/bin/generate_keys
+```
+
+`generate_keys` stores the private key in the login keychain and prints the
+public key. Export the private key with `generate_keys -x private-key.txt`,
+store it as the `SPARKLE_ED_PRIVATE_KEY` repository secret, keep an offline
+copy, and delete the exported file. Store the printed public key as the
+`SPARKLE_ED_PUBLIC_KEY` repository variable; the release workflow passes it to
+CMake and refuses to publish if only one of the two is configured.
+
+Losing the private key means shipped clients reject every later update, so it
+has to outlive the machine that created it.
 
 ## Packaging
 
