@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 
 #include <opencv2/core.hpp>
 
@@ -8,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <vector>
 
 class QLocalServer;
 class QLocalSocket;
@@ -49,6 +51,15 @@ namespace cloakframe
 
     int crfForQuality(VideoQuality quality);
 
+    struct AudioStreamInfo
+    {
+        QString codec;
+        // ISO 639 code the source declares, empty when it declares none. Container metadata is
+        // stripped wholesale for privacy, so this one field is re-applied explicitly, the same
+        // way the image path allowlists individual EXIF tags.
+        QString language;
+    };
+
     struct VideoInfo
     {
         int width = 0;
@@ -63,10 +74,11 @@ namespace cloakframe
         int sarNum = 1;
         int sarDen = 1;
         qint64 estimatedFrameCount = 0;
-        bool hasAudio = false;
         bool isVfr = false;
         QString videoCodec;
-        QString audioCodec;
+        // Every audio stream, in stream order. The output keeps all of them, so this has to
+        // describe the whole source rather than just the first track.
+        std::vector<AudioStreamInfo> audioStreams;
         QString pixelFormat;
         QString colorTransfer;
 
@@ -137,8 +149,18 @@ namespace cloakframe
         [[nodiscard]] QString errorString() const;
         [[nodiscard]] QString encoderName() const;
 
+        // True once `open` has picked a hardware encoder. A caller that wants to retry in
+        // software after a failure needs this to know whether a retry can change anything.
+        [[nodiscard]] bool usedHardwareEncoder() const;
+
+        // True when the encoder process itself failed. Publication refusals and source-identity
+        // failures leave this false, because re-encoding cannot change their outcome.
+        [[nodiscard]] bool encoderFailed() const;
+
     private:
         void releaseStaging();
+
+        void noteEncoderFailure(const QString &message);
 
         std::unique_ptr<QProcess> process_;
         std::unique_ptr<QTemporaryDir> stagingDirectory_;
@@ -150,5 +172,7 @@ namespace cloakframe
         int frameHeight_ = 0;
         QString error_;
         QString encoderName_;
+        bool usedHardwareEncoder_ = false;
+        bool encoderFailed_ = false;
     };
 }

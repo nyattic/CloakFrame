@@ -410,7 +410,8 @@ namespace cloakframe
         const auto sourceSnapshot = captureVideoSourceSnapshot(sourcePath);
         if (!sourceSnapshot)
         {
-            result.error = trVideoProcessor("Could not inspect the source video.");
+            result.error = trVideoProcessor(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoProcessor", "Could not inspect the source video."));
             return result;
         }
         const auto originalIsUnchanged = [&]()
@@ -420,8 +421,8 @@ namespace cloakframe
         };
         const auto rejectChangedSource = [&]()
         {
-            result.error = trVideoProcessor(
-                "The source video changed during processing. Start the operation again.");
+            result.error = trVideoProcessor(QT_TRANSLATE_NOOP("cloakframe::VideoProcessor",
+                "The source video changed during processing. Start the operation again."));
             spdlog::warn("Video source changed while processing: {}", sourcePath.toStdString());
         };
 
@@ -432,8 +433,8 @@ namespace cloakframe
             QDir(stagingBase).filePath(QStringLiteral(".cloakframe-snapshot-XXXXXX")));
         if (!sourceStaging.isValid())
         {
-            result.error =
-                trVideoProcessor("Could not create a private snapshot of the source video.");
+            result.error = trVideoProcessor(QT_TRANSLATE_NOOP("cloakframe::VideoProcessor",
+                "Could not create a private snapshot of the source video."));
             return result;
         }
         std::error_code snapshotError;
@@ -459,8 +460,8 @@ namespace cloakframe
             }
             else
             {
-                result.error =
-                    trVideoProcessor("Could not create a private snapshot of the source video.");
+                result.error = trVideoProcessor(QT_TRANSLATE_NOOP("cloakframe::VideoProcessor",
+                    "Could not create a private snapshot of the source video."));
             }
             return result;
         }
@@ -469,8 +470,8 @@ namespace cloakframe
         const auto processingSnapshot = captureVideoSourceSnapshot(processingSource);
         if (!processingSnapshot)
         {
-            result.error =
-                trVideoProcessor("Could not create a private snapshot of the source video.");
+            result.error = trVideoProcessor(QT_TRANSLATE_NOOP("cloakframe::VideoProcessor",
+                "Could not create a private snapshot of the source video."));
             return result;
         }
         const auto sourceIsUnchanged = [&]()
@@ -558,8 +559,8 @@ namespace cloakframe
                 cutDetector.push(frame);
                 if (static_cast<qint64>(frameDetections.size()) >= kMaxVideoFrameCount)
                 {
-                    result.error =
-                        trVideoProcessor("The video frame count exceeds the safety limit.");
+                    result.error = trVideoProcessor(QT_TRANSLATE_NOOP("cloakframe::VideoProcessor",
+                        "The video frame count exceeds the safety limit."));
                     return result;
                 }
                 FaceDetections detections = detect ? detect(frame) : FaceDetections{};
@@ -570,8 +571,8 @@ namespace cloakframe
                     });
                 if (detections.size() > kMaxVideoDetectionsPerFrame)
                 {
-                    result.error =
-                        trVideoProcessor("Video detection data exceeds the safety limit.");
+                    result.error = trVideoProcessor(QT_TRANSLATE_NOOP("cloakframe::VideoProcessor",
+                        "Video detection data exceeds the safety limit."));
                     return result;
                 }
                 const auto capacity = static_cast<std::uint64_t>(detections.capacity());
@@ -579,15 +580,15 @@ namespace cloakframe
                 const auto elementBytes = sizeof(FaceDetection);
                 if (capacity > (maximum - sizeof(FaceDetections)) / elementBytes)
                 {
-                    result.error =
-                        trVideoProcessor("Video detection data exceeds the safety limit.");
+                    result.error = trVideoProcessor(QT_TRANSLATE_NOOP("cloakframe::VideoProcessor",
+                        "Video detection data exceeds the safety limit."));
                     return result;
                 }
                 const auto additional = sizeof(FaceDetections) + capacity * elementBytes;
                 if (additional > detectionBudget || detectionMemory > detectionBudget - additional)
                 {
-                    result.error =
-                        trVideoProcessor("Video detection data exceeds the safety limit.");
+                    result.error = trVideoProcessor(QT_TRANSLATE_NOOP("cloakframe::VideoProcessor",
+                        "Video detection data exceeds the safety limit."));
                     return result;
                 }
                 detectionMemory += additional;
@@ -627,7 +628,8 @@ namespace cloakframe
         result.frameCount = frameCount;
         if (frameCount == 0)
         {
-            result.error = trVideoProcessor("No frames could be decoded.");
+            result.error = trVideoProcessor(
+                QT_TRANSLATE_NOOP("cloakframe::VideoProcessor", "No frames could be decoded."));
             return result;
         }
 
@@ -659,7 +661,8 @@ namespace cloakframe
         }
         catch (const std::exception &)
         {
-            result.error = trVideoProcessor("Video tracking data exceeds the safety limit.");
+            result.error = trVideoProcessor(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoProcessor", "Video tracking data exceeds the safety limit."));
             return result;
         }
         scaleTracksToNative(tracks, scaleX, scaleY);
@@ -715,7 +718,8 @@ namespace cloakframe
         }
         catch (const std::exception &)
         {
-            result.error = trVideoProcessor("Video tracking data exceeds the safety limit.");
+            result.error = trVideoProcessor(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoProcessor", "Video tracking data exceeds the safety limit."));
             return result;
         }
         tracks.clear();
@@ -727,250 +731,295 @@ namespace cloakframe
             frameDetections.shrink_to_fit();
         }
 
-        VideoFrameReader reader;
-        if (!reader.open(tools, processingSource, activeInfo))
+        struct EncodeAttempt
         {
-            result.error = reader.errorString();
-            return result;
-        }
-        if (!sourceIsUnchanged())
-        {
-            rejectChangedSource();
-            return result;
-        }
-        VideoFrameWriter writer;
-        if (!writer.open(tools,
-                destinationPath,
-                processingSource,
-                activeInfo,
-                options.crf,
-                options.hardwareEncoder,
-                options.codec,
-                options.outputRootPath,
-                options.outputRelativePath))
-        {
-            result.error = writer.errorString();
-            return result;
-        }
-        if (!sourceIsUnchanged())
-        {
-            rejectChangedSource();
-            writer.abort();
-            return result;
-        }
-        result.encoderName = writer.encoderName();
-
-        StageTimer readTimer;
-        StageTimer maskTimer;
-        StageTimer writeTimer;
-        const VideoMaskingPlan maskingPlan = videoMaskingPlan(
-            reader.frameWidth(), reader.frameHeight(), std::thread::hardware_concurrency());
-        const int workerCount = maskingPlan.workerCount;
-        const int batchCap = maskingPlan.batchFrames;
-        spdlog::info("Video masking plan: {} worker(s), {} frame batch, {} MiB raw-frame cap",
-            workerCount,
-            batchCap,
-            (maskingPlan.frameBytes * static_cast<qint64>(batchCap)) / (qint64{1024} * 1024));
-        const ScopedCvThreads maskThreads(1);
-        MaskWorkerPool maskPool(hasTrackedRegions ? workerCount : 1);
-        qint64 frameIndex = 0;
-        std::vector<cv::Mat> batch;
-        batch.reserve(static_cast<std::size_t>(batchCap));
-        for (;;)
-        {
-            batch.clear();
-            const auto readMark = StageTimer::now();
-            for (int slot = 0; slot < batchCap; ++slot)
-            {
-                if (cancelled.load(std::memory_order_acquire))
-                {
-                    break;
-                }
-                cv::Mat frame;
-                if (!reader.readFrame(frame, canContinue))
-                {
-                    break;
-                }
-                batch.push_back(std::move(frame));
-            }
-            readTimer.add(readMark);
-            if (batch.empty())
-            {
-                break;
-            }
-            if (cancelled.load(std::memory_order_acquire))
-            {
-                writer.abort();
-                result.status = VideoProcessStatus::Cancelled;
-                return result;
-            }
-            if (frameIndex + static_cast<qint64>(batch.size()) > frameCount)
-            {
-                result.error = trVideoProcessor("The source video changed during processing (frame "
-                                                "count differs between passes).");
-                writer.abort();
-                return result;
-            }
-
-            const auto maskMark = StageTimer::now();
-            const qint64 baseIndex = frameIndex;
-            std::atomic<int> nextSlot{0};
-            std::atomic<bool> maskFailed{false};
-            std::atomic<bool> maskCancelled{false};
-            const auto maskWorker = [&]()
-            {
-                int slot;
-                while ((slot = nextSlot.fetch_add(1, std::memory_order_relaxed))
-                       < static_cast<int>(batch.size()))
-                {
-                    if (cancelled.load(std::memory_order_acquire))
-                    {
-                        maskCancelled.store(true, std::memory_order_relaxed);
-                        return;
-                    }
-                    try
-                    {
-                        const auto &toRedact =
-                            frameDetections[static_cast<std::size_t>(baseIndex + slot)];
-                        applyAnonymization(batch[static_cast<std::size_t>(slot)],
-                            toRedact,
-                            options.method,
-                            options.mosaicBlockSize,
-                            options.paddingRatio,
-                            options.shape,
-                            options.softEdges,
-                            options.customImage);
-                    }
-                    catch (...)
-                    {
-                        maskFailed.store(true, std::memory_order_relaxed);
-                    }
-                }
-            };
-            if (hasTrackedRegions)
-            {
-                maskPool.run(maskWorker);
-            }
-            maskTimer.add(maskMark);
-            if (maskFailed.load(std::memory_order_relaxed))
-            {
-                result.error = trVideoProcessor("Video redaction failed.");
-                writer.abort();
-                return result;
-            }
-            if (maskCancelled.load(std::memory_order_relaxed)
-                || cancelled.load(std::memory_order_acquire))
-            {
-                writer.abort();
-                result.status = VideoProcessStatus::Cancelled;
-                return result;
-            }
-
-            const auto writeMark = StageTimer::now();
-            for (auto &frame : batch)
-            {
-                if (cancelled.load(std::memory_order_acquire))
-                {
-                    writer.abort();
-                    result.status = VideoProcessStatus::Cancelled;
-                    return result;
-                }
-                if (!writer.writeFrame(frame, canContinue))
-                {
-                    writer.abort();
-                    writeTimer.add(writeMark);
-                    if (cancelled.load(std::memory_order_acquire))
-                    {
-                        result.status = VideoProcessStatus::Cancelled;
-                    }
-                    else if (!sourceIsUnchanged())
-                    {
-                        rejectChangedSource();
-                    }
-                    else
-                    {
-                        result.error = writer.errorString();
-                    }
-                    return result;
-                }
-                ++frameIndex;
-                if (progress)
-                {
-                    progress(2, frameIndex, frameCount);
-                }
-            }
-            writeTimer.add(writeMark);
-        }
-        if (cancelled.load(std::memory_order_acquire))
-        {
-            writer.abort();
-            result.status = VideoProcessStatus::Cancelled;
-            return result;
-        }
-        if (!sourceIsUnchanged())
-        {
-            rejectChangedSource();
-            writer.abort();
-            return result;
-        }
-        if (!reader.errorString().isEmpty())
-        {
-            result.error = reader.errorString();
-            writer.abort();
-            return result;
-        }
-        if (frameIndex == 0)
-        {
-            result.error = trVideoProcessor("No frames could be decoded.");
-            writer.abort();
-            return result;
-        }
-        if (frameIndex != frameCount)
-        {
-            result.error = trVideoProcessor(
-                "The source video changed during processing (frame count differs between passes).");
-            writer.abort();
-            return result;
-        }
-        if (!sourceIsUnchanged())
-        {
-            rejectChangedSource();
-            writer.abort();
-            return result;
-        }
-        if (cancelled.load(std::memory_order_acquire))
-        {
-            writer.abort();
-            result.status = VideoProcessStatus::Cancelled;
-            return result;
-        }
-
-        StageTimer finishTimer;
-        const auto finishMark = StageTimer::now();
-        const auto canPublish = [&]()
-        {
-            return !cancelled.load(std::memory_order_acquire) && sourceIsUnchanged();
+            VideoProcessStatus status = VideoProcessStatus::Failed;
+            // Set when the encoder process itself failed, so the same frames may still encode
+            // with a different encoder.
+            bool encoderFailed = false;
+            bool usedHardwareEncoder = false;
         };
-        const bool finished = writer.finish(canPublish);
-        finishTimer.add(finishMark);
-        if (!finished)
+
+        // A hardware encoder can clear its start-up probe and still fail once real frames reach
+        // it. Nothing is published until `finish` succeeds, so a failed attempt can be dropped
+        // and the whole pass replayed on the software encoder.
+        const auto runEncodePass = [&](const bool allowHardwareEncoder) -> EncodeAttempt
         {
+            EncodeAttempt attempt;
+            VideoFrameReader reader;
+            if (!reader.open(tools, processingSource, activeInfo))
+            {
+                result.error = reader.errorString();
+                return attempt;
+            }
+            if (!sourceIsUnchanged())
+            {
+                rejectChangedSource();
+                return attempt;
+            }
+            VideoFrameWriter writer;
+            if (!writer.open(tools,
+                    destinationPath,
+                    processingSource,
+                    activeInfo,
+                    options.crf,
+                    allowHardwareEncoder,
+                    options.codec,
+                    options.outputRootPath,
+                    options.outputRelativePath))
+            {
+                attempt.usedHardwareEncoder = writer.usedHardwareEncoder();
+                attempt.encoderFailed = writer.encoderFailed();
+                result.error = writer.errorString();
+                return attempt;
+            }
+            attempt.usedHardwareEncoder = writer.usedHardwareEncoder();
+            if (!sourceIsUnchanged())
+            {
+                rejectChangedSource();
+                writer.abort();
+                return attempt;
+            }
+            result.encoderName = writer.encoderName();
+
+            StageTimer readTimer;
+            StageTimer maskTimer;
+            StageTimer writeTimer;
+            const VideoMaskingPlan maskingPlan = videoMaskingPlan(
+                reader.frameWidth(), reader.frameHeight(), std::thread::hardware_concurrency());
+            const int workerCount = maskingPlan.workerCount;
+            const int batchCap = maskingPlan.batchFrames;
+            spdlog::info("Video masking plan: {} worker(s), {} frame batch, {} MiB raw-frame cap",
+                workerCount,
+                batchCap,
+                (maskingPlan.frameBytes * static_cast<qint64>(batchCap)) / (qint64{1024} * 1024));
+            const ScopedCvThreads maskThreads(1);
+            MaskWorkerPool maskPool(hasTrackedRegions ? workerCount : 1);
+            qint64 frameIndex = 0;
+            std::vector<cv::Mat> batch;
+            batch.reserve(static_cast<std::size_t>(batchCap));
+            for (;;)
+            {
+                batch.clear();
+                const auto readMark = StageTimer::now();
+                for (int slot = 0; slot < batchCap; ++slot)
+                {
+                    if (cancelled.load(std::memory_order_acquire))
+                    {
+                        break;
+                    }
+                    cv::Mat frame;
+                    if (!reader.readFrame(frame, canContinue))
+                    {
+                        break;
+                    }
+                    batch.push_back(std::move(frame));
+                }
+                readTimer.add(readMark);
+                if (batch.empty())
+                {
+                    break;
+                }
+                if (cancelled.load(std::memory_order_acquire))
+                {
+                    writer.abort();
+                    attempt.status = VideoProcessStatus::Cancelled;
+                    return attempt;
+                }
+                if (frameIndex + static_cast<qint64>(batch.size()) > frameCount)
+                {
+                    result.error = trVideoProcessor(QT_TRANSLATE_NOOP("cloakframe::VideoProcessor",
+                        "The source video changed during processing (frame "
+                        "count differs between passes)."));
+                    writer.abort();
+                    return attempt;
+                }
+
+                const auto maskMark = StageTimer::now();
+                const qint64 baseIndex = frameIndex;
+                std::atomic<int> nextSlot{0};
+                std::atomic<bool> maskFailed{false};
+                std::atomic<bool> maskCancelled{false};
+                const auto maskWorker = [&]()
+                {
+                    int slot;
+                    while ((slot = nextSlot.fetch_add(1, std::memory_order_relaxed))
+                           < static_cast<int>(batch.size()))
+                    {
+                        if (cancelled.load(std::memory_order_acquire))
+                        {
+                            maskCancelled.store(true, std::memory_order_relaxed);
+                            return;
+                        }
+                        try
+                        {
+                            const auto &toRedact =
+                                frameDetections[static_cast<std::size_t>(baseIndex + slot)];
+                            applyAnonymization(batch[static_cast<std::size_t>(slot)],
+                                toRedact,
+                                options.method,
+                                options.mosaicBlockSize,
+                                options.paddingRatio,
+                                options.shape,
+                                options.softEdges,
+                                options.customImage);
+                        }
+                        catch (...)
+                        {
+                            maskFailed.store(true, std::memory_order_relaxed);
+                        }
+                    }
+                };
+                if (hasTrackedRegions)
+                {
+                    maskPool.run(maskWorker);
+                }
+                maskTimer.add(maskMark);
+                if (maskFailed.load(std::memory_order_relaxed))
+                {
+                    result.error = trVideoProcessor(
+                        QT_TRANSLATE_NOOP("cloakframe::VideoProcessor", "Video redaction failed."));
+                    writer.abort();
+                    return attempt;
+                }
+                if (maskCancelled.load(std::memory_order_relaxed)
+                    || cancelled.load(std::memory_order_acquire))
+                {
+                    writer.abort();
+                    attempt.status = VideoProcessStatus::Cancelled;
+                    return attempt;
+                }
+
+                const auto writeMark = StageTimer::now();
+                for (auto &frame : batch)
+                {
+                    if (cancelled.load(std::memory_order_acquire))
+                    {
+                        writer.abort();
+                        attempt.status = VideoProcessStatus::Cancelled;
+                        return attempt;
+                    }
+                    if (!writer.writeFrame(frame, canContinue))
+                    {
+                        writer.abort();
+                        writeTimer.add(writeMark);
+                        if (cancelled.load(std::memory_order_acquire))
+                        {
+                            attempt.status = VideoProcessStatus::Cancelled;
+                        }
+                        else if (!sourceIsUnchanged())
+                        {
+                            rejectChangedSource();
+                        }
+                        else
+                        {
+                            attempt.encoderFailed = writer.encoderFailed();
+                            result.error = writer.errorString();
+                        }
+                        return attempt;
+                    }
+                    ++frameIndex;
+                    if (progress)
+                    {
+                        progress(2, frameIndex, frameCount);
+                    }
+                }
+                writeTimer.add(writeMark);
+            }
             if (cancelled.load(std::memory_order_acquire))
             {
-                result.status = VideoProcessStatus::Cancelled;
-                return result;
+                writer.abort();
+                attempt.status = VideoProcessStatus::Cancelled;
+                return attempt;
             }
-            result.error = writer.errorString();
+            if (!sourceIsUnchanged())
+            {
+                rejectChangedSource();
+                writer.abort();
+                return attempt;
+            }
+            if (!reader.errorString().isEmpty())
+            {
+                result.error = reader.errorString();
+                writer.abort();
+                return attempt;
+            }
+            if (frameIndex == 0)
+            {
+                result.error = trVideoProcessor(
+                    QT_TRANSLATE_NOOP("cloakframe::VideoProcessor", "No frames could be decoded."));
+                writer.abort();
+                return attempt;
+            }
+            if (frameIndex != frameCount)
+            {
+                result.error = trVideoProcessor(QT_TRANSLATE_NOOP("cloakframe::VideoProcessor",
+                    "The source video changed during processing (frame "
+                    "count differs between passes)."));
+                writer.abort();
+                return attempt;
+            }
+            if (!sourceIsUnchanged())
+            {
+                rejectChangedSource();
+                writer.abort();
+                return attempt;
+            }
+            if (cancelled.load(std::memory_order_acquire))
+            {
+                writer.abort();
+                attempt.status = VideoProcessStatus::Cancelled;
+                return attempt;
+            }
+
+            StageTimer finishTimer;
+            const auto finishMark = StageTimer::now();
+            const auto canPublish = [&]()
+            {
+                return !cancelled.load(std::memory_order_acquire) && sourceIsUnchanged();
+            };
+            const bool finished = writer.finish(canPublish);
+            finishTimer.add(finishMark);
+            if (!finished)
+            {
+                if (cancelled.load(std::memory_order_acquire))
+                {
+                    attempt.status = VideoProcessStatus::Cancelled;
+                    return attempt;
+                }
+                attempt.encoderFailed = writer.encoderFailed();
+                result.error = writer.errorString();
+                return attempt;
+            }
+
+            spdlog::info("Pass 2 timing: decode {} ms, redact {} ms, encode-write {} ms, "
+                         "finalize {} ms ({} frames)",
+                readTimer.ms(),
+                maskTimer.ms(),
+                writeTimer.ms(),
+                finishTimer.ms(),
+                frameIndex);
+
+            attempt.status = VideoProcessStatus::Completed;
+            return attempt;
+        };
+
+        auto attempt = runEncodePass(options.hardwareEncoder);
+        if (attempt.status == VideoProcessStatus::Failed && attempt.encoderFailed
+            && attempt.usedHardwareEncoder && !cancelled.load(std::memory_order_acquire))
+        {
+            spdlog::warn("Hardware encoder {} failed while encoding ({}); retrying in software",
+                result.encoderName.toStdString(),
+                result.error.toStdString());
+            result.error.clear();
+            result.encoderName.clear();
+            attempt = runEncodePass(false);
+        }
+        if (attempt.status != VideoProcessStatus::Completed)
+        {
+            result.status = attempt.status;
             return result;
         }
-
-        spdlog::info("Pass 2 timing: decode {} ms, redact {} ms, encode-write {} ms, "
-                     "finalize {} ms ({} frames)",
-            readTimer.ms(),
-            maskTimer.ms(),
-            writeTimer.ms(),
-            finishTimer.ms(),
-            frameIndex);
 
         result.status = VideoProcessStatus::Completed;
         return result;

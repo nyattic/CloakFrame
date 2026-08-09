@@ -71,7 +71,8 @@ namespace cloakframe
             {
                 if (error)
                 {
-                    *error = trVideo("Could not read the FFmpeg checksum manifest.");
+                    *error = trVideo(QT_TRANSLATE_NOOP(
+                        "cloakframe::VideoIo", "Could not read the FFmpeg checksum manifest."));
                 }
                 return false;
             }
@@ -83,7 +84,8 @@ namespace cloakframe
             {
                 if (error)
                 {
-                    *error = trVideo("Could not read the bundled FFmpeg binary.");
+                    *error = trVideo(QT_TRANSLATE_NOOP(
+                        "cloakframe::VideoIo", "Could not read the bundled FFmpeg binary."));
                 }
                 return false;
             }
@@ -92,7 +94,8 @@ namespace cloakframe
             {
                 if (error)
                 {
-                    *error = trVideo("Could not read the bundled FFmpeg binary.");
+                    *error = trVideo(QT_TRANSLATE_NOOP(
+                        "cloakframe::VideoIo", "Could not read the bundled FFmpeg binary."));
                 }
                 return false;
             }
@@ -101,7 +104,8 @@ namespace cloakframe
             {
                 if (error)
                 {
-                    *error = trVideo("The bundled FFmpeg binary failed its integrity check.");
+                    *error = trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo",
+                        "The bundled FFmpeg binary failed its integrity check."));
                 }
                 return false;
             }
@@ -214,6 +218,24 @@ namespace cloakframe
                     .trimmed();
             }
             return process.errorString();
+        }
+
+        // Only a plain ISO 639 code is carried over. Anything else is container text of unknown
+        // provenance and is dropped with the rest of the metadata.
+        QString sanitizedLanguageTag(const QJsonValue &value)
+        {
+            const QString tag = value.toString();
+            if (tag.size() < 2 || tag.size() > 3 || tag == QLatin1String("und"))
+            {
+                return {};
+            }
+            const bool lettersOnly = std::all_of(tag.cbegin(),
+                tag.cend(),
+                [](const QChar character)
+                {
+                    return character >= QLatin1Char('a') && character <= QLatin1Char('z');
+                });
+            return lettersOnly ? tag : QString();
         }
 
         QString codecPrefix(const VideoCodec codec)
@@ -382,7 +404,8 @@ namespace cloakframe
         const auto ffprobe = locateTool("ffprobe");
         if (ffmpeg.path.isEmpty() || ffprobe.path.isEmpty())
         {
-            return fail(trVideo("FFmpeg was not found. Video processing is unavailable."));
+            return fail(trVideo(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoIo", "FFmpeg was not found. Video processing is unavailable.")));
         }
 
         QString checksumError;
@@ -398,7 +421,8 @@ namespace cloakframe
         const QString version = probeVersionLine(ffmpeg.path);
         if (version.isEmpty())
         {
-            return fail(trVideo("FFmpeg was found but could not be executed."));
+            return fail(trVideo(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoIo", "FFmpeg was found but could not be executed.")));
         }
 
         FfmpegTools tools;
@@ -465,7 +489,8 @@ namespace cloakframe
             process.kill();
             if (error)
             {
-                *error = trVideo("Could not inspect the video (ffprobe did not respond).");
+                *error = trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo",
+                    "Could not inspect the video (ffprobe did not respond)."));
             }
             return std::nullopt;
         }
@@ -473,8 +498,9 @@ namespace cloakframe
         {
             if (error)
             {
-                *error =
-                    trVideo("Could not inspect the video: %1").arg(processErrorDetail(process));
+                *error = trVideo(
+                    QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Could not inspect the video: %1"))
+                             .arg(processErrorDetail(process));
             }
             return std::nullopt;
         }
@@ -489,10 +515,13 @@ namespace cloakframe
         {
             const auto stream = entry.toObject();
             const auto type = stream.value("codec_type").toString();
-            if (type == "audio" && !info.hasAudio)
+            if (type == "audio")
             {
-                info.hasAudio = true;
-                info.audioCodec = stream.value("codec_name").toString();
+                AudioStreamInfo audio;
+                audio.codec = stream.value("codec_name").toString();
+                audio.language =
+                    sanitizedLanguageTag(stream.value("tags").toObject().value("language"));
+                info.audioStreams.push_back(std::move(audio));
                 continue;
             }
             if (type != "video" || videoFound)
@@ -591,7 +620,8 @@ namespace cloakframe
         {
             if (error)
             {
-                *error = trVideo("The file contains no video stream.");
+                *error = trVideo(
+                    QT_TRANSLATE_NOOP("cloakframe::VideoIo", "The file contains no video stream."));
             }
             return std::nullopt;
         }
@@ -602,40 +632,49 @@ namespace cloakframe
     {
         if (info.width <= 0 || info.height <= 0 || info.fpsNum <= 0 || info.fpsDen <= 0)
         {
-            return trVideo("the video stream could not be read");
+            return trVideo(
+                QT_TRANSLATE_NOOP("cloakframe::VideoIo", "the video stream could not be read"));
         }
         const qint64 pixelCount = static_cast<qint64>(info.width) * info.height;
         if (info.width > kMaxVideoDimension || info.height > kMaxVideoDimension
             || pixelCount > kMaxVideoPixelCount)
         {
-            return trVideo("the video resolution exceeds the safety limit");
+            return trVideo(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoIo", "the video resolution exceeds the safety limit"));
         }
         const double frameRate = info.fps();
         if (!std::isfinite(frameRate) || frameRate > kMaxVideoFrameRate)
         {
-            return trVideo("the video frame rate exceeds the safety limit");
+            return trVideo(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoIo", "the video frame rate exceeds the safety limit"));
         }
         if (!std::isfinite(info.durationSeconds) || info.durationSeconds < 0.0
             || info.durationSeconds > kMaxVideoDurationSeconds)
         {
-            return trVideo("the video duration exceeds the safety limit");
+            return trVideo(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoIo", "the video duration exceeds the safety limit"));
         }
         if (info.estimatedFrameCount < 0 || info.estimatedFrameCount > kMaxVideoFrameCount)
         {
-            return trVideo("the video frame count exceeds the safety limit");
+            return trVideo(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoIo", "the video frame count exceeds the safety limit"));
         }
         if (info.videoCodec != "h264" && info.videoCodec != "hevc")
         {
-            return trVideo("unsupported video codec '%1' (H.264/HEVC only)").arg(info.videoCodec);
+            return trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo",
+                               "unsupported video codec '%1' (H.264/HEVC only)"))
+                .arg(info.videoCodec);
         }
         static const QRegularExpression highBitDepth("(9|10|12|14|16)(le|be)?$");
         if (highBitDepth.match(info.pixelFormat).hasMatch())
         {
-            return trVideo("10-bit or higher bit depth is not supported yet");
+            return trVideo(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoIo", "10-bit or higher bit depth is not supported yet"));
         }
         if (info.colorTransfer == "smpte2084" || info.colorTransfer == "arib-std-b67")
         {
-            return trVideo("HDR video is not supported yet");
+            return trVideo(
+                QT_TRANSLATE_NOOP("cloakframe::VideoIo", "HDR video is not supported yet"));
         }
         return {};
     }
@@ -659,7 +698,7 @@ namespace cloakframe
         frameHeight_ = info.displayHeight();
         if (frameWidth_ <= 0 || frameHeight_ <= 0 || info.fpsNum <= 0 || info.fpsDen <= 0)
         {
-            error_ = trVideo("Invalid video dimensions.");
+            error_ = trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Invalid video dimensions."));
             return false;
         }
 
@@ -686,7 +725,8 @@ namespace cloakframe
                                      .arg(QRandomGenerator::global()->generate64(), 0, 16);
         if (!server_->listen(pipeName))
         {
-            error_ = trVideo("Could not start FFmpeg for decoding.");
+            error_ = trVideo(
+                QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Could not start FFmpeg for decoding."));
             server_.reset();
             return false;
         }
@@ -699,6 +739,10 @@ namespace cloakframe
                 "error",
                 "-nostdin",
                 "-y",
+                // A damaged stream must not decode into a silently shorter video. `-xerror`
+                // turns a recovered decode error into a nonzero exit, which the read loop
+                // reports instead of publishing whatever frames survived.
+                "-xerror",
                 "-i",
                 path,
                 "-map",
@@ -712,7 +756,8 @@ namespace cloakframe
                 sink});
         if (!process_->waitForStarted(kProcessStartTimeoutMs))
         {
-            error_ = trVideo("Could not start FFmpeg for decoding.");
+            error_ = trVideo(
+                QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Could not start FFmpeg for decoding."));
             process_.reset();
             server_.reset();
             return false;
@@ -738,7 +783,8 @@ namespace cloakframe
         if (!socket_)
         {
             process_->waitForFinished(kProcessStartTimeoutMs);
-            error_ = trVideo("Decoding failed: %1").arg(processErrorDetail(*process_));
+            error_ = trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Decoding failed: %1"))
+                         .arg(processErrorDetail(*process_));
             close();
             return false;
         }
@@ -802,13 +848,16 @@ namespace cloakframe
                 process_->waitForFinished(kProcessStartTimeoutMs);
                 if (received > 0)
                 {
-                    error_ =
-                        trVideo("Decoding ended mid-frame: %1").arg(processErrorDetail(*process_));
+                    error_ = trVideo(
+                        QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Decoding ended mid-frame: %1"))
+                                 .arg(processErrorDetail(*process_));
                 }
                 else if (process_->exitStatus() != QProcess::NormalExit
                          || process_->exitCode() != 0)
                 {
-                    error_ = trVideo("Decoding failed: %1").arg(processErrorDetail(*process_));
+                    error_ =
+                        trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Decoding failed: %1"))
+                            .arg(processErrorDetail(*process_));
                 }
                 return false;
             }
@@ -825,7 +874,8 @@ namespace cloakframe
                 const qint64 remaining = kProcessIoTimeoutMs - waitTimer.elapsed();
                 if (remaining <= 0)
                 {
-                    error_ = trVideo("Decoding timed out.");
+                    error_ =
+                        trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Decoding timed out."));
                     atEnd_ = true;
                     return false;
                 }
@@ -881,15 +931,17 @@ namespace cloakframe
     {
         abort();
         error_.clear();
+        encoderFailed_ = false;
         frameWidth_ = info.displayWidth();
         frameHeight_ = info.displayHeight();
         if (frameWidth_ <= 0 || frameHeight_ <= 0 || info.fpsNum <= 0 || info.fpsDen <= 0)
         {
-            error_ = trVideo("Invalid video dimensions.");
+            error_ = trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Invalid video dimensions."));
             return false;
         }
 
-        encoderName_ = softwareEncoderName(codec);
+        const QString softwareEncoder = softwareEncoderName(codec);
+        encoderName_ = softwareEncoder;
         if (hardwareEncoder)
         {
             encoderName_ = selectVideoEncoder(tools,
@@ -899,6 +951,7 @@ namespace cloakframe
                 info.fpsNum,
                 info.fpsDen);
         }
+        usedHardwareEncoder_ = encoderName_ != softwareEncoder;
         spdlog::info("Video encoder: {}", encoderName_.toStdString());
 
         destinationPath_ = destination;
@@ -912,13 +965,14 @@ namespace cloakframe
         if (!stagingDirectory_->isValid())
         {
             stagingDirectory_.reset();
-            error_ = trVideo("Could not create a temporary directory for encoding.");
+            error_ = trVideo(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoIo", "Could not create a temporary directory for encoding."));
             return false;
         }
         tempPath_ = stagingDirectory_->filePath(QStringLiteral("video.mp4"));
 
         static const QStringList mp4CompatibleAudio = {"aac", "mp3", "ac3", "eac3", "alac"};
-        const bool copyAudio = info.hasAudio && mp4CompatibleAudio.contains(info.audioCodec);
+        const bool hasAudio = !info.audioStreams.empty();
 
         QStringList arguments = {
             "-v",
@@ -935,7 +989,7 @@ namespace cloakframe
             "-i",
             "-",
         };
-        if (info.hasAudio)
+        if (hasAudio)
         {
             // The encoded video covers the video stream's own interval, so the audio has to be
             // taken from that same interval rather than from the container origin.
@@ -948,9 +1002,14 @@ namespace cloakframe
                 arguments << "-t" << QString::number(info.durationSeconds, 'f', 3);
             }
         }
-        arguments << "-i" << audioSource << "-map" << "0:v:0"
-                  << "-map" << "1:a:0?" << videoEncoderArgs(encoderName_, crf) << "-pix_fmt"
-                  << "yuv420p";
+        arguments << "-i" << audioSource << "-map" << "0:v:0";
+        if (hasAudio)
+        {
+            // Every audio stream, not just the first: commentary, alternate languages and
+            // descriptive tracks must survive anonymization.
+            arguments << "-map" << "1:a?";
+        }
+        arguments << videoEncoderArgs(encoderName_, crf) << "-pix_fmt" << "yuv420p";
         if (codec == VideoCodec::Hevc)
         {
             arguments << "-tag:v" << "hvc1";
@@ -972,15 +1031,25 @@ namespace cloakframe
         {
             arguments << "-vf" << videoFilters.join(QLatin1Char(','));
         }
-        if (info.hasAudio)
+        for (std::size_t stream = 0; stream < info.audioStreams.size(); ++stream)
         {
-            if (copyAudio)
+            // Output audio stream `stream` is input audio stream `stream`, because every one of
+            // them is mapped in order. Only the streams MP4 cannot carry are re-encoded.
+            const auto &audio = info.audioStreams[stream];
+            const auto index = static_cast<int>(stream);
+            if (mp4CompatibleAudio.contains(audio.codec))
             {
-                arguments << "-c:a" << "copy";
+                arguments << QString("-c:a:%1").arg(index) << "copy";
             }
             else
             {
-                arguments << "-c:a" << "aac" << "-b:a" << "192k";
+                arguments << QString("-c:a:%1").arg(index) << "aac" << QString("-b:a:%1").arg(index)
+                          << "192k";
+            }
+            if (!audio.language.isEmpty())
+            {
+                arguments << QString("-metadata:s:a:%1").arg(index)
+                          << QString("language=%1").arg(audio.language);
             }
         }
         arguments << "-map_metadata" << "-1"
@@ -992,7 +1061,8 @@ namespace cloakframe
         process_->start(tools.ffmpegPath, arguments);
         if (!process_->waitForStarted(kProcessStartTimeoutMs))
         {
-            error_ = trVideo("Could not start FFmpeg for encoding.");
+            noteEncoderFailure(trVideo(
+                QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Could not start FFmpeg for encoding.")));
             process_.reset();
             releaseStaging();
             return false;
@@ -1009,13 +1079,15 @@ namespace cloakframe
         }
         if (!process_ || process_->state() != QProcess::Running)
         {
-            error_ = trVideo("Encoding failed: %1")
-                         .arg(process_ ? processErrorDetail(*process_) : QString());
+            noteEncoderFailure(
+                trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Encoding failed: %1"))
+                    .arg(process_ ? processErrorDetail(*process_) : QString()));
             return false;
         }
         if (frame.cols != frameWidth_ || frame.rows != frameHeight_ || frame.type() != CV_8UC3)
         {
-            error_ = trVideo("Internal error: frame does not match the video format.");
+            error_ = trVideo(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoIo", "Internal error: frame does not match the video format."));
             return false;
         }
 
@@ -1037,7 +1109,9 @@ namespace cloakframe
                 reinterpret_cast<const char *>(continuous.data) + written, frameBytes - written);
             if (chunk < 0 || process_->state() != QProcess::Running)
             {
-                error_ = trVideo("Encoding failed: %1").arg(processErrorDetail(*process_));
+                noteEncoderFailure(
+                    trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Encoding failed: %1"))
+                        .arg(processErrorDetail(*process_)));
                 return false;
             }
             written += chunk;
@@ -1054,13 +1128,17 @@ namespace cloakframe
                     }
                     if (process_->state() != QProcess::Running)
                     {
-                        error_ = trVideo("Encoding failed: %1").arg(processErrorDetail(*process_));
+                        noteEncoderFailure(
+                            trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Encoding failed: %1"))
+                                .arg(processErrorDetail(*process_)));
                         return false;
                     }
                     const qint64 remaining = kProcessIoTimeoutMs - waitTimer.elapsed();
                     if (remaining <= 0)
                     {
-                        error_ = trVideo("Encoding failed: %1").arg(processErrorDetail(*process_));
+                        noteEncoderFailure(
+                            trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Encoding failed: %1"))
+                                .arg(processErrorDetail(*process_)));
                         return false;
                     }
                     writtenToProcess = process_->waitForBytesWritten(
@@ -1085,14 +1163,16 @@ namespace cloakframe
         {
             if (publishGuard && !publishGuard())
             {
-                error_ = trVideo("The source video changed during processing.");
+                error_ = trVideo(QT_TRANSLATE_NOOP(
+                    "cloakframe::VideoIo", "The source video changed during processing."));
                 abort();
                 return false;
             }
             const qint64 remaining = kProcessFinishTimeoutMs - finishTimer.elapsed();
             if (remaining <= 0)
             {
-                error_ = trVideo("Encoding timed out while finalizing.");
+                noteEncoderFailure(trVideo(QT_TRANSLATE_NOOP(
+                    "cloakframe::VideoIo", "Encoding timed out while finalizing.")));
                 abort();
                 return false;
             }
@@ -1101,7 +1181,9 @@ namespace cloakframe
         const bool ok = process_->exitStatus() == QProcess::NormalExit && process_->exitCode() == 0;
         if (!ok)
         {
-            error_ = trVideo("Encoding failed: %1").arg(processErrorDetail(*process_));
+            noteEncoderFailure(
+                trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo", "Encoding failed: %1"))
+                    .arg(processErrorDetail(*process_)));
             abort();
             return false;
         }
@@ -1110,7 +1192,8 @@ namespace cloakframe
         if (publishGuard && !publishGuard())
         {
             releaseStaging();
-            error_ = trVideo("The source video changed during processing.");
+            error_ = trVideo(QT_TRANSLATE_NOOP(
+                "cloakframe::VideoIo", "The source video changed during processing."));
             return false;
         }
 
@@ -1159,13 +1242,16 @@ namespace cloakframe
             releaseStaging();
             if (!guardAccepted)
             {
-                error_ = trVideo("The source video changed during processing.");
+                error_ = trVideo(QT_TRANSLATE_NOOP(
+                    "cloakframe::VideoIo", "The source video changed during processing."));
             }
             else
             {
                 error_ = QFileInfo::exists(destinationPath_)
-                             ? trVideo("The output file already exists.")
-                             : trVideo("Could not move the finished video into place.");
+                             ? trVideo(QT_TRANSLATE_NOOP(
+                                   "cloakframe::VideoIo", "The output file already exists."))
+                             : trVideo(QT_TRANSLATE_NOOP("cloakframe::VideoIo",
+                                   "Could not move the finished video into place."));
             }
             return false;
         }
@@ -1212,5 +1298,21 @@ namespace cloakframe
     QString VideoFrameWriter::encoderName() const
     {
         return encoderName_;
+    }
+
+    bool VideoFrameWriter::usedHardwareEncoder() const
+    {
+        return usedHardwareEncoder_;
+    }
+
+    bool VideoFrameWriter::encoderFailed() const
+    {
+        return encoderFailed_;
+    }
+
+    void VideoFrameWriter::noteEncoderFailure(const QString &message)
+    {
+        encoderFailed_ = true;
+        error_ = message;
     }
 }

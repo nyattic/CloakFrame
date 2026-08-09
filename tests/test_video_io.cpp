@@ -12,6 +12,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cmath>
@@ -118,6 +119,83 @@ namespace
                        "-c",
                        "copy",
                        path});
+    }
+
+    // A container that still probes as a supported video, but whose bitstream makes the decoder
+    // report errors and carry on. Which byte a given corruption lands on depends on the local
+    // encoder, so candidates are tried until one reproduces the hazard: a decode that reports
+    // errors and still exits 0.
+    bool generateRecoverablyCorruptSample(
+        const cloakframe::FfmpegTools &tools, const QString &directory, const QString &path)
+    {
+        const QString clean = directory + "/decode-clean.mp4";
+        if (!runFfmpeg(tools,
+                {"-v",
+                    "error",
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "testsrc=size=128x96:rate=10:duration=6",
+                    "-c:v",
+                    "libx264",
+                    "-g",
+                    "10",
+                    "-pix_fmt",
+                    "yuv420p",
+                    clean}))
+        {
+            return false;
+        }
+
+        for (const int amount : {1000, 100, 10})
+        {
+            if (!runFfmpeg(tools,
+                    {"-v",
+                        "error",
+                        "-y",
+                        "-i",
+                        clean,
+                        "-map",
+                        "0:v:0",
+                        "-c",
+                        "copy",
+                        "-bsf:v",
+                        QString("noise=amount=%1").arg(amount),
+                        path}))
+            {
+                continue;
+            }
+
+            QProcess decode;
+            decode.setStandardOutputFile(QProcess::nullDevice());
+            decode.start(tools.ffmpegPath,
+                {"-v",
+                    "error",
+                    "-nostdin",
+                    "-y",
+                    "-i",
+                    path,
+                    "-map",
+                    "0:v:0",
+                    "-f",
+                    "rawvideo",
+                    "-pix_fmt",
+                    "bgr24",
+                    "-"});
+            if (!decode.waitForStarted(15000) || !decode.waitForFinished(60000))
+            {
+                decode.kill();
+                continue;
+            }
+            const bool reportedErrors = !decode.readAllStandardError().trimmed().isEmpty();
+            if (decode.exitStatus() == QProcess::NormalExit && decode.exitCode() == 0
+                && reportedErrors)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     QString rawProbeOutput(const cloakframe::FfmpegTools &tools, const QString &path)
@@ -351,6 +429,222 @@ namespace
         assert(written->width == 720 && written->height == 576);
         assert(written->sarNum == 16 && written->sarDen == 15);
     }
+
+    void testEveryAudioStreamSurvives(
+        const cloakframe::FfmpegTools &tools, const QString &directory)
+    {
+        // Two audio streams, one of them in a codec MP4 cannot carry, so both mapping and
+        // per-stream codec selection are exercised.
+        const QString source = directory + "/two-audio.mp4";
+        assert(runFfmpeg(tools,
+            {"-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=128x96:rate=10:duration=2",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=2",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=880:duration=2",
+                "-map",
+                "0:v:0",
+                "-map",
+                "1:a:0",
+                "-map",
+                "2:a:0",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a:0",
+                "aac",
+                "-c:a:1",
+                "flac",
+                "-metadata:s:a:1",
+                "language=jpn",
+                source}));
+
+        const auto info = cloakframe::probeVideo(tools, source);
+        assert(info);
+        assert(info->audioStreams.size() == 2);
+        assert(info->audioStreams.at(0).codec == "aac");
+        assert(info->audioStreams.at(1).codec == "flac");
+        assert(info->audioStreams.at(1).language == "jpn");
+
+        const QString output = directory + "/two-audio-out.mp4";
+        cloakframe::VideoProcessOptions options;
+        options.hardwareEncoder = false;
+        std::atomic<bool> cancelled{false};
+        const auto result = cloakframe::processVideo(
+            tools,
+            source,
+            output,
+            *info,
+            options,
+            [](const cv::Mat &)
+            {
+                return cloakframe::FaceDetections{};
+            },
+            cancelled);
+        assert(result.status == cloakframe::VideoProcessStatus::Completed);
+
+        const auto written = cloakframe::probeVideo(tools, output);
+        assert(written);
+        assert(written->audioStreams.size() == 2);
+        // The compatible stream is copied; the one MP4 cannot carry is re-encoded.
+        assert(written->audioStreams.at(0).codec == "aac");
+        assert(written->audioStreams.at(1).codec == "aac");
+        assert(written->audioStreams.at(1).language == "jpn");
+    }
+
+    void testRecoveredDecodeErrorsDoNotPublish(
+        const cloakframe::FfmpegTools &tools, const QString &directory)
+    {
+        const QString source = directory + "/decode-errors.mp4";
+        assert(generateRecoverablyCorruptSample(tools, directory, source));
+
+        // The container itself still describes a supported video, which is what made the
+        // damaged stream reach the encoder unnoticed.
+        const auto info = cloakframe::probeVideo(tools, source);
+        assert(info);
+        assert(cloakframe::videoUnsupportedReason(*info).isEmpty());
+
+        const QString output = directory + "/decode-errors-out.mp4";
+        cloakframe::VideoProcessOptions options;
+        options.hardwareEncoder = false;
+        std::atomic<bool> cancelled{false};
+        const auto result = cloakframe::processVideo(
+            tools,
+            source,
+            output,
+            *info,
+            options,
+            [](const cv::Mat &)
+            {
+                return cloakframe::FaceDetections{};
+            },
+            cancelled);
+
+        assert(result.status == cloakframe::VideoProcessStatus::Failed);
+        assert(!result.error.isEmpty());
+        assert(!QFile::exists(output));
+    }
+
+#ifndef _WIN32
+    // Stands in for FFmpeg: it reports every hardware encoder as available, then fails once
+    // real frames are piped to one, and records the encoder each encode ran with. Anything
+    // else is handed to the real FFmpeg unchanged.
+    bool writeHardwareFailingFfmpeg(
+        const cloakframe::FfmpegTools &tools, const QString &scriptPath, const QString &logPath)
+    {
+        QFile script(scriptPath);
+        if (!script.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        {
+            return false;
+        }
+        const QString body = QStringLiteral(R"(#!/bin/sh
+hardware=0
+raw=0
+previous=""
+encoder=""
+for argument in "$@"; do
+  case "$previous" in -c:v) encoder="$argument" ;; esac
+  case "$argument" in
+    *_nvenc|*_qsv|*_videotoolbox) hardware=1 ;;
+    rawvideo) raw=1 ;;
+  esac
+  previous="$argument"
+done
+if [ "$raw" -eq 1 ] && [ -n "$encoder" ]; then
+  echo "$encoder" >> "%1"
+fi
+if [ "$hardware" -eq 1 ]; then
+  if [ "$raw" -eq 1 ]; then
+    exit 42
+  fi
+  exit 0
+fi
+exec "%2" "$@"
+)")
+                                 .arg(logPath, tools.ffmpegPath);
+        script.write(body.toUtf8());
+        script.close();
+        return script.setPermissions(
+            QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+    }
+
+    void testHardwareEncodeFailureRetriesInSoftware(
+        const cloakframe::FfmpegTools &tools, const QString &directory)
+    {
+        const QString source = directory + "/hardware-retry.mp4";
+        assert(runFfmpeg(tools,
+            {"-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=96x72:rate=10:duration=1",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                source}));
+
+        const QString scriptPath = directory + "/ffmpeg-hardware-fails.sh";
+        const QString logPath = directory + "/encoder-attempts.txt";
+        assert(writeHardwareFailingFfmpeg(tools, scriptPath, logPath));
+
+        const auto info = cloakframe::probeVideo(tools, source);
+        assert(info);
+
+        cloakframe::FfmpegTools failing = tools;
+        failing.ffmpegPath = scriptPath;
+
+        const QString output = directory + "/hardware-retry-out.mp4";
+        cloakframe::VideoProcessOptions options;
+        options.hardwareEncoder = true;
+        std::atomic<bool> cancelled{false};
+        const auto result = cloakframe::processVideo(
+            failing,
+            source,
+            output,
+            *info,
+            options,
+            [](const cv::Mat &)
+            {
+                return cloakframe::FaceDetections{};
+            },
+            cancelled);
+
+        assert(result.status == cloakframe::VideoProcessStatus::Completed);
+        assert(result.encoderName == "libx264");
+
+        QFile attempts(logPath);
+        assert(attempts.open(QIODevice::ReadOnly));
+        const QStringList encoders =
+            QString::fromUtf8(attempts.readAll()).split('\n', Qt::SkipEmptyParts);
+        // The hardware encoder has to have been tried first, or the software result would
+        // prove nothing about the fallback.
+        assert(std::any_of(encoders.cbegin(),
+            encoders.cend(),
+            [](const QString &encoder)
+            {
+                return encoder != "libx264";
+            }));
+        assert(encoders.contains("libx264"));
+
+        const auto written = cloakframe::probeVideo(tools, output);
+        assert(written);
+        assert(written->width == 96 && written->height == 72);
+    }
+#endif
 }
 
 int main(int argc, char **argv)
@@ -384,6 +678,14 @@ int main(int argc, char **argv)
     std::puts("preview and reader frame identity: ok");
     testAnamorphicOutputKeepsDisplayAspect(*tools, tempDir.path());
     std::puts("anamorphic display aspect preserved: ok");
+    testRecoveredDecodeErrorsDoNotPublish(*tools, tempDir.path());
+    std::puts("recovered decode errors do not publish: ok");
+    testEveryAudioStreamSurvives(*tools, tempDir.path());
+    std::puts("every audio stream survives: ok");
+#ifndef _WIN32
+    testHardwareEncodeFailureRetriesInSoftware(*tools, tempDir.path());
+    std::puts("hardware encode failure retries in software: ok");
+#endif
 
     const QString samplePath = tempDir.filePath("sample.mp4");
     const QString outputPath = tempDir.filePath("out/redacted.mp4");
@@ -406,8 +708,8 @@ int main(int argc, char **argv)
     assert(info->height == 240);
     assert(info->fpsNum == 30 && info->fpsDen == 1);
     assert(info->videoCodec == "h264");
-    assert(info->hasAudio);
-    assert(info->audioCodec == "aac");
+    assert(info->audioStreams.size() == 1);
+    assert(info->audioStreams.at(0).codec == "aac");
     assert(!info->isVfr);
     assert(cloakframe::videoUnsupportedReason(*info).isEmpty());
     assert(info->estimatedFrameCount >= 55 && info->estimatedFrameCount <= 65);
@@ -466,8 +768,8 @@ int main(int argc, char **argv)
     assert(outInfo->width == 320);
     assert(outInfo->height == 240);
     assert(outInfo->videoCodec == "h264");
-    assert(outInfo->hasAudio);
-    assert(outInfo->audioCodec == "aac");
+    assert(outInfo->audioStreams.size() == 1);
+    assert(outInfo->audioStreams.at(0).codec == "aac");
     assert(outInfo->durationSeconds > 1.5 && outInfo->durationSeconds < 2.5);
 
     const QString rawOutput = rawProbeOutput(*tools, outputPath);
@@ -555,7 +857,7 @@ int main(int argc, char **argv)
             const auto hevcInfo = cloakframe::probeVideo(*tools, hevcPath, &probeError);
             assert(hevcInfo.has_value());
             assert(hevcInfo->videoCodec == "hevc");
-            assert(hevcInfo->hasAudio);
+            assert(!hevcInfo->audioStreams.empty());
             assert(rawProbeOutput(*tools, hevcPath).contains("hvc1"));
             std::puts("hevc round trip: ok");
         }
@@ -684,7 +986,7 @@ int main(int argc, char **argv)
         const auto processedInfo = cloakframe::probeVideo(*tools, processedPath, &probeError);
         assert(processedInfo.has_value());
         assert(processedInfo->videoCodec == "h264");
-        assert(processedInfo->hasAudio);
+        assert(!processedInfo->audioStreams.empty());
         std::puts("video processor round trip: ok");
     }
 
