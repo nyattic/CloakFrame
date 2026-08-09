@@ -2,6 +2,52 @@
 
 감사 기준 revision: `4f3d6da8b96f68799a0871ec6899570e95dd675f` (`main`)
 
+> 본문의 파일 경로, 줄 번호, LOC는 모두 위 revision 기준이다. 이후 수정으로
+> 코드가 이동했고 `scripts/package_linux.sh`, `scripts/package_macos.sh`,
+> `scripts/package_windows.ps1`은 삭제되었으므로, 각 finding을 다시 확인할 때는
+> §0의 현재 상태를 먼저 보고 본문은 원인 분석과 재현 절차로 읽어야 한다.
+
+## 0. Finding 현재 상태 (2026-08-09 기준)
+
+아래 표는 각 finding을 현재 `main`에서 다시 확인한 결과다. 본문 §9의 분류와
+심각도는 감사 시점 기록이므로 바꾸지 않았다.
+
+| ID | 상태 | 근거 |
+|---|---|---|
+| CF-001 | Open | Velopack feed/package에 app-pinned trust anchor가 없다. offline signing key 보관 위치 결정 대기 |
+| CF-002 | Open | Velopack 1.2.0 고정과 공유 `/var/tmp` cache 그대로 |
+| CF-003 | Fixed | `DetectionResult::omitted`로 detector가 버린 후보를 전달하고 `RunSummary::uncovered`가 clean `Completed`를 막는다 |
+| CF-004 | Fixed | `TrackCoverageReport::droppedTracks`가 삭제된 track을 결과로 올린다 |
+| CF-005 | Fixed | `TrackCoverageReport::uncoveredFrames`가 retained track 내부 hole을 결과로 올린다 |
+| CF-006 | Fixed | `VideoInfo::startTimeSeconds`가 정규화된 timeline을 정의하고 preview/encode가 같은 mapping을 쓴다 |
+| CF-007 | Fixed | 서명 job이 `environment: release`를 선언하고, 저장소의 `release` 환경이 `v*` tag 배포 제한과 필수 리뷰어로 설정되었다 (2026-08-09) |
+| CF-008 | Fixed | 디코드 패스가 `-xerror`로 실행되어, 복구된 오류가 나면 짧아진 결과를 게시하지 않고 실패한다 (2026-08-09) |
+| CF-009 | Fixed | `VideoInfo::sarNum/sarDen`을 probe하고 writer가 `setsar`를 적용한다 |
+| CF-010 | Fixed | probe가 모든 audio stream을 읽고 writer가 `-map 1:a?`로 전부 map하며, 호환되지 않는 stream만 재인코딩하고 언어 태그를 보존한다 (2026-08-09) |
+| CF-011 | Fixed | 실제 encode 실패가 encoder 원인일 때 software encoder로 pass 2를 한 번 재실행한다 (2026-08-09) |
+| CF-012 | Fixed | `process()` 진입 시의 cancel flag reset 제거 |
+| CF-013 | Fixed | thread 생성 실패 시 이미 시작한 worker를 stop/join한 뒤 rethrow한다 |
+| CF-014 | Fixed | estimate가 budget을 넘으면 decode 전에 거부한다 (2026-08-09) |
+| CF-015 | Fixed | 원자적 primitive가 없는 filesystem에서는 `.cloakframe-partial`로 복사한 뒤 rename하며, 복사 중 guard를 polling한다 (2026-08-09) |
+| CF-016 | Open | custom ONNX 동의가 path에만 묶이고 parser가 같은 process에서 실행된다 |
+| CF-017 | Obsolete | `scripts/package_linux.sh`가 삭제되고 AppImage는 `vpk pack`이 만든다 |
+| CF-018 | Partial | `CLOAKFRAME_SPARKLE_PUBLIC_KEY`로 plist에 key를 고정할 수 있고 workflow가 반쪽 설정을 거부한다. 실제 keypair 생성·보관은 사람이 해야 한다 (2026-08-09) |
+| CF-019 | Open | `ModelDownloader`가 고정 `.part` 이름을 일반 `QFile`로 연다 |
+| CF-020 | Open | crash 후 남은 source snapshot을 회수하는 startup scavenger가 없다 |
+| CF-021 | Open | `destinationKey`가 compile-time OS 가정으로 collision을 판단한다 |
+| CF-022 | Fixed | alpha 채널이 있는 image의 solid fill이 불투명해졌다 |
+| CF-023 | Fixed | 96개 문구를 번역하고 세 locale 모두에 strict gate를 적용했다. 근본 원인인 `trVideo`/`trVideoProcessor` 간접 호출도 `QT_TRANSLATE_NOOP`으로 노출했다 (2026-08-09) |
+| CF-024 | Fixed | release workflow의 `verify-version` job이 tag/project/release-notes 일치를 강제한다 |
+| CF-025 | Open | macOS Homebrew closure가 고정되지 않고 SBOM이 없다 |
+| CF-026 | Open | `SceneCutDetector::push`의 확정 분기가 여전히 early return한다 |
+
+감사에 없던 항목 두 가지도 함께 처리했다. Windows manifest
+(`activeCodePage`/`longPathAware`)를 추가해 non-ASCII 경로에서 metadata 보존이
+꺼지던 문제를 막았다(Windows CI가 검증 수단이다). 그리고 `lupdate`가
+`trVideo`/`trVideoProcessor` 간접 호출을 인식하지 못해 video 관련 문구 36개가
+obsolete로 표시되고 `lrelease`가 이를 제외하면서, 모든 언어에서 영어로 표시되고
+있었다. 이는 `CF-023`보다 넓은 범위의 결함이었다.
+
 이 보고서는 정적 코드 추적, 두 번의 독립적인 sweep, 기존 테스트 검토, 별도 sanitizer/경고 빌드, 합성 이미지·영상과 production library에 연결한 임시 harness, 그리고 현재 CI/패키징 설정 검증을 결합한 결과다. 소스의 주석이나 README를 구현의 증거로 사용하지 않고 caller에서 최종 output/update sink까지 실제 경로를 확인했다. 외부 플랫폼이나 안전하게 재현할 수 없는 조건은 명시적으로 **Not dynamically verified**라고 표시했다.
 
 ## 1. Executive Summary
