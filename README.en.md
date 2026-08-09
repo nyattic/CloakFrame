@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-6366f1?style=for-the-badge&logo=gnu&logoColor=white&labelColor=1e1b2e)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-6366f1?style=for-the-badge&logo=qt&logoColor=white&labelColor=1e1b2e)
 
-<p align="center"><a href="README.md">KR</a> · <b>EN</b> · <a href="README.ja.md">JP</a></p>
+<p align="center"><a href="README.md">KR</a> · <b>EN</b> · <a href="README.ja.md">JP</a> · <a href="README.zh.md">ZH</a></p>
 
 A desktop app that automatically hides faces and license plates in photos and
 videos. Your files are processed entirely on your computer and are never

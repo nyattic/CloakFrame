@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-6366f1?style=for-the-badge&logo=gnu&logoColor=white&labelColor=1e1b2e)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-6366f1?style=for-the-badge&logo=qt&logoColor=white&labelColor=1e1b2e)
 
-<p align="center"><b>KR</b> · <a href="README.en.md">EN</a> · <a href="README.ja.md">JP</a></p>
+<p align="center"><b>KR</b> · <a href="README.en.md">EN</a> · <a href="README.ja.md">JP</a> · <a href="README.zh.md">ZH</a></p>
 
 사진과 영상 속 얼굴·자동차 번호판을 자동으로 가려 주는 데스크톱 앱입니다.
 파일은 내 컴퓨터 안에서만 처리되며 서버로 업로드되지 않습니다.

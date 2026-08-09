@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-6366f1?style=for-the-badge&logo=gnu&logoColor=white&labelColor=1e1b2e)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-6366f1?style=for-the-badge&logo=qt&logoColor=white&labelColor=1e1b2e)
 
-<p align="center"><a href="README.md">KR</a> · <a href="README.en.md">EN</a> · <b>JP</b></p>
+<p align="center"><a href="README.md">KR</a> · <a href="README.en.md">EN</a> · <b>JP</b> · <a href="README.zh.md">ZH</a></p>
 
 写真や動画に写った顔と車のナンバープレートを自動で隠すデスクトップ
 アプリです。ファイルはすべて自分のパソコン内で処理され、サーバーへ

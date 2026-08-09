@@ -24,10 +24,10 @@ are safe to share. A small synthetic sample is preferred for reproductions.
 4. Update Korean, English, Japanese, and Simplified Chinese UI translations
    when user-visible strings change.
 5. Add or update the release notes for a user-visible change. Each version has
-   one file per language: `release-notes/<version>.ko.md`, `.en.md`, and
-   `.ja.md`. CI fails when any of the three is missing for the current project
-   version.
-6. Update all three READMEs when user instructions change.
+   one file per language: `release-notes/<version>.ko.md`, `.en.md`, `.ja.md`,
+   and `.zh.md`. CI fails when any of the four is missing for the current
+   project version.
+6. Update all four READMEs when user instructions change.
 
 The local quality-gate commands are:
 

@@ -13,7 +13,7 @@ set -euo pipefail
 version="${1:?usage: compose_release_notes.sh <version> <output-file>}"
 output="${2:?usage: compose_release_notes.sh <version> <output-file>}"
 
-for language in ko en ja; do
+for language in ko en ja zh; do
     notes="release-notes/${version}.${language}.md"
     if [[ ! -s "$notes" ]]; then
         echo "Missing release notes: $notes" >&2
@@ -28,5 +28,7 @@ done
     cat "release-notes/${version}.en.md"
     printf '\n</details>\n\n<details><summary>日本語</summary>\n\n<!-- notes:ja -->\n\n'
     cat "release-notes/${version}.ja.md"
+    printf '\n</details>\n\n<details><summary>简体中文</summary>\n\n<!-- notes:zh -->\n\n'
+    cat "release-notes/${version}.zh.md"
     printf '\n</details>\n'
 } > "$output"
