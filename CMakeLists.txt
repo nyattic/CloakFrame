@@ -91,16 +91,14 @@ include(CTest)
 if(BUILD_TESTING)
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
+        # Every advertised locale is gated on source equality: an entry left in English is a
+        # safety or output warning the user cannot read, not a cosmetic gap.
         add_test(NAME translation_quality
             COMMAND "${Python3_EXECUTABLE}"
                     "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_translations.py"
+                    --strict-source-equality
                     "${CMAKE_CURRENT_SOURCE_DIR}/translations/cloakframe_ko.ts"
                     "${CMAKE_CURRENT_SOURCE_DIR}/translations/cloakframe_ja.ts"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/translations/cloakframe_zh_CN.ts")
-        add_test(NAME translation_quality_zh_CN
-            COMMAND "${Python3_EXECUTABLE}"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_translations.py"
-                    --strict-source-equality
                     "${CMAKE_CURRENT_SOURCE_DIR}/translations/cloakframe_zh_CN.ts")
     endif()
 endif()
