@@ -15,7 +15,7 @@ and enable tests.
 - Qt SVG (optional, renders the settings icon as SVG)
 - FFmpeg and FFprobe at runtime for video processing
 
-Official Windows and Linux releases use Qt 6.10.3 and OpenCV 4.13.0. The
+Official Windows and Linux releases use Qt 6.11.1 and OpenCV 4.13.0. The
 Linux release baseline is Ubuntu 26.04. macOS release builds use the stable
 Homebrew packages available to the release workflow.
 
@@ -75,7 +75,7 @@ spdlog, and optional Exiv2 discoverable through `CMAKE_PREFIX_PATH` and
 
 ```powershell
 cmake --preset release `
-  -DCMAKE_PREFIX_PATH="C:\Qt\6.10.3\msvc2022_64;C:\opencv\build;C:\vcpkg\installed\x64-windows-static-md" `
+  -DCMAKE_PREFIX_PATH="C:\Qt\6.11.1\msvc2022_64;C:\opencv\build;C:\vcpkg\installed\x64-windows-static-md" `
   -DONNXRUNTIME_ROOT="C:\onnxruntime-directml"
 cmake --build --preset release --parallel
 ctest --preset release
