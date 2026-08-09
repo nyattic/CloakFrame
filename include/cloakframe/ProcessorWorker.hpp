@@ -23,6 +23,16 @@ namespace cloakframe
     class Detector;
     class PlateDetector;
 
+    // Peak bytes one image can hold at once: decoded pixels, the oriented copy, the detection
+    // view, mask work and the encoded buffer. Saturates instead of wrapping, so an oversized
+    // header can never report a small requirement.
+    [[nodiscard]] std::uint64_t estimatedImageMemoryBytes(
+        std::uint64_t pixels, std::uint64_t encodedBytes);
+
+    // The whole pool one image run may hold at once. An item whose estimate exceeds this is
+    // rejected before it is decoded rather than admitted against a truncated reservation.
+    [[nodiscard]] std::uint64_t imageMemoryBudget();
+
     struct ProcessingRequest
     {
         QString modelPath;
@@ -152,6 +162,10 @@ namespace cloakframe
         std::atomic<bool> cancelled_{false};
         std::mutex imageMemoryMutex_;
         std::condition_variable imageMemoryCv_;
+        // The whole pool one run may hold at once. `imageMemoryAvailable_` starts here, so an
+        // item estimated above this can never be admitted and has to be rejected before decode
+        // instead of waiting for a reservation that will never be granted.
+        std::uint64_t imageMemoryBudget_ = 0;
         std::uint64_t imageMemoryAvailable_ = 0;
         std::mutex detectMutex_;
         std::shared_ptr<Detector> detector_;

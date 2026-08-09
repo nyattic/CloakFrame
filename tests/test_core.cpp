@@ -9,6 +9,7 @@
 #include "cloakframe/PathSafety.hpp"
 #include "cloakframe/PlateDetector.hpp"
 #include "cloakframe/ProcessorWorker.hpp"
+#include "cloakframe/ReleaseNotes.hpp"
 #include "cloakframe/ReviewTypes.hpp"
 #include "cloakframe/ScrfdFaceDetector.hpp"
 #include "cloakframe/Yolo5FaceDetector.hpp"
@@ -25,6 +26,7 @@
 #include <opencv2/imgcodecs.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <barrier>
 #include <cassert>
@@ -518,6 +520,251 @@ namespace
         worker.process();
         assert(result == cloakframe::RunOutcome::CompletedWithWarnings);
         assert(std::filesystem::exists(output / "large.jpg"));
+    }
+
+    // CRC-32/ISO-HDLC over a PNG chunk's type and data, as the format requires.
+    std::uint32_t pngChunkCrc(const std::vector<unsigned char> &bytes)
+    {
+        std::uint32_t crc = 0xFFFFFFFFU;
+        for (const auto byte : bytes)
+        {
+            crc ^= byte;
+            for (int bit = 0; bit < 8; ++bit)
+            {
+                crc = (crc & 1U) != 0U ? (crc >> 1U) ^ 0xEDB88320U : crc >> 1U;
+            }
+        }
+        return crc ^ 0xFFFFFFFFU;
+    }
+
+    // A PNG carrying only its signature, IHDR and a stub IDAT. A reader takes the dimensions
+    // from IHDR without decoding anything, which is exactly what the worker inspects before it
+    // decides whether an image is small enough to decode.
+    void writePngHeaderWithDeclaredSize(
+        const std::filesystem::path &path, const std::uint32_t width, const std::uint32_t height)
+    {
+        std::vector<unsigned char> file{137, 80, 78, 71, 13, 10, 26, 10};
+        const auto appendBigEndian =
+            [](std::vector<unsigned char> &target, const std::uint32_t value)
+        {
+            target.push_back(static_cast<unsigned char>((value >> 24U) & 0xFFU));
+            target.push_back(static_cast<unsigned char>((value >> 16U) & 0xFFU));
+            target.push_back(static_cast<unsigned char>((value >> 8U) & 0xFFU));
+            target.push_back(static_cast<unsigned char>(value & 0xFFU));
+        };
+        const auto appendChunk =
+            [&](const std::string &type, const std::vector<unsigned char> &data)
+        {
+            appendBigEndian(file, static_cast<std::uint32_t>(data.size()));
+            std::vector<unsigned char> checked(type.cbegin(), type.cend());
+            checked.insert(checked.cend(), data.cbegin(), data.cend());
+            file.insert(file.cend(), checked.cbegin(), checked.cend());
+            appendBigEndian(file, pngChunkCrc(checked));
+        };
+
+        std::vector<unsigned char> header;
+        appendBigEndian(header, width);
+        appendBigEndian(header, height);
+        header.push_back(8); // bit depth
+        header.push_back(2); // truecolour
+        header.push_back(0); // deflate
+        header.push_back(0); // adaptive filtering
+        header.push_back(0); // no interlace
+        appendChunk("IHDR", header);
+        appendChunk("IDAT", {0x78});
+        appendChunk("IEND", {});
+
+        std::ofstream stream(path, std::ios::binary);
+        assert(stream.is_open());
+        stream.write(
+            reinterpret_cast<const char *>(file.data()), static_cast<std::streamsize>(file.size()));
+        stream.close();
+        assert(!stream.fail());
+    }
+
+#ifndef _WIN32
+    class ForcedNonAtomicPublication
+    {
+    public:
+        ForcedNonAtomicPublication()
+        {
+            cloakframe::setAtomicPublicationDisabledForTesting(true);
+        }
+
+        ~ForcedNonAtomicPublication()
+        {
+            cloakframe::setAtomicPublicationDisabledForTesting(false);
+        }
+
+        ForcedNonAtomicPublication(const ForcedNonAtomicPublication &) = delete;
+        ForcedNonAtomicPublication &operator=(const ForcedNonAtomicPublication &) = delete;
+    };
+
+    void testPublicationWithoutAtomicPrimitivesLeavesNoCompleteLookingPartial()
+    {
+        QTemporaryDir temp;
+        assert(temp.isValid());
+        // The rooted publication path compares the canonical root against the absolute one, so
+        // the symlinked temporary directory has to be resolved first.
+        const auto root = std::filesystem::canonical(temp.path().toStdString());
+        const cv::Mat image(64, 64, CV_8UC3, cv::Scalar(30, 60, 90));
+        const auto noResidue = [&root]
+        {
+            for (const auto &entry : std::filesystem::directory_iterator(root))
+            {
+                if (entry.path().filename().string().find(".cloakframe-") != std::string::npos)
+                {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        const ForcedNonAtomicPublication forced;
+
+        assert(cloakframe::imwriteUnicodeNoReplaceAtRoot(root, "copy.png", image)
+               == cloakframe::ImageWriteResult::Saved);
+        assert(!cv::imread((root / "copy.png").string(), cv::IMREAD_UNCHANGED).empty());
+        assert(noResidue());
+
+        // An existing destination still wins: the fallback claims the name only after the copy
+        // finishes, and only if nothing else took it.
+        writeBytes(QString::fromStdString((root / "taken.png").string()));
+        assert(cloakframe::imwriteUnicodeNoReplaceAtRoot(root, "taken.png", image)
+               == cloakframe::ImageWriteResult::Failed);
+        assert(std::filesystem::file_size(root / "taken.png") == 1);
+        assert(noResidue());
+
+        // A guard that refuses publication must leave neither an output nor a partial file.
+        assert(cloakframe::imwriteUnicodeNoReplaceAtRoot(root,
+                   "guarded.png",
+                   image,
+                   {},
+                   {},
+                   []
+                   {
+                       return false;
+                   })
+               == cloakframe::ImageWriteResult::Failed);
+        assert(!std::filesystem::exists(root / "guarded.png"));
+        assert(noResidue());
+    }
+#endif
+
+    void testWorkerRejectsAnImageLargerThanTheMemoryBudget()
+    {
+        constexpr auto kUnsignedMaximum = std::numeric_limits<std::uint64_t>::max();
+        assert(cloakframe::estimatedImageMemoryBytes(4, 100) == 164);
+        assert(cloakframe::estimatedImageMemoryBytes(kUnsignedMaximum, 1) == kUnsignedMaximum);
+        assert(cloakframe::estimatedImageMemoryBytes(kUnsignedMaximum, kUnsignedMaximum)
+               == kUnsignedMaximum);
+
+        const auto budget = cloakframe::imageMemoryBudget();
+        const auto estimateForSide = [](const std::int32_t side)
+        {
+            const auto pixels = static_cast<std::uint64_t>(side) * static_cast<std::uint64_t>(side);
+            return cloakframe::estimatedImageMemoryBytes(pixels, 0);
+        };
+
+        // The worker rejects images past a fixed pixel count before it looks at memory at all,
+        // so on a host whose budget is larger than the biggest image that gate admits, this
+        // rejection is unreachable through a real file.
+        constexpr std::int32_t kLargestTestSide = 22000;
+        std::int32_t side = 2048;
+        while (side < kLargestTestSide && estimateForSide(side) <= budget)
+        {
+            side += 1024;
+        }
+        if (estimateForSide(side) <= budget)
+        {
+            std::puts("skipped over-budget image rejection: this host's image memory budget "
+                      "exceeds the largest image the dimension gate admits");
+            return;
+        }
+
+        QTemporaryDir temp;
+        assert(temp.isValid());
+        const auto root = std::filesystem::path(temp.path().toStdString());
+        const auto source = root / "huge.png";
+        const auto output = root / "out";
+        writePngHeaderWithDeclaredSize(
+            source, static_cast<std::uint32_t>(side), static_cast<std::uint32_t>(side));
+
+        cloakframe::ProcessingRequest request;
+        request.inputs = {QString::fromStdString(source.string())};
+        request.outputDirectory = QString::fromStdString(output.string());
+        request.detectFaces = false;
+
+        cloakframe::RunOutcome result = cloakframe::RunOutcome::Failed;
+        cloakframe::RunSummary summary;
+        QStringList logs;
+        cloakframe::ProcessorWorker worker(std::move(request));
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::logMessage,
+            [&](const QString &message)
+            {
+                logs.push_back(message);
+            });
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::summaryAvailable,
+            [&](const cloakframe::RunSummary value)
+            {
+                summary = value;
+            });
+        QObject::connect(&worker,
+            &cloakframe::ProcessorWorker::finished,
+            [&](const cloakframe::RunOutcome value)
+            {
+                result = value;
+            });
+        worker.process();
+
+        assert(summary.skipped == 1);
+        assert(summary.redacted == 0);
+        assert(result == cloakframe::RunOutcome::CompletedWithWarnings);
+        assert(!std::filesystem::exists(output / "huge.png"));
+        // The item has to be turned away for its memory requirement, not because the header
+        // could not be read at all.
+        assert(std::any_of(logs.cbegin(),
+            logs.cend(),
+            [](const QString &message)
+            {
+                return message.contains("MB limit");
+            }));
+    }
+
+    void testReleaseNotesPickTheInterfaceLanguage()
+    {
+        const QString combined =
+            QStringLiteral("<!-- notes:ko -->\n\n## 설치\n\n- 한국어 항목\n\n"
+                           "<details><summary>English</summary>\n\n<!-- notes:en -->\n\n"
+                           "## Install\n\n- English item\n\n</details>\n\n"
+                           "<details><summary>日本語</summary>\n\n<!-- notes:ja -->\n\n"
+                           "## インストール\n\n- 日本語の項目\n\n</details>\n");
+
+        const QString korean = cloakframe::releaseNotesForLanguage(combined, "ko");
+        assert(korean.startsWith("## 설치"));
+        assert(korean.contains("한국어 항목"));
+        assert(!korean.contains("English item"));
+        assert(!korean.contains("日本語の項目"));
+
+        const QString japanese = cloakframe::releaseNotesForLanguage(combined, "ja");
+        assert(japanese.contains("日本語の項目"));
+        assert(!japanese.contains("English item"));
+        // The <details> wrapper is markup, and the update dialog renders plain text.
+        assert(!japanese.contains("<details"));
+        assert(!japanese.contains("</details>"));
+        assert(!japanese.contains("<summary"));
+
+        // A language the release does not carry falls back to English.
+        const QString chinese = cloakframe::releaseNotesForLanguage(combined, "zh");
+        assert(chinese.contains("English item"));
+
+        // Notes without markers are shown as they are, so an older release still reads fine.
+        const QString plain = QStringLiteral("  ## Only one language\n\n- item\n ");
+        assert(cloakframe::releaseNotesForLanguage(plain, "ko")
+               == QStringLiteral("## Only one language\n\n- item"));
+        assert(cloakframe::releaseNotesForLanguage(QString(), "ko").isEmpty());
     }
 
     void testWorkerRejectsMultiFrameImages()
@@ -1733,6 +1980,8 @@ int main(int argc, char **argv)
     testDroppedDetectionsKeepTheRunOutOfCleanCompletion();
     testWorkerUsesStableImageSnapshotDuringReview();
     testWorkerAcceptsThirtyMegabyteJpeg();
+    testWorkerRejectsAnImageLargerThanTheMemoryBudget();
+    testReleaseNotesPickTheInterfaceLanguage();
     testWorkerRejectsMultiFrameImages();
     testAnimatedImageContainersAreDetectedWithoutDecodingAllFrames();
     testApplyMosaicTouchesOnlyDetectedRegion();
@@ -1753,6 +2002,9 @@ int main(int argc, char **argv)
     testExifOrientationFallback();
     testEncodeParams();
     testImageWritePublishesWithoutReplacing();
+#ifndef _WIN32
+    testPublicationWithoutAtomicPrimitivesLeavesNoCompleteLookingPartial();
+#endif
     testRootedWritesRejectEscapesAndUsePrivateFiles();
     testMetadataFailurePublishesCleanImage();
     testIntersectionOverUnion();

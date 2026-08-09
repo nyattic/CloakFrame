@@ -73,9 +73,10 @@ namespace cloakframe
             throw std::invalid_argument("Unsupported face model kind.");
         }
 
-        std::uint64_t imageMemoryBudget()
+        std::uint64_t megabytesForDisplay(const std::uint64_t bytes)
         {
-            return adaptiveMemoryBudget(kImageMinimumMemoryBudget, kImageMaximumMemoryBudget, 4);
+            constexpr std::uint64_t kBytesPerMegabyte = 1024ULL * 1024ULL;
+            return (bytes + kBytesPerMegabyte - 1) / kBytesPerMegabyte;
         }
 
         struct ImageDimensionCheck
@@ -196,12 +197,8 @@ namespace cloakframe
                 const auto fileSize =
                     std::filesystem::file_size(items[index].sourcePath, sizeError);
                 const auto encodedBytes = sizeError ? 0 : static_cast<std::uint64_t>(fileSize);
-                const auto maximum = std::numeric_limits<std::uint64_t>::max();
-                const auto estimate =
-                    pixels > (maximum - encodedBytes) / kEstimatedImageBytesPerPixel
-                        ? maximum
-                        : pixels * kEstimatedImageBytesPerPixel + encodedBytes;
-                largestEstimate = std::max(largestEstimate, estimate);
+                largestEstimate =
+                    std::max(largestEstimate, estimatedImageMemoryBytes(pixels, encodedBytes));
             }
 
             const auto memoryLimit = static_cast<unsigned>(
@@ -298,6 +295,22 @@ namespace cloakframe
         }
     }
 
+    std::uint64_t estimatedImageMemoryBytes(
+        const std::uint64_t pixels, const std::uint64_t encodedBytes)
+    {
+        constexpr auto maximum = std::numeric_limits<std::uint64_t>::max();
+        if (pixels > (maximum - encodedBytes) / kEstimatedImageBytesPerPixel)
+        {
+            return maximum;
+        }
+        return pixels * kEstimatedImageBytesPerPixel + encodedBytes;
+    }
+
+    std::uint64_t imageMemoryBudget()
+    {
+        return adaptiveMemoryBudget(kImageMinimumMemoryBudget, kImageMaximumMemoryBudget, 4);
+    }
+
     struct ProcessorWorker::ItemOutcome
     {
         QStringList logs;
@@ -336,7 +349,8 @@ namespace cloakframe
         , gpuAcceleration_(request.gpuAcceleration)
         , videoCrf_(request.videoCrf)
         , videoCodec_(request.videoCodec)
-        , imageMemoryAvailable_(imageMemoryBudget())
+        , imageMemoryBudget_(imageMemoryBudget())
+        , imageMemoryAvailable_(imageMemoryBudget_)
         , detector_(std::move(cache.face))
         , plateDetector_(std::move(cache.plate))
         , videoDetector_(std::move(cache.videoFace))
@@ -805,12 +819,17 @@ namespace cloakframe
 
             const auto pixels = static_cast<std::uint64_t>(dimensions.size.width())
                                 * static_cast<std::uint64_t>(dimensions.size.height());
-            const auto maximum = std::numeric_limits<std::uint64_t>::max();
-            const auto estimatedMemory =
-                pixels > (maximum - fileSize) / kEstimatedImageBytesPerPixel
-                    ? imageMemoryBudget()
-                    : std::min<std::uint64_t>(
-                          imageMemoryBudget(), pixels * kEstimatedImageBytesPerPixel + fileSize);
+            const auto estimatedMemory = estimatedImageMemoryBytes(pixels, fileSize);
+            if (estimatedMemory > imageMemoryBudget_)
+            {
+                outcome.logs.push_back(tr("Skipped (%1): %2")
+                        .arg(tr("needs about %1 MB of memory, over the %2 MB limit")
+                                 .arg(megabytesForDisplay(estimatedMemory))
+                                 .arg(megabytesForDisplay(imageMemoryBudget_)),
+                            fileName));
+                outcome.skipped = 1;
+                return outcome;
+            }
             ImageMemoryReservation memoryReservation(imageMemoryMutex_,
                 imageMemoryCv_,
                 imageMemoryAvailable_,

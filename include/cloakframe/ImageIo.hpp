@@ -42,6 +42,12 @@ namespace cloakframe
     [[nodiscard]] std::optional<FileIdentity> captureFileIdentity(
         const std::filesystem::path &path);
 
+    // Test seam for the POSIX publication fallback used on filesystems that support neither an
+    // exclusive rename nor hardlinks (FAT, exFAT, some network and FUSE mounts). No filesystem
+    // reachable from the test suite lacks both, so this is the only way to exercise that path.
+    // A no-op on Windows.
+    void setAtomicPublicationDisabledForTesting(bool disabled);
+
     bool metadataSupportAvailable();
 
     int readExifOrientation(const std::filesystem::path &source);

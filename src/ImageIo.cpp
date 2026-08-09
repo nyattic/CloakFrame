@@ -1112,49 +1112,63 @@ namespace cloakframe
             return PosixParent{std::move(current), relativeDestination.filename().native()};
         }
 
+        // Filesystems without an exclusive rename and without hardlinks (FAT, exFAT, some
+        // network and FUSE mounts) cannot publish atomically. The copy fallback goes through
+        // this name instead of the destination, so an interrupted publication leaves something
+        // obviously incomplete rather than a truncated file under the name a user would read as
+        // a finished result.
+        constexpr const char *kPartialSuffix = ".cloakframe-partial";
+
+        std::atomic<bool> atomicPublicationDisabled{false};
+
         bool publishPosixNoReplace(const int stageDescriptor,
             const char *payload,
             const int parentDescriptor,
-            const char *destination)
+            const char *destination,
+            const std::function<bool()> &publishGuard = {})
         {
+            if (!atomicPublicationDisabled.load(std::memory_order_relaxed))
+            {
 #ifdef __APPLE__
-            if (::renameatx_np(stageDescriptor, payload, parentDescriptor, destination, RENAME_EXCL)
-                == 0)
-            {
-                return true;
-            }
-            if (errno != ENOTSUP && errno != EINVAL)
-            {
-                return false;
-            }
+                if (::renameatx_np(
+                        stageDescriptor, payload, parentDescriptor, destination, RENAME_EXCL)
+                    == 0)
+                {
+                    return true;
+                }
+                if (errno != ENOTSUP && errno != EINVAL)
+                {
+                    return false;
+                }
 #elif defined(__linux__) && defined(SYS_renameat2)
-            if (::syscall(SYS_renameat2,
-                    stageDescriptor,
-                    payload,
-                    parentDescriptor,
-                    destination,
-                    RENAME_NOREPLACE)
-                == 0)
-            {
-                return true;
-            }
-            if (errno != ENOSYS && errno != EINVAL && errno != ENOTSUP)
-            {
-                return false;
-            }
+                if (::syscall(SYS_renameat2,
+                        stageDescriptor,
+                        payload,
+                        parentDescriptor,
+                        destination,
+                        RENAME_NOREPLACE)
+                    == 0)
+                {
+                    return true;
+                }
+                if (errno != ENOSYS && errno != EINVAL && errno != ENOTSUP)
+                {
+                    return false;
+                }
 #endif
-            if (::linkat(stageDescriptor, payload, parentDescriptor, destination, 0) == 0)
-            {
-                ::unlinkat(stageDescriptor, payload, 0);
-                return true;
-            }
-            if (errno == EEXIST)
-            {
-                return false;
-            }
-            if (errno != ENOTSUP && errno != EOPNOTSUPP && errno != EPERM && errno != ENOSYS)
-            {
-                return false;
+                if (::linkat(stageDescriptor, payload, parentDescriptor, destination, 0) == 0)
+                {
+                    ::unlinkat(stageDescriptor, payload, 0);
+                    return true;
+                }
+                if (errno == EEXIST)
+                {
+                    return false;
+                }
+                if (errno != ENOTSUP && errno != EOPNOTSUPP && errno != EPERM && errno != ENOSYS)
+                {
+                    return false;
+                }
             }
             PosixDescriptor source(
                 ::openat(stageDescriptor, payload, O_RDONLY | O_NOFOLLOW | O_CLOEXEC));
@@ -1167,8 +1181,9 @@ namespace cloakframe
             {
                 return false;
             }
+            const std::string partial = std::string(destination) + kPartialSuffix;
             PosixDescriptor target(::openat(parentDescriptor,
-                destination,
+                partial.c_str(),
                 O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
                 sourceInfo.st_mode & 07777));
             if (!target.valid())
@@ -1177,12 +1192,24 @@ namespace cloakframe
             }
             const auto abandonTarget = [&]
             {
-                ::unlinkat(parentDescriptor, destination, 0);
+                ::unlinkat(parentDescriptor, partial.c_str(), 0);
                 return false;
             };
             std::array<char, 65536> buffer{};
+            // Consulting the guard costs a stat, so it is polled per megabyte rather than per
+            // chunk. A cancelled run must not keep copying to the end.
+            constexpr int kChunksPerGuardCheck = 16;
+            int chunksSinceGuard = 0;
             for (;;)
             {
+                if (publishGuard && ++chunksSinceGuard >= kChunksPerGuardCheck)
+                {
+                    chunksSinceGuard = 0;
+                    if (!publishGuard())
+                    {
+                        return abandonTarget();
+                    }
+                }
                 const ssize_t got = ::read(source.get(), buffer.data(), buffer.size());
                 if (got == 0)
                 {
@@ -1215,6 +1242,21 @@ namespace cloakframe
                 }
             }
             if (::fsync(target.get()) != 0)
+            {
+                return abandonTarget();
+            }
+            target.reset();
+
+            // The destination name is claimed only now, so the window in which another writer
+            // could take it is a single rename rather than the whole copy. `renameat` replaces,
+            // so the name has to be checked immediately before it.
+            struct stat existing{};
+            if (::fstatat(parentDescriptor, destination, &existing, AT_SYMLINK_NOFOLLOW) == 0
+                || errno != ENOENT)
+            {
+                return abandonTarget();
+            }
+            if (::renameat(parentDescriptor, partial.c_str(), parentDescriptor, destination) != 0)
             {
                 return abandonTarget();
             }
@@ -1292,10 +1334,12 @@ namespace cloakframe
                     return false;
                 }
 
-                const bool published =
-                    (!publishGuard || publishGuard())
-                    && publishPosixNoReplace(
-                        stage.get(), "payload", parent->descriptor.get(), parent->filename.c_str());
+                const bool published = (!publishGuard || publishGuard())
+                                       && publishPosixNoReplace(stage.get(),
+                                           "payload",
+                                           parent->descriptor.get(),
+                                           parent->filename.c_str(),
+                                           publishGuard);
                 file.reset();
                 ::unlinkat(stage.get(), "payload", 0);
                 stage.reset();
@@ -1317,6 +1361,13 @@ namespace cloakframe
         return initializeExiv2();
 #else
         return false;
+#endif
+    }
+
+    void setAtomicPublicationDisabledForTesting([[maybe_unused]] const bool disabled)
+    {
+#ifndef _WIN32
+        atomicPublicationDisabled.store(disabled, std::memory_order_relaxed);
 #endif
     }
 
@@ -1871,7 +1922,8 @@ namespace cloakframe
         if (publishPosixNoReplace(sourceParent.get(),
                 sourceName.c_str(),
                 destinationParent->descriptor.get(),
-                destinationParent->filename.c_str()))
+                destinationParent->filename.c_str(),
+                publishGuard))
         {
             ::fsync(destinationParent->descriptor.get());
             ::fsync(sourceParent.get());
