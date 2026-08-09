@@ -55,50 +55,6 @@ namespace cloakframe
                        : QStringLiteral("%1:%2").arg(minutes).arg(secs, 2, 10, QLatin1Char('0'));
         }
 
-        QStringList previewFrameArguments(const VideoReviewRequest &request, const int frame)
-        {
-            if (request.ffmpegPath.isEmpty() || request.sourcePath.isEmpty() || request.fps <= 0.0
-                || request.fpsNum <= 0 || request.fpsDen <= 0 || frame < 0
-                || !request.frameSize.isValid())
-            {
-                return {};
-            }
-
-            int previewWidth = request.frameSize.width();
-            int previewHeight = request.frameSize.height();
-            const int longEdge = std::max(previewWidth, previewHeight);
-            if (longEdge > 960)
-            {
-                const double scale = 960.0 / static_cast<double>(longEdge);
-                previewWidth = std::max(2, static_cast<int>(std::lround(previewWidth * scale)));
-                previewHeight = std::max(2, static_cast<int>(std::lround(previewHeight * scale)));
-            }
-            previewWidth += previewWidth % 2;
-            previewHeight += previewHeight % 2;
-
-            const int marginFrames =
-                std::clamp(static_cast<int>(std::ceil(request.fps * 3.0)), 1, 240);
-            const int seekFrame = std::max(0, frame - marginFrames);
-            const QString cfr = QStringLiteral("%1/%2").arg(request.fpsNum).arg(request.fpsDen);
-            const QString filter =
-                QString("fps=fps=%1%2,select=eq(n\\,%3),scale=%4:%5:flags=area")
-                    .arg(cfr, seekFrame > 0 ? QStringLiteral(":start_time=0") : QString())
-                    .arg(frame - seekFrame)
-                    .arg(previewWidth)
-                    .arg(previewHeight);
-
-            QStringList arguments{"-v", "error", "-nostdin"};
-            if (seekFrame > 0)
-            {
-                const double seekSeconds =
-                    static_cast<double>(seekFrame) * request.fpsDen / request.fpsNum;
-                arguments << "-ss" << QString::number(seekSeconds, 'f', 6);
-            }
-            arguments << "-i" << request.sourcePath << "-map" << "0:v:0"
-                      << "-vf" << filter << "-frames:v" << "1"
-                      << "-f" << "image2pipe" << "-c:v" << "png" << "-";
-            return arguments;
-        }
     }
 
     class VideoReviewCanvas final : public QWidget
@@ -773,7 +729,7 @@ namespace cloakframe
     {
         seekTimer_->stop();
         const int requestedFrame = currentFrame_;
-        const QStringList arguments = previewFrameArguments(request_, requestedFrame);
+        const QStringList arguments = videoPreviewFrameArguments(request_, requestedFrame);
         if (arguments.isEmpty())
         {
             canvas_->setFrame(requestedFrame, {});

@@ -57,6 +57,11 @@ namespace cloakframe
         int fpsNum = 0;
         int fpsDen = 1;
         double durationSeconds = 0.0;
+        // Presentation time of the first video frame. Frame i of the normalized timeline is
+        // at startTimeSeconds + i * fpsDen / fpsNum, and every stage must use that mapping.
+        double startTimeSeconds = 0.0;
+        int sarNum = 1;
+        int sarDen = 1;
         qint64 estimatedFrameCount = 0;
         bool hasAudio = false;
         bool isVfr = false;

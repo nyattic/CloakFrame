@@ -1,18 +1,22 @@
 #include "cloakframe/VideoIo.hpp"
 #include "cloakframe/VideoProcessor.hpp"
+#include "cloakframe/VideoReviewTypes.hpp"
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QProcess>
 #include <QTemporaryDir>
 
 #include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
 
 #include <atomic>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 
 namespace
 {
@@ -53,6 +57,67 @@ namespace
             return false;
         }
         return process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
+    }
+
+    bool runFfmpeg(const cloakframe::FfmpegTools &tools, const QStringList &arguments)
+    {
+        QProcess process;
+        process.start(tools.ffmpegPath, arguments);
+        if (!process.waitForStarted(15000) || !process.waitForFinished(60000))
+        {
+            process.kill();
+            return false;
+        }
+        return process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
+    }
+
+    // A video whose stream starts after the container origin, with audio that starts at it.
+    bool generateOffsetStartSample(
+        const cloakframe::FfmpegTools &tools, const QString &directory, const QString &path)
+    {
+        const QString video = directory + "/offset-video.mp4";
+        const QString audio = directory + "/offset-audio.m4a";
+        return runFfmpeg(tools,
+                   {"-v",
+                       "error",
+                       "-y",
+                       "-f",
+                       "lavfi",
+                       "-i",
+                       "testsrc=size=160x120:rate=10:duration=4",
+                       "-c:v",
+                       "libx264",
+                       "-pix_fmt",
+                       "yuv420p",
+                       video})
+               && runFfmpeg(tools,
+                   {"-v",
+                       "error",
+                       "-y",
+                       "-f",
+                       "lavfi",
+                       "-i",
+                       "sine=frequency=440:duration=6",
+                       "-c:a",
+                       "aac",
+                       audio})
+               && runFfmpeg(tools,
+                   {"-v",
+                       "error",
+                       "-y",
+                       "-itsoffset",
+                       "2",
+                       "-i",
+                       video,
+                       "-i",
+                       audio,
+                       "-map",
+                       "0:v:0",
+                       "-map",
+                       "1:a:0",
+                       "-c",
+                       "copy",
+                       path});
     }
 
     QString rawProbeOutput(const cloakframe::FfmpegTools &tools, const QString &path)
@@ -182,6 +247,110 @@ namespace
         assert(unknownCpuCount.workerCount == 1);
         assert(unknownCpuCount.batchFrames == 2);
     }
+
+    // CF-006: the review preview and the pass that actually masks pixels must agree on what
+    // "frame N" is, or a box placed in review lands on a different frame in the output.
+    void testPreviewAndReaderAgreeOnFrameIndex(
+        const cloakframe::FfmpegTools &tools, const QString &directory)
+    {
+        const QString source = directory + "/offset-start.mp4";
+        assert(generateOffsetStartSample(tools, directory, source));
+
+        const auto info = cloakframe::probeVideo(tools, source);
+        assert(info);
+        assert(std::abs(info->startTimeSeconds - 2.0) < 0.001);
+
+        cloakframe::VideoFrameReader reader;
+        assert(reader.open(tools, source, *info));
+        std::vector<QByteArray> readerFrames;
+        cv::Mat frame;
+        while (reader.readFrame(frame))
+        {
+            assert(frame.isContinuous());
+            readerFrames.push_back(QCryptographicHash::hash(
+                QByteArrayView(
+                    frame.data, static_cast<qsizetype>(frame.total() * frame.elemSize())),
+                QCryptographicHash::Md5));
+        }
+        // The stream holds 40 frames; the container origin two seconds earlier must not pad it.
+        assert(readerFrames.size() == 40);
+        assert(readerFrames.front() != readerFrames[10]);
+
+        cloakframe::VideoReviewRequest request;
+        request.sourcePath = source;
+        request.ffmpegPath = tools.ffmpegPath;
+        request.frameSize = QSize(info->displayWidth(), info->displayHeight());
+        request.fps = info->fps();
+        request.startTimeSeconds = info->startTimeSeconds;
+        request.fpsNum = info->fpsNum;
+        request.fpsDen = info->fpsDen;
+        request.frameCount = static_cast<int>(readerFrames.size());
+
+        // Cross the seek margin so both the direct and the seeking branch are exercised.
+        for (const int index : {0, 1, 17, 30, 31, 39})
+        {
+            const auto arguments = cloakframe::videoPreviewFrameArguments(request, index);
+            assert(!arguments.isEmpty());
+            QProcess process;
+            process.start(tools.ffmpegPath, arguments);
+            assert(process.waitForStarted(15000) && process.waitForFinished(60000));
+            const QByteArray png = process.readAllStandardOutput();
+            assert(!png.isEmpty());
+
+            const cv::Mat decoded = cv::imdecode(
+                cv::Mat(1, static_cast<int>(png.size()), CV_8UC1, const_cast<char *>(png.data())),
+                cv::IMREAD_COLOR);
+            assert(!decoded.empty());
+            const auto previewHash = QCryptographicHash::hash(
+                QByteArrayView(
+                    decoded.data, static_cast<qsizetype>(decoded.total() * decoded.elemSize())),
+                QCryptographicHash::Md5);
+            assert(previewHash == readerFrames[static_cast<std::size_t>(index)]);
+        }
+    }
+
+    // CF-009: anamorphic sources must not be published as square-pixel.
+    void testAnamorphicOutputKeepsDisplayAspect(
+        const cloakframe::FfmpegTools &tools, const QString &directory)
+    {
+        const QString source = directory + "/anamorphic.mp4";
+        assert(runFfmpeg(tools,
+            {"-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=720x576:rate=25:duration=1",
+                "-vf",
+                "setsar=16/15",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                source}));
+
+        const auto info = cloakframe::probeVideo(tools, source);
+        assert(info);
+        assert(info->sarNum == 16 && info->sarDen == 15);
+
+        const QString output = directory + "/anamorphic-out.mp4";
+        cloakframe::VideoFrameWriter writer;
+        assert(writer.open(tools, output, source, *info, 23, false, cloakframe::VideoCodec::H264));
+        cloakframe::VideoFrameReader reader;
+        assert(reader.open(tools, source, *info));
+        cv::Mat frame;
+        while (reader.readFrame(frame))
+        {
+            assert(writer.writeFrame(frame));
+        }
+        assert(writer.finish());
+
+        const auto written = cloakframe::probeVideo(tools, output);
+        assert(written);
+        assert(written->width == 720 && written->height == 576);
+        assert(written->sarNum == 16 && written->sarDen == 15);
+    }
 }
 
 int main(int argc, char **argv)
@@ -210,6 +379,12 @@ int main(int argc, char **argv)
 
     QTemporaryDir tempDir;
     assert(tempDir.isValid());
+
+    testPreviewAndReaderAgreeOnFrameIndex(*tools, tempDir.path());
+    std::puts("preview and reader frame identity: ok");
+    testAnamorphicOutputKeepsDisplayAspect(*tools, tempDir.path());
+    std::puts("anamorphic display aspect preserved: ok");
+
     const QString samplePath = tempDir.filePath("sample.mp4");
     const QString outputPath = tempDir.filePath("out/redacted.mp4");
     QDir().mkpath(tempDir.filePath("out"));

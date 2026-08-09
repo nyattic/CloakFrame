@@ -1269,6 +1269,7 @@ namespace cloakframe
                 request.sourceName = fileName;
                 request.frameSize = QSize(reviewInfo.displayWidth(), reviewInfo.displayHeight());
                 request.fps = reviewInfo.fps();
+                request.startTimeSeconds = reviewInfo.startTimeSeconds;
                 request.fpsNum = reviewInfo.fpsNum;
                 request.fpsDen = reviewInfo.fpsDen;
                 request.frameCount =

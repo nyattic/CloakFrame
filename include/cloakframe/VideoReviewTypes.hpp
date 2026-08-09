@@ -6,6 +6,7 @@
 #include <QRectF>
 #include <QSize>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 #include <optional>
@@ -41,6 +42,9 @@ namespace cloakframe
         QString sourceName;
         QSize frameSize;
         double fps = 0.0;
+        // Must match VideoInfo::startTimeSeconds so preview frame indices mean the same thing
+        // as the indices the encoder masks.
+        double startTimeSeconds = 0.0;
         int fpsNum = 0;
         int fpsDen = 1;
         int frameCount = 0;
@@ -52,6 +56,10 @@ namespace cloakframe
         Encode,
         CancelAll,
     };
+
+    // FFmpeg arguments that extract exactly the frame the encoder knows as `frame`.
+    [[nodiscard]] QStringList videoPreviewFrameArguments(
+        const VideoReviewRequest &request, int frame);
 
     struct VideoReviewResult
     {

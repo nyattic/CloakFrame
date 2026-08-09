@@ -174,7 +174,8 @@ namespace cloakframe
 
         bool parseRational(const QString &value, int &num, int &den)
         {
-            const auto parts = value.split('/');
+            // ffprobe writes frame rates as "30/1" but aspect ratios as "16:15".
+            const auto parts = value.split(value.contains(':') ? ':' : '/');
             bool okNum = false;
             bool okDen = true;
             int parsedNum = parts.value(0).toInt(&okNum);
@@ -506,6 +507,22 @@ namespace cloakframe
             info.width = stream.value("width").toInt();
             info.height = stream.value("height").toInt();
 
+            bool startOk = false;
+            const double streamStart = stream.value("start_time").toString().toDouble(&startOk);
+            if (startOk && std::isfinite(streamStart) && streamStart > 0.0)
+            {
+                info.startTimeSeconds = streamStart;
+            }
+            int parsedSarNum = 0;
+            int parsedSarDen = 0;
+            if (parseRational(
+                    stream.value("sample_aspect_ratio").toString(), parsedSarNum, parsedSarDen)
+                && parsedSarNum > 0 && parsedSarDen > 0)
+            {
+                info.sarNum = parsedSarNum;
+                info.sarDen = parsedSarDen;
+            }
+
             int avgNum = 0;
             int avgDen = 1;
             const bool avgValid =
@@ -646,7 +663,12 @@ namespace cloakframe
             return false;
         }
 
-        QString filter = QString("fps=%1/%2").arg(info.fpsNum).arg(info.fpsDen);
+        // Rebase to the first video frame so frame 0 is that frame. Without this a stream
+        // that starts after the container origin is padded with duplicates and every frame
+        // index shifts relative to the review preview.
+        QString filter = QString("setpts=PTS-STARTPTS,fps=fps=%1/%2:start_time=0")
+                             .arg(info.fpsNum)
+                             .arg(info.fpsDen);
         const int longEdge = std::max(frameWidth_, frameHeight_);
         if (decodeLongEdge > 0 && decodeLongEdge < longEdge)
         {
@@ -913,9 +935,18 @@ namespace cloakframe
             "-i",
             "-",
         };
-        if (info.hasAudio && info.durationSeconds > 0)
+        if (info.hasAudio)
         {
-            arguments << "-t" << QString::number(info.durationSeconds, 'f', 3);
+            // The encoded video covers the video stream's own interval, so the audio has to be
+            // taken from that same interval rather than from the container origin.
+            if (info.startTimeSeconds > 0)
+            {
+                arguments << "-ss" << QString::number(info.startTimeSeconds, 'f', 6);
+            }
+            if (info.durationSeconds > 0)
+            {
+                arguments << "-t" << QString::number(info.durationSeconds, 'f', 3);
+            }
         }
         arguments << "-i" << audioSource << "-map" << "0:v:0"
                   << "-map" << "1:a:0?" << videoEncoderArgs(encoderName_, crf) << "-pix_fmt"
@@ -924,12 +955,22 @@ namespace cloakframe
         {
             arguments << "-tag:v" << "hvc1";
         }
+        QStringList videoFilters;
         if ((frameWidth_ % 2) != 0 || (frameHeight_ % 2) != 0)
         {
-            arguments << "-vf"
-                      << QString("crop=%1:%2:0:0")
-                             .arg(frameWidth_ - (frameWidth_ % 2))
-                             .arg(frameHeight_ - (frameHeight_ % 2));
+            videoFilters << QString("crop=%1:%2:0:0")
+                                .arg(frameWidth_ - (frameWidth_ % 2))
+                                .arg(frameHeight_ - (frameHeight_ % 2));
+        }
+        // The raw frames carry no aspect metadata, so an anamorphic source would otherwise be
+        // published as square-pixel and display at the wrong shape.
+        if (info.sarNum > 0 && info.sarDen > 0 && info.sarNum != info.sarDen)
+        {
+            videoFilters << QString("setsar=%1/%2").arg(info.sarNum).arg(info.sarDen);
+        }
+        if (!videoFilters.isEmpty())
+        {
+            arguments << "-vf" << videoFilters.join(QLatin1Char(','));
         }
         if (info.hasAudio)
         {
