@@ -9,6 +9,7 @@
 #include "cloakframe/PathUtil.hpp"
 #include "cloakframe/PlateDetector.hpp"
 #include "cloakframe/ProcessorWorker.hpp"
+#include "cloakframe/ReleaseNotes.hpp"
 #include "cloakframe/ReviewDialog.hpp"
 #include "cloakframe/SelfUpdater.hpp"
 #include "cloakframe/SettingsDialog.hpp"
@@ -174,7 +175,11 @@ namespace cloakframe
 
         QString releaseNotesSection(const QString &releaseNotes)
         {
-            return releaseNotes.trimmed();
+            // Notes carry every language the release ships with, so the dialog shows the one
+            // matching the interface rather than all of them stacked together.
+            return releaseNotesForLanguage(releaseNotes,
+                QLocale().language() == QLocale::C ? QStringLiteral("en")
+                                                   : QLocale().name().left(2));
         }
 
         QString defaultOutputDirectory()
